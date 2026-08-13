@@ -1,0 +1,2539 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import { usePortfolioStore } from 'stores/PortfolioStore';
+import { useJournalStore, type Trade } from 'stores/JournalStore';
+import { useGoalStore } from 'stores/GoalStore';
+import { useAnalyticsStore } from 'stores/AnalyticsStore';
+import VueApexCharts from 'vue3-apexcharts';
+import { useQuasar } from 'quasar';
+import type { ApexOptions } from 'apexcharts';
+import html2canvas from 'html2canvas';
+
+const $q = useQuasar();
+const portStore = usePortfolioStore();
+const journalStore = useJournalStore();
+const goalStore = useGoalStore();
+const analyticsStore = useAnalyticsStore();
+
+// ── Tax Report ────────────────────────────────────────────────────────────────
+const showTaxDialog = ref(false);
+const TAX_RATE = 0.15; // 15% capital gains (estimated)
+const currentTaxYear = computed(() => new Date().getFullYear());
+
+const taxMonthly = computed(() => {
+  const MONTHS = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  const year = currentTaxYear.value;
+  const map: Record<number, { profit: number; loss: number; count: number }> = {};
+  for (let i = 0; i < 12; i++) map[i] = { profit: 0, loss: 0, count: 0 };
+
+  journalStore.trades.forEach((t) => {
+    if (t.trade_type === 'DEPOSIT' || t.trade_type === 'WITHDRAW') return;
+    const d = new Date(t.date);
+    if (d.getFullYear() !== year) return;
+    const m = d.getMonth();
+    const pnl = Number(t.pnl);
+    map[m]!.count++;
+    if (pnl > 0) map[m]!.profit += pnl;
+    else map[m]!.loss += Math.abs(pnl);
+  });
+
+  return MONTHS.map((month, i) => ({
+    month,
+    profit: map[i]!.profit,
+    loss: map[i]!.loss,
+    net: map[i]!.profit - map[i]!.loss,
+  }));
+});
+
+const annualNet = computed(() => taxMonthly.value.reduce((s, r) => s + r.net, 0));
+
+const taxRows = computed(() => {
+  // Group trades by year-month
+  const map: Record<string, { profit: number; loss: number; count: number; label: string }> = {};
+  journalStore.trades.forEach((t) => {
+    if (t.trade_type === 'DEPOSIT' || t.trade_type === 'WITHDRAW') return;
+    const d = new Date(t.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    if (!map[key]) map[key] = { profit: 0, loss: 0, count: 0, label };
+    const pnl = Number(t.pnl);
+    map[key].count++;
+    if (pnl > 0) map[key].profit += pnl;
+    else map[key].loss += Math.abs(pnl);
+  });
+  return Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => ({
+      ...v,
+      net: v.profit - v.loss,
+      taxable: Math.max(0, v.profit - v.loss),
+      tax: Math.max(0, v.profit - v.loss) * TAX_RATE,
+    }));
+});
+
+const printTaxReport = () => {
+  const el = document.getElementById('tax-print-area');
+  if (!el) return;
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"><title>Tax Report</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;padding:28px}
+      h1{font-size:18px;font-weight:800;margin-bottom:4px}
+      h2{font-size:13px;font-weight:700;margin:20px 0 8px;color:#334155;text-transform:uppercase;letter-spacing:.04em}
+      .sub{font-size:12px;color:#64748b;margin-bottom:16px}
+      .meta{display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1e293b}
+      table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:11px}
+      thead tr{background:#1e293b;color:#fff}
+      thead th{padding:8px 10px;text-align:left;font-weight:700;letter-spacing:.03em}
+      thead th.r{text-align:right}
+      tbody tr{border-bottom:1px solid #e2e8f0}
+      tbody tr:nth-child(even){background:#f8fafc}
+      tbody td{padding:7px 10px}
+      tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
+      .profit{color:#16a34a;font-weight:600}
+      .loss{color:#dc2626;font-weight:600}
+      .tax{color:#7c3aed;font-weight:700}
+      tfoot tr{background:#1e293b;color:#fff;font-weight:700}
+      tfoot td{padding:8px 10px}
+      tfoot td.r{text-align:right}
+      .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+      .card{border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px}
+      .card.hl{background:#faf5ff;border-color:#c4b5fd}
+      .card-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px}
+      .card-val{font-size:16px;font-weight:800}
+      .disclaimer{border-top:1px solid #e2e8f0;padding-top:12px;font-size:9px;color:#94a3b8;line-height:1.6}
+      .disclaimer strong{color:#64748b}
+      .sig-row{display:flex;justify-content:flex-end;gap:40px;margin:24px 0 16px}
+      .sig{text-align:center}
+      .sig-line{width:150px;border-bottom:1px solid #1e293b;height:30px;margin-bottom:4px}
+      .sig-label{font-size:10px;color:#64748b}
+      @media print{body{padding:16px}}
+    </style>
+  </head><body>${el.innerHTML}
+  <script>window.onload=function(){window.print()}<'/script>
+  </body></html>`);
+  win.document.close();
+};
+
+onMounted(async () => {
+  if (portStore.portfolios.length === 0) {
+    await portStore.loadPortfolios();
+  }
+  const port = portStore.activePortfolio;
+  if (!port) return;
+
+  const today = new Date();
+  // โหลด goal ทันทีตอนเปิดหน้า (month+1 เพราะ GoalStore ใช้ 1-based month)
+  void goalStore.loadGoalByMonth(port.id, today.getFullYear(), today.getMonth() + 1);
+});
+
+// ==========================================
+// 1. Calendar Navigation & Setup
+// ==========================================
+const currentDate = ref(new Date());
+
+const calendarMonthYear = computed(() => {
+  return currentDate.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+});
+
+const prevMonth = () => {
+  currentDate.value = new Date(
+    currentDate.value.getFullYear(),
+    currentDate.value.getMonth() - 1,
+    1,
+  );
+  const y = currentDate.value.getFullYear();
+  const m = currentDate.value.getMonth(); // 0-based สำหรับ analyticsStore
+  analyticsStore.setCalendarMonth(m, y);
+  // GoalStore ใช้ 1-based month
+  const port = portStore.activePortfolio;
+  if (port) void goalStore.loadGoalByMonth(port.id, y, m + 1);
+};
+
+const nextMonth = () => {
+  currentDate.value = new Date(
+    currentDate.value.getFullYear(),
+    currentDate.value.getMonth() + 1,
+    1,
+  );
+  const y = currentDate.value.getFullYear();
+  const m = currentDate.value.getMonth(); // 0-based สำหรับ analyticsStore
+  analyticsStore.setCalendarMonth(m, y);
+  // GoalStore ใช้ 1-based month
+  const port = portStore.activePortfolio;
+  if (port) void goalStore.loadGoalByMonth(port.id, y, m + 1);
+};
+
+const calendarDays = computed(() => {
+  const year = currentDate.value.getFullYear();
+  const month = currentDate.value.getMonth();
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const days = [];
+
+  for (let i = 0; i < firstDay; i++) {
+    days.push({ day: null, dateStr: '', pnl: 0 });
+  }
+
+  for (let i = 1; i <= daysInMonth; i++) {
+    const monthStr = String(month + 1).padStart(2, '0');
+    const dayStr = String(i).padStart(2, '0');
+    const dateStr = `${year}-${monthStr}-${dayStr}`;
+
+    const pnl = analyticsStore.dailyPnL[dateStr] || 0;
+
+    days.push({ day: i, dateStr, pnl });
+  }
+
+  // Always pad to exactly 42 cells (6 rows × 7 cols) to keep fixed height
+  while (days.length < 42) {
+    days.push({ day: null, dateStr: '', pnl: 0 });
+  }
+
+  return days;
+});
+
+// Check if the currently viewed month is in the past
+const isMonthInPast = computed(() => {
+  const today = new Date();
+  const y = currentDate.value.getFullYear();
+  const m = currentDate.value.getMonth();
+  return y < today.getFullYear() || (y === today.getFullYear() && m < today.getMonth());
+});
+
+// Goal status badge label
+const goalStatusLabel = computed(() => {
+  if (monthlyGoal.value.progressPercent >= 100) return '🎯 Done';
+  if (isMonthInPast.value) {
+    // Past month: succeeded if ≥100%, failed otherwise
+    return monthlyGoal.value.progressPercent >= 100 ? '✅ Successful' : '❌ Failed';
+  }
+  return monthlyGoal.value.progressPercent >= 50 ? 'On Track' : 'Behind';
+});
+
+const goalStatusClass = computed(() => {
+  if (monthlyGoal.value.progressPercent >= 100) return 'badge-done';
+  if (isMonthInPast.value) {
+    return monthlyGoal.value.progressPercent >= 100 ? 'badge-done' : 'badge-failed';
+  }
+  return monthlyGoal.value.progressPercent >= 50 ? 'badge-on-track' : 'badge-behind';
+});
+
+// ==========================================
+// 2. ข้อมูลพอร์ตฟอลิโอ
+// ==========================================
+const activePort = computed(() => portStore.activePortfolio);
+const currentBalance = computed(() => activePort.value?.current_balance || 0);
+const growthPercentage = computed(() => {
+  const port = activePort.value;
+  if (!port || !port.initial_balance || port.initial_balance === 0) return 0;
+
+  // คำนวณ: ((ปัจจุบัน - เริ่มต้น) / เริ่มต้น) * 100
+  return ((port.current_balance - port.initial_balance) / port.initial_balance) * 100;
+});
+// ==========================================
+// 3. ฟิลเตอร์ Trades (สำหรับ Top Cards)
+// ==========================================
+const monthlyTrades = computed(() => {
+  return journalStore.trades.filter((t) => {
+    if (t.trade_type === 'DEPOSIT' || t.trade_type === 'WITHDRAW') return false;
+    const d = new Date(t.date || new Date());
+    return (
+      d.getMonth() === analyticsStore.selectedMonth &&
+      d.getFullYear() === analyticsStore.selectedYear
+    );
+  });
+});
+
+const totalTrades = computed(() => monthlyTrades.value.length);
+const winningTrades = computed(() => monthlyTrades.value.filter((t) => Number(t.pnl) > 0).length);
+const losingTrades = computed(() => monthlyTrades.value.filter((t) => Number(t.pnl) < 0).length);
+
+const winRate = computed(() => {
+  if (totalTrades.value === 0) return 0;
+  return (winningTrades.value / totalTrades.value) * 100;
+});
+
+const totalPnL = computed(() => {
+  return monthlyTrades.value.reduce((sum, t) => sum + Number(t.pnl), 0);
+});
+
+// ==========================================
+// 4. Performance Insights (Pair, Strategy, Trend, Emotion, Reason)
+// ==========================================
+const getCategoryStats = (categoryKey: keyof Trade) => {
+  const summary: Record<string, number> = {};
+
+  monthlyTrades.value.forEach((t) => {
+    const val = t[categoryKey];
+    if (!val || val === '') return;
+    const key = String(val);
+    if (!summary[key]) summary[key] = 0;
+    summary[key] += Number(t.pnl);
+  });
+
+  const summaryArray = Object.entries(summary).map(([name, pnl]) => ({ name, pnl }));
+  const defaultStat = { name: '-', pnl: 0 };
+
+  if (summaryArray.length === 0) {
+    return { best: defaultStat, worst: defaultStat };
+  }
+
+  const sortedDesc = [...summaryArray].sort((a, b) => b.pnl - a.pnl);
+  const sortedAsc = [...summaryArray].sort((a, b) => a.pnl - b.pnl);
+
+  const best = sortedDesc[0] || defaultStat;
+  const worst = sortedAsc[0] || defaultStat;
+
+  return {
+    best: best.pnl > 0 ? best : defaultStat,
+    worst: worst.pnl < 0 ? worst : defaultStat,
+  };
+};
+
+const pairStats = computed(() => getCategoryStats('pair'));
+
+const insightsData = computed(() => [
+  { label: 'Strategy', icon: 'lightbulb', stats: getCategoryStats('strategy') },
+  { label: 'Trend', icon: 'show_chart', stats: getCategoryStats('trend') },
+  { label: 'Emotion', icon: 'mood', stats: getCategoryStats('emotion') },
+  { label: 'Reason', icon: 'psychology', stats: getCategoryStats('entry_reason') },
+]);
+
+// ==========================================
+// 5. Chart
+// ==========================================
+const chartOptions = computed<ApexOptions>(() => ({
+  chart: {
+    type: 'area',
+    toolbar: { show: false },
+    fontFamily: 'inherit',
+    background: 'transparent',
+    zoom: { enabled: false },
+  },
+  colors: ['#1976D2'],
+  fill: {
+    type: 'gradient',
+    gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] },
+  },
+  dataLabels: { enabled: false },
+  stroke: { curve: 'smooth', width: 2 },
+  xaxis: {
+    type: 'category',
+    categories: analyticsStore.chartData?.categories || [],
+    labels: {
+      show: true, // เปิดให้แสดงวันที่
+      style: {
+        colors: $q.dark.isActive ? '#94a3b8' : '#64748b',
+        fontSize: '12px', // ขนาดตัวหนังสือแกน X
+        fontFamily: 'inherit',
+        fontWeight: 500,
+      },
+      rotate: -45, // เอียงตัวหนังสือไม่ให้ซ้อนกัน
+    },
+    axisBorder: {
+      show: true,
+      color: $q.dark.isActive ? '#334155' : '#e2e8f0',
+    },
+    axisTicks: { show: false },
+    tooltip: { enabled: false },
+  },
+  yaxis: {
+    labels: {
+      formatter: (val: number) => `$${val.toLocaleString()}`,
+      style: { fontSize: '11px' },
+    },
+  },
+  grid: {
+    borderColor: $q.dark.isActive ? '#334155' : '#f1f1f1',
+    strokeDashArray: 4,
+  },
+  theme: { mode: $q.dark.isActive ? 'dark' : 'light' },
+  tooltip: { theme: $q.dark.isActive ? 'dark' : 'light' },
+}));
+
+// ==========================================
+// 6. เป้าหมายรายเดือน & Recent Trades
+// ==========================================
+const monthlyGoal = computed(() => goalStore.monthlyPlan);
+
+const recentTrades = computed(() => {
+  return journalStore.trades
+    .filter((t) => t.trade_type === 'BUY' || t.trade_type === 'SELL')
+    .slice(0, 5);
+});
+const shareDialogOpen = ref(false);
+
+const isSavingImage = ref(false);
+
+const downloadStatsImage = async () => {
+  const element = document.getElementById('share-image-area');
+  if (!element) return;
+
+  isSavingImage.value = true;
+  try {
+    const canvas = await html2canvas(element, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    const link = document.createElement('a');
+    const portfolioSlug = (activePort.value?.name || 'stats').toLowerCase().replace(/\s+/g, '-');
+    link.download = `trading-journal-${portfolioSlug}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+
+    $q.notify({
+      type: 'positive',
+      message: 'Image saved!',
+      icon: 'check_circle',
+      position: 'top',
+      timeout: 2000,
+    });
+  } catch (error) {
+    console.error('Failed to generate image:', error);
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to save image. Please try again.',
+      position: 'top',
+    });
+  } finally {
+    isSavingImage.value = false;
+  }
+};
+</script>
+
+<template>
+  <q-page class="dashboard-page q-pa-md q-pa-lg-xl">
+    <div class="row items-center justify-between q-mb-md q-mt-xs">
+      <div class="text-subtitle2 text-muted q-mt-xs">
+        Current Portfolio:
+        <span class="text-primary text-weight-bold q-ml-xs">{{
+          activePort?.name || 'No portfolio selected'
+        }}</span>
+      </div>
+
+      <div class="row q-gutter-sm">
+        <q-btn
+          v-if="activePort"
+          unelevated
+          dense
+          icon="receipt_long"
+          label="Tax"
+          class="btn-outline-modern text-weight-bold q-px-sm"
+          @click="showTaxDialog = true"
+        >
+          <q-tooltip>Trading P&amp;L Tax Summary</q-tooltip>
+        </q-btn>
+
+        <q-btn
+          v-if="activePort"
+          unelevated
+          dense
+          icon="ios_share"
+          label="Share"
+          color="primary"
+          class="share-btn-main text-weight-bold q-px-sm"
+          @click="shareDialogOpen = true"
+        >
+          <q-tooltip class="bg-primary text-white text-weight-bold shadow-4"
+            >Share your stats</q-tooltip
+          >
+        </q-btn>
+      </div>
+    </div>
+
+    <q-banner
+      v-if="!activePort"
+      class="custom-banner warning-banner rounded-borders q-mb-md q-pa-sm"
+    >
+      <template v-slot:avatar><q-icon name="warning" size="sm" /></template>
+      <div class="text-weight-medium text-body2">
+        You haven't selected a portfolio yet. Please select one to view the Dashboard.
+      </div>
+    </q-banner>
+
+    <template v-else>
+      <div class="row q-col-gutter-md q-mb-lg">
+        <div class="col-6 col-sm-6 col-md-3">
+          <q-card class="dashboard-card stat-card h-full q-pa-md flex column justify-between">
+            <div class="row items-center justify-between q-mb-md">
+              <div
+                class="text-caption text-muted text-weight-bold text-uppercase tracking-wide stat-label"
+              >
+                Current Balance
+              </div>
+              <div class="icon-box bg-icon-primary text-primary">
+                <q-icon name="account_balance_wallet" size="20px" />
+              </div>
+            </div>
+            <div>
+              <div class="stat-val text-weight-bolder text-main tracking-tight">
+                ${{ currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}
+              </div>
+              <div class="text-muted text-weight-medium stat-sub-label">All Time</div>
+            </div>
+          </q-card>
+        </div>
+
+        <div class="col-6 col-sm-6 col-md-3">
+          <q-card class="dashboard-card stat-card h-full q-pa-md flex column justify-between">
+            <div class="row items-center justify-between q-mb-md">
+              <div
+                class="text-caption text-muted text-weight-bold text-uppercase tracking-wide stat-label"
+              >
+                Net PnL
+              </div>
+              <div
+                class="icon-box"
+                :class="
+                  totalPnL >= 0
+                    ? 'bg-icon-positive text-positive'
+                    : 'bg-icon-negative text-negative'
+                "
+              >
+                <q-icon :name="totalPnL >= 0 ? 'trending_up' : 'trending_down'" size="20px" />
+              </div>
+            </div>
+            <div>
+              <div
+                class="stat-val text-weight-bolder tracking-tight"
+                :class="totalPnL >= 0 ? 'text-positive' : 'text-negative'"
+              >
+                {{ totalPnL >= 0 ? '+' : '' }}${{
+                  totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                }}
+              </div>
+              <div class="text-muted text-weight-medium stat-sub-label">
+                In {{ calendarMonthYear }}
+              </div>
+            </div>
+          </q-card>
+        </div>
+
+        <div class="col-6 col-sm-6 col-md-3">
+          <q-card class="dashboard-card stat-card h-full q-pa-md flex column justify-between">
+            <div class="row items-center justify-between q-mb-md">
+              <div
+                class="text-caption text-muted text-weight-bold text-uppercase tracking-wide stat-label"
+              >
+                Win Rate
+              </div>
+              <div class="icon-box bg-icon-warning text-warning">
+                <q-icon name="pie_chart" size="20px" />
+              </div>
+            </div>
+            <div>
+              <div class="row items-baseline">
+                <div class="stat-val text-weight-bolder text-warning tracking-tight">
+                  {{ winRate.toFixed(1) }}
+                </div>
+                <div class="text-subtitle1 text-warning q-ml-xs text-weight-bold">%</div>
+              </div>
+              <div class="text-muted text-weight-medium stat-sub-label">
+                Win {{ winningTrades }} <span class="q-mx-xs">•</span> Loss {{ losingTrades }}
+              </div>
+            </div>
+          </q-card>
+        </div>
+
+        <div class="col-6 col-sm-6 col-md-3">
+          <q-card class="dashboard-card stat-card h-full q-pa-md flex column justify-between">
+            <div class="row items-center justify-between q-mb-md">
+              <div
+                class="text-caption text-muted text-weight-bold text-uppercase tracking-wide stat-label"
+              >
+                Growth
+              </div>
+              <div
+                class="icon-box"
+                :class="
+                  growthPercentage >= 0
+                    ? 'bg-icon-positive text-positive'
+                    : 'bg-icon-negative text-negative'
+                "
+              >
+                <q-icon
+                  :name="growthPercentage >= 0 ? 'trending_up' : 'trending_down'"
+                  size="20px"
+                />
+              </div>
+            </div>
+            <div>
+              <div
+                class="stat-val text-weight-bolder tracking-tight"
+                :class="growthPercentage >= 0 ? 'text-positive' : 'text-negative'"
+              >
+                {{ growthPercentage > 0 ? '+' : '' }}{{ growthPercentage.toFixed(2) }}%
+              </div>
+              <div class="text-muted text-weight-medium stat-sub-label">All Time</div>
+            </div>
+          </q-card>
+        </div>
+      </div>
+
+      <div class="row q-mb-lg">
+        <div class="col-12">
+          <q-card class="dashboard-card h-full flex column overflow-hidden">
+            <div class="q-pa-sm q-px-md header-divider flex items-center justify-between">
+              <div class="text-subtitle1 text-weight-bold text-main flex items-center q-px-xs">
+                <q-icon name="insights" color="primary" size="sm" class="q-mr-sm" />
+                Portfolio Growth
+              </div>
+              <q-btn-toggle
+                v-model="analyticsStore.chartFilter"
+                unelevated
+                rounded
+                class="filter-toggle text-weight-bold q-mr-sm"
+                toggle-color="primary"
+                :color="$q.dark.isActive ? 'grey-9' : 'grey-2'"
+                :text-color="$q.dark.isActive ? 'grey-4' : 'grey-7'"
+                :options="[
+                  { label: '1M', value: '1M' },
+                  { label: '3M', value: '3M' },
+                  { label: '6M', value: '6M' },
+                  { label: '9M', value: '9M' },
+                  { label: '1Y', value: '1Y' },
+                ]"
+                size="11px"
+              />
+            </div>
+
+            <div
+              class="chart-container flex-grow q-mt-xs q-px-md"
+              style="min-width: 0; width: 100%"
+            >
+              <VueApexCharts
+                v-if="analyticsStore.chartData"
+                type="area"
+                width="100%"
+                height="320"
+                :options="chartOptions"
+                :series="analyticsStore.chartData.series"
+                style="min-height: 380px"
+              />
+            </div>
+          </q-card>
+        </div>
+      </div>
+
+      <div class="row q-col-gutter-md q-col-gutter-lg-lg q-mb-lg items-stretch">
+        <div class="col-12 col-md-4">
+          <q-card class="dashboard-card h-full flex column q-pa-md">
+            <div class="text-subtitle1 text-weight-bold text-main q-mb-sm flex items-center">
+              <div class="icon-box-sm bg-icon-primary text-primary q-mr-sm">
+                <q-icon name="currency_exchange" size="16px" />
+              </div>
+              Pair Performance
+            </div>
+
+            <div class="column q-gutter-y-md flex-grow-1 justify-center q-pb-xs">
+              <div
+                class="inner-card bg-icon-positive flex column justify-center q-px-md q-py-lg relative-position overflow-hidden"
+              >
+                <div class="row items-center justify-between z-top">
+                  <div>
+                    <div
+                      class="text-caption text-positive text-weight-bold text-uppercase tracking-wide"
+                      style="font-size: 10px"
+                    >
+                      Best Pair
+                    </div>
+                    <div
+                      class="text-h5 text-weight-bolder text-main q-mt-xs"
+                      style="line-height: 1"
+                    >
+                      {{ pairStats.best.name }}
+                    </div>
+                  </div>
+                  <div class="text-subtitle1 text-positive text-weight-bolder z-top">
+                    +${{
+                      pairStats.best.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                    }}
+                  </div>
+                </div>
+                <q-icon
+                  name="trending_up"
+                  class="absolute text-positive opacity-20"
+                  size="80px"
+                  style="right: -10px; bottom: -15px; z-index: 0"
+                />
+              </div>
+
+              <div
+                class="inner-card bg-icon-negative flex column justify-center q-px-md q-py-lg relative-position overflow-hidden"
+              >
+                <div class="row items-center justify-between z-top">
+                  <div>
+                    <div
+                      class="text-caption text-negative text-weight-bold text-uppercase tracking-wide"
+                      style="font-size: 10px"
+                    >
+                      Worst Pair
+                    </div>
+                    <div
+                      class="text-h5 text-weight-bolder text-main q-mt-xs"
+                      style="line-height: 1"
+                    >
+                      {{ pairStats.worst.name }}
+                    </div>
+                  </div>
+                  <div class="text-subtitle1 text-negative text-weight-bolder z-top">
+                    {{
+                      pairStats.worst.pnl === 0
+                        ? '$0.00'
+                        : '-$' +
+                          Math.abs(pairStats.worst.pnl).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                          })
+                    }}
+                  </div>
+                </div>
+                <q-icon
+                  name="trending_down"
+                  class="absolute text-negative opacity-20"
+                  size="80px"
+                  style="right: -10px; bottom: -15px; z-index: 0"
+                />
+              </div>
+            </div>
+          </q-card>
+        </div>
+
+        <div class="col-12 col-md-8">
+          <q-card class="dashboard-card h-full flex column q-pa-md">
+            <div class="text-subtitle1 text-weight-bold text-main q-mb-sm flex items-center">
+              <div class="icon-box-sm bg-icon-primary text-primary q-mr-sm">
+                <q-icon name="troubleshoot" size="16px" />
+              </div>
+              Trading Insights
+            </div>
+
+            <div class="row q-col-gutter-sm flex-grow-1">
+              <div v-for="item in insightsData" :key="item.label" class="col-12 col-sm-6">
+                <div
+                  class="inner-card bg-card-soft h-full column justify-between q-pa-sm transition-hover"
+                >
+                  <div class="row items-center q-mb-xs q-px-xs">
+                    <q-icon
+                      :item="item.icon"
+                      :name="item.icon"
+                      size="16px"
+                      class="text-muted q-mr-sm"
+                    />
+                    <span class="text-subtitle2 text-main text-weight-bold">{{ item.label }}</span>
+                  </div>
+
+                  <div class="column q-gutter-y-xs">
+                    <div class="row items-center justify-between insight-pill bg-card shadow-sm">
+                      <div class="row items-center text-ellipsis" style="max-width: 65%">
+                        <div class="icon-micro bg-icon-positive text-positive q-mr-xs">
+                          <q-icon name="arrow_upward" size="12px" text-weight-bolder />
+                        </div>
+                        <span class="text-caption text-main text-weight-bold text-ellipsis">{{
+                          item.stats.best.name
+                        }}</span>
+                      </div>
+                      <div class="text-caption text-positive text-weight-bolder">
+                        +${{
+                          item.stats.best.pnl.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                          })
+                        }}
+                      </div>
+                    </div>
+
+                    <div class="row items-center justify-between insight-pill bg-card shadow-sm">
+                      <div class="row items-center text-ellipsis" style="max-width: 65%">
+                        <div class="icon-micro bg-icon-negative text-negative q-mr-xs">
+                          <q-icon name="arrow_downward" size="12px" text-weight-bolder />
+                        </div>
+                        <span class="text-caption text-main text-weight-bold text-ellipsis">{{
+                          item.stats.worst.name
+                        }}</span>
+                      </div>
+                      <div class="text-caption text-negative text-weight-bolder">
+                        {{
+                          item.stats.worst.pnl === 0
+                            ? '$0.00'
+                            : '-$' +
+                              Math.abs(item.stats.worst.pnl).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                              })
+                        }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </q-card>
+        </div>
+      </div>
+
+      <div class="row q-col-gutter-md q-col-gutter-lg-lg q-mb-lg items-stretch">
+        <div class="col-12 col-md-4">
+          <q-card class="dashboard-card h-full flex column q-pa-md">
+            <!-- Header -->
+            <div class="row items-center justify-between q-mb-md header-divider q-pb-sm">
+              <div class="flex items-center">
+                <div class="icon-box-sm bg-icon-primary text-primary q-mr-sm">
+                  <q-icon name="track_changes" size="16px" />
+                </div>
+                <span class="text-subtitle1 text-weight-bold text-main">
+                  Goal — {{ monthlyGoal.monthName }}
+                </span>
+              </div>
+              <span
+                v-if="monthlyGoal.targetProfit > 0"
+                class="goal-status-badge"
+                :class="goalStatusClass"
+              >
+                {{ goalStatusLabel }}
+              </span>
+            </div>
+
+            <!-- Has Goal -->
+            <div v-if="monthlyGoal.targetProfit > 0" class="column flex-grow-1 q-gutter-y-sm">
+              <!-- Progress bar + percent -->
+              <div>
+                <div class="row items-center justify-between q-mb-xs">
+                  <span class="text-caption text-muted text-weight-bold">PROGRESS</span>
+                  <span class="text-subtitle2 text-weight-bolder text-primary">
+                    {{ monthlyGoal.progressPercent.toFixed(1) }}%
+                  </span>
+                </div>
+                <q-linear-progress
+                  :value="Math.min(monthlyGoal.progressPercent / 100, 1)"
+                  rounded
+                  size="10px"
+                  class="goal-progress-bar"
+                  :color="monthlyGoal.progressPercent >= 100 ? 'positive' : 'primary'"
+                  :track-color="$q.dark.isActive ? 'grey-9' : 'grey-3'"
+                />
+              </div>
+
+              <!-- Achieved / Target -->
+              <div class="goal-amount-row flex-grow-1" style="min-height: 0">
+                <div class="goal-amount-block column justify-center" style="flex: 1">
+                  <div class="goal-amount-label">Achieved</div>
+                  <div
+                    class="text-h6 text-weight-bolder"
+                    :class="monthlyGoal.totalAchieved >= 0 ? 'text-positive' : 'text-negative'"
+                  >
+                    {{ monthlyGoal.totalAchieved >= 0 ? '+' : '-' }}${{
+                      Math.abs(monthlyGoal.totalAchieved).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })
+                    }}
+                  </div>
+                  <div class="text-caption text-muted q-mt-xs">of month target</div>
+                </div>
+                <div class="goal-amount-divider" />
+                <div class="goal-amount-block column justify-center" style="flex: 1">
+                  <div class="goal-amount-label">Target</div>
+                  <div class="text-h6 text-weight-bolder text-main">
+                    ${{
+                      monthlyGoal.targetProfit.toLocaleString(undefined, {
+                        minimumFractionDigits: 0,
+                      })
+                    }}
+                  </div>
+                  <div class="text-caption text-muted q-mt-xs">monthly goal</div>
+                </div>
+              </div>
+
+              <!-- Remaining -->
+              <div class="goal-remaining-box">
+                <div class="column">
+                  <span class="goal-amount-label">Remaining</span>
+                  <span
+                    class="text-caption text-muted"
+                    v-if="!isMonthInPast && monthlyGoal.remainingTarget > 0"
+                    >Keep going!</span
+                  >
+                </div>
+                <span
+                  class="text-subtitle2 text-weight-bolder"
+                  :class="monthlyGoal.remainingTarget <= 0 ? 'text-positive' : 'text-warning'"
+                >
+                  {{
+                    monthlyGoal.remainingTarget <= 0
+                      ? 'Goal reached! 🎉'
+                      : '$' +
+                        monthlyGoal.remainingTarget.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })
+                  }}
+                </span>
+              </div>
+
+              <!-- Past month result banner -->
+              <div
+                v-if="isMonthInPast"
+                class="goal-result-banner"
+                :class="
+                  monthlyGoal.progressPercent >= 100 ? 'goal-result-success' : 'goal-result-fail'
+                "
+              >
+                <q-icon
+                  :name="
+                    monthlyGoal.progressPercent >= 100 ? 'emoji_events' : 'sentiment_dissatisfied'
+                  "
+                  size="18px"
+                  class="q-mr-xs"
+                />
+                {{
+                  monthlyGoal.progressPercent >= 100
+                    ? 'Target achieved this month!'
+                    : `Fell short by $${monthlyGoal.remainingTarget.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                }}
+              </div>
+            </div>
+
+            <!-- No Goal -->
+            <div v-else class="column flex-grow-1 justify-center items-center q-pa-lg">
+              <q-icon
+                name="outlined_flag"
+                size="36px"
+                class="text-muted q-mb-sm"
+                style="opacity: 0.4"
+              />
+              <div class="text-body2 text-muted text-center" style="opacity: 0.6">
+                No goal set for this month
+              </div>
+            </div>
+          </q-card>
+        </div>
+
+        <div class="col-12 col-md-8">
+          <q-card class="dashboard-card h-full flex column">
+            <div class="q-pa-sm q-px-md header-divider flex items-center justify-between">
+              <div class="text-subtitle1 text-weight-bold text-main flex items-center q-px-xs">
+                <q-icon name="calendar_month" color="primary" size="sm" class="q-mr-sm" />
+                Trading Calendar
+              </div>
+              <div class="row items-center calendar-nav q-mr-sm">
+                <q-btn flat round dense icon="chevron_left" class="text-main" @click="prevMonth" />
+                <div
+                  class="text-subtitle2 text-weight-bold text-main q-px-sm"
+                  style="min-width: 130px; text-align: center"
+                >
+                  {{ calendarMonthYear }}
+                </div>
+                <q-btn flat round dense icon="chevron_right" class="text-main" @click="nextMonth" />
+              </div>
+            </div>
+
+            <div class="q-pa-md flex-grow">
+              <div
+                class="calendar-grid text-weight-bold text-muted q-mb-sm text-uppercase"
+                style="font-size: 11px"
+              >
+                <div class="text-center tracking-wide">Sun</div>
+                <div class="text-center tracking-wide">Mon</div>
+                <div class="text-center tracking-wide">Tue</div>
+                <div class="text-center tracking-wide">Wed</div>
+                <div class="text-center tracking-wide">Thu</div>
+                <div class="text-center tracking-wide">Fri</div>
+                <div class="text-center tracking-wide">Sat</div>
+              </div>
+
+              <!-- Fixed 6-row grid: always 42 cells -->
+              <div class="calendar-grid calendar-fixed-grid">
+                <div
+                  v-for="(item, index) in calendarDays"
+                  :key="index"
+                  class="calendar-cell"
+                  :class="{
+                    'cell-positive': item.pnl > 0,
+                    'cell-negative': item.pnl < 0,
+                    'is-empty': !item.day,
+                  }"
+                >
+                  <template v-if="item.day">
+                    <div class="day-number text-weight-medium">{{ item.day }}</div>
+                    <div
+                      v-if="item.pnl !== 0"
+                      class="pnl-amount text-weight-bold"
+                      :class="item.pnl > 0 ? 'text-positive' : 'text-negative'"
+                    >
+                      <span v-if="item.pnl > 0">+</span
+                      >{{
+                        item.pnl > 0
+                          ? `$${item.pnl.toFixed(2)}`
+                          : `-$${Math.abs(item.pnl).toFixed(2)}`
+                      }}
+                    </div>
+                    <div
+                      v-else
+                      class="pnl-amount text-muted text-weight-medium"
+                      style="opacity: 0.5"
+                    >
+                      $0
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </q-card>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-12">
+          <q-card class="dashboard-card h-full">
+            <div class="q-pa-sm q-px-md header-divider flex items-center justify-between">
+              <div class="text-subtitle1 text-weight-bold text-main flex items-center q-px-xs">
+                <q-icon name="history" color="primary" size="sm" class="q-mr-sm" />
+                Recent Trades
+              </div>
+              <q-btn
+                flat
+                dense
+                color="primary"
+                label="View All"
+                icon-right="chevron_right"
+                class="text-weight-bold q-pr-sm"
+                to="/journal"
+              />
+            </div>
+
+            <div class="q-pa-sm q-px-md">
+              <q-table
+                v-if="recentTrades.length > 0"
+                flat
+                dense
+                class="custom-table bg-transparent"
+                :rows="recentTrades"
+                row-key="id"
+                hide-pagination
+                hide-bottom
+                :rows-per-page-options="[0]"
+                :columns="[
+                  { name: 'date', label: 'Date', field: 'date', align: 'left' },
+                  { name: 'pair', label: 'Pair', field: 'pair', align: 'left' },
+                  { name: 'type', label: 'Type', field: 'trade_type', align: 'center' },
+                  { name: 'pnl', label: 'PnL ($)', field: 'pnl', align: 'right' },
+                ]"
+              >
+                <template v-slot:body-cell-date="props">
+                  <q-td :props="props" class="text-muted text-weight-medium text-body2">
+                    {{ new Date(props.row.date).toLocaleDateString('en-GB') }}
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-pair="props">
+                  <q-td :props="props" class="text-main text-weight-bold text-body2">
+                    {{ props.row.pair }}
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-type="props">
+                  <q-td :props="props">
+                    <q-chip
+                      size="sm"
+                      class="text-weight-bold custom-chip"
+                      :class="props.row.trade_type === 'BUY' ? 'chip-buy' : 'chip-sell'"
+                    >
+                      {{ props.row.trade_type }}
+                    </q-chip>
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-pnl="props">
+                  <q-td
+                    :props="props"
+                    class="text-body2"
+                    :class="
+                      Number(props.row.pnl) >= 0
+                        ? 'text-positive text-weight-bolder'
+                        : 'text-negative text-weight-bolder'
+                    "
+                  >
+                    {{ Number(props.row.pnl) >= 0 ? '+' : '' }}${{
+                      Number(props.row.pnl).toFixed(2)
+                    }}
+                  </q-td>
+                </template>
+              </q-table>
+
+              <div
+                v-else
+                class="q-pa-md text-center text-muted flex flex-center column opacity-50"
+                style="min-height: 160px"
+              >
+                <q-icon name="receipt_long" size="48px" class="q-mb-md" />
+                <div class="text-subtitle1 text-weight-medium">No trade history yet</div>
+              </div>
+            </div>
+          </q-card>
+        </div>
+      </div>
+    </template>
+    <q-dialog v-model="shareDialogOpen" backdrop-filter="blur(10px) saturate(1.3)">
+      <q-card class="bg-transparent no-shadow column items-center share-dialog-wrapper">
+        <!-- ── Share Card ── -->
+        <div
+          id="share-image-area"
+          class="share-card-v3 overflow-hidden relative-position column w-full"
+        >
+          <!-- Noise / warmth layer -->
+          <div class="share-warm-overlay absolute-full" />
+
+          <!-- Corner accent dots -->
+          <div class="share-dot share-dot-tl" />
+          <div class="share-dot share-dot-br" />
+
+          <!-- Header row: watermark left, date right -->
+          <div class="share-header-row z-top">
+            <div class="share-wm-top">TRADING JOURNAL</div>
+            <div class="share-header-date">
+              {{
+                new Date().toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              }}
+            </div>
+          </div>
+
+          <!-- Account chip -->
+          <div class="z-top share-account-chip-wrap">
+            <div class="share-account-chip">
+              <span class="share-account-at">@</span>
+              <span class="share-account-text">{{ activePort?.name || '—' }}</span>
+            </div>
+            <div class="share-period-pill">{{ calendarMonthYear }}</div>
+          </div>
+
+          <!-- Hero balance -->
+          <div class="z-top share-hero-section">
+            <div class="share-hero-label">portfolio balance</div>
+            <div class="share-hero-num">
+              ${{ currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}
+            </div>
+            <div class="share-growth-tag" :class="growthPercentage >= 0 ? 'tag-up' : 'tag-down'">
+              {{ growthPercentage >= 0 ? '↑' : '↓' }}{{ Math.abs(growthPercentage).toFixed(2) }}%
+              overall
+            </div>
+          </div>
+
+          <!-- Thin divider -->
+          <div class="share-thin-line z-top" />
+
+          <!-- Stats row — 3 big numbers -->
+          <div class="z-top share-big-stats">
+            <div class="share-big-stat">
+              <div class="share-big-num" :class="totalPnL >= 0 ? 'num-green' : 'num-red'">
+                {{ totalPnL >= 0 ? '+' : '' }}${{
+                  Math.abs(totalPnL).toLocaleString(undefined, { minimumFractionDigits: 0 })
+                }}
+              </div>
+              <div class="share-big-label">month p&amp;l</div>
+            </div>
+            <div class="share-big-stat-sep" />
+            <div class="share-big-stat">
+              <div class="share-big-num num-amber">
+                {{ winRate.toFixed(1) }}<span class="share-big-unit">%</span>
+              </div>
+              <div class="share-big-label">win rate</div>
+            </div>
+            <div class="share-big-stat-sep" />
+            <div class="share-big-stat">
+              <div class="share-big-num">{{ totalTrades }}</div>
+              <div class="share-big-label">trades</div>
+            </div>
+          </div>
+
+          <!-- Mini stats chips row -->
+          <div class="z-top share-chips-row">
+            <div class="share-chip">
+              <span class="chip-dot dot-green" />
+              <span class="chip-label">{{ winningTrades }} wins</span>
+            </div>
+            <div class="share-chip">
+              <span class="chip-dot dot-red" />
+              <span class="chip-label">{{ losingTrades }} losses</span>
+            </div>
+            <div class="share-chip" v-if="pairStats.best.name !== '-'">
+              <span class="chip-dot dot-blue" />
+              <span class="chip-label">{{ pairStats.best.name }}</span>
+            </div>
+            <div class="share-chip" v-if="growthPercentage !== 0">
+              <span class="chip-dot dot-amber" />
+              <span class="chip-label">{{ Math.abs(growthPercentage).toFixed(1) }}% growth</span>
+            </div>
+          </div>
+
+          <!-- Goal bar (only if set) -->
+          <div v-if="monthlyGoal.targetProfit > 0" class="z-top share-goal-area">
+            <div class="share-goal-header">
+              <span class="share-goal-label">monthly goal</span>
+              <span
+                class="share-goal-pct-v3"
+                :class="monthlyGoal.progressPercent >= 100 ? 'pct-done' : ''"
+              >
+                {{ monthlyGoal.progressPercent.toFixed(0) }}%
+              </span>
+            </div>
+            <div class="share-goal-bar">
+              <div
+                class="share-goal-bar-fill"
+                :style="{ width: Math.min(monthlyGoal.progressPercent, 100) + '%' }"
+                :class="monthlyGoal.progressPercent >= 100 ? 'fill-done' : ''"
+              />
+            </div>
+            <div class="share-goal-sub">
+              ${{
+                monthlyGoal.totalAchieved.toLocaleString(undefined, { minimumFractionDigits: 0 })
+              }}
+              <span class="share-goal-of">of</span>
+              ${{
+                monthlyGoal.targetProfit.toLocaleString(undefined, { minimumFractionDigits: 0 })
+              }}
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="share-footer-v3 z-top">
+            <div class="share-footer-brand">✦ tradingjrnl.com</div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="row justify-center q-mt-md gap-md w-full">
+          <q-btn
+            flat
+            rounded
+            class="share-action-close q-px-lg text-weight-bold"
+            label="Close"
+            v-close-popup
+          />
+          <q-btn
+            unelevated
+            rounded
+            class="share-action-save q-px-lg text-weight-bold"
+            icon="download"
+            label="Save Image"
+            :loading="isSavingImage"
+            @click="downloadStatsImage"
+          />
+        </div>
+      </q-card>
+    </q-dialog>
+
+    <!-- ── Tax Report Dialog ─────────────────────────────────────────────── -->
+    <q-dialog v-model="showTaxDialog" persistent>
+      <q-card class="tax-cert-card" style="width: 600px; max-width: 96vw">
+        <!-- Card Header -->
+        <div class="row items-center justify-between q-px-lg q-pt-lg q-pb-sm">
+          <div class="row items-center q-gutter-sm">
+            <q-icon name="receipt_long" size="18px" color="grey-6" />
+            <span
+              class="text-caption text-muted text-weight-bold text-uppercase"
+              style="letter-spacing: 0.06em"
+              >Tax Certificate</span
+            >
+          </div>
+          <div class="row q-gutter-xs">
+            <q-btn
+              flat
+              round
+              dense
+              size="sm"
+              icon="print"
+              class="text-muted"
+              @click="printTaxReport"
+            >
+              <q-tooltip>Print / Save PDF</q-tooltip>
+            </q-btn>
+            <q-btn flat round dense size="sm" icon="close" class="text-muted" v-close-popup />
+          </div>
+        </div>
+
+        <!-- Certificate Paper -->
+        <div id="tax-print-area" class="tax-paper q-mx-lg q-mb-lg">
+          <!-- Paper Header -->
+          <div class="tp-header">
+            <div class="tp-title">TRADING TAX CERTIFICATE</div>
+            <div class="tp-sub">Annual Income &amp; Tax Withholding Summary</div>
+            <div class="tp-year-badge">Tax Year: {{ currentTaxYear }}</div>
+          </div>
+
+          <!-- Account Info Bar -->
+          <div class="tp-info-bar">
+            <div>
+              <div class="tp-info-label">ACCOUNT HOLDER</div>
+              <div class="tp-info-val">{{ portStore.activePortfolio?.name ?? '—' }}</div>
+            </div>
+            <div class="text-center">
+              <div class="tp-info-label">TOTAL TRADES</div>
+              <div class="tp-info-val">{{ taxRows.reduce((s, r) => s + r.count, 0) }} Orders</div>
+            </div>
+            <div class="text-right">
+              <div class="tp-info-label">GENERATED</div>
+              <div class="tp-info-val">{{ new Date().toLocaleDateString('en-GB') }}</div>
+            </div>
+          </div>
+
+          <!-- Monthly Table -->
+          <table class="tp-table">
+            <thead>
+              <tr>
+                <th>MONTH</th>
+                <th class="r">GROSS PROFIT (USD)</th>
+                <th class="r">GROSS LOSS (USD)</th>
+                <th class="r">NET PNL (USD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in taxMonthly" :key="r.month">
+                <td class="tp-month">{{ r.month }}</td>
+                <td class="r tp-profit">+${{ r.profit.toFixed(2) }}</td>
+                <td class="r tp-loss">-${{ r.loss.toFixed(2) }}</td>
+                <td class="r" :class="r.net >= 0 ? 'tp-neutral' : 'tp-loss'">
+                  {{ r.net >= 0 ? '' : '-' }}${{ Math.abs(r.net).toFixed(2) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Summary Box -->
+          <div class="tp-summary-wrap">
+            <div class="tp-summary-box">
+              <div class="tp-sum-row">
+                <span>Total Gross Profit</span>
+                <span class="tp-profit"
+                  >+${{ taxRows.reduce((s, r) => s + r.profit, 0).toFixed(2) }}</span
+                >
+              </div>
+              <div class="tp-sum-row">
+                <span>Total Gross Loss</span>
+                <span class="tp-loss"
+                  >-${{ taxRows.reduce((s, r) => s + r.loss, 0).toFixed(2) }}</span
+                >
+              </div>
+              <div class="tp-sum-divider" />
+              <div class="tp-sum-row tp-sum-bold">
+                <span>Annual Net Profit (USD)</span>
+                <span :class="annualNet >= 0 ? 'tp-profit' : 'tp-loss'"
+                  >${{ annualNet.toFixed(2) }}</span
+                >
+              </div>
+              <div class="tp-sum-row tp-sum-sm">
+                <span>Est. Exchange Rate (THB/USD)</span>
+                <span>x 34.50</span>
+              </div>
+              <div class="tp-sum-row tp-sum-sm">
+                <span>Est. Taxable Income (THB)</span>
+                <span
+                  >฿{{
+                    annualNet > 0
+                      ? (annualNet * 34.5).toLocaleString('th-TH', { minimumFractionDigits: 2 })
+                      : '0.00'
+                  }}</span
+                >
+              </div>
+              <div class="tp-sum-divider tp-sum-divider--dashed" />
+              <div class="tp-sum-row tp-sum-tax">
+                <span>ESTIMATED TAX</span>
+                <span
+                  >฿{{
+                    annualNet > 0
+                      ? (annualNet * 34.5 * TAX_RATE).toLocaleString('th-TH', {
+                          minimumFractionDigits: 2,
+                        })
+                      : '0.00'
+                  }}</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="tp-footer">
+            <q-icon name="info_outline" size="12px" class="q-mr-xs" />
+            This document is for reference only. Consult a licensed tax professional before filing.
+          </div>
+        </div>
+      </q-card>
+    </q-dialog>
+  </q-page>
+</template>
+
+<style scoped>
+/* ==========================================================
+   1. CSS Variables สำหรับ Light Mode และ Dark Mode
+========================================================== */
+.dashboard-page {
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-soft: #f1f5f9;
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.03), 0 2px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-hover: 0 10px 20px -3px rgba(0, 0, 0, 0.05), 0 4px 8px -2px rgba(0, 0, 0, 0.03);
+
+  --bg-icon-primary: #eff6ff;
+  --bg-icon-positive: #f0fdf4;
+  --bg-icon-warning: #fffbeb;
+  --bg-icon-negative: #fef2f2;
+  --bg-icon-purple: #faf5ff;
+
+  --table-hover: #f8fafc;
+
+  background-color: var(--bg-page);
+  min-height: 100vh;
+  color: var(--text-main);
+  transition: background-color 0.3s ease;
+}
+
+.body--dark .dashboard-page {
+  --bg-page: #0f172a;
+  --bg-card: #151e32;
+  --bg-card-soft: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #23314b;
+  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 10px 20px -3px rgba(0, 0, 0, 0.4);
+
+  --bg-icon-primary: rgba(59, 130, 246, 0.15);
+  --bg-icon-positive: rgba(34, 197, 94, 0.15);
+  --bg-icon-warning: rgba(245, 158, 11, 0.15);
+  --bg-icon-negative: rgba(239, 68, 68, 0.15);
+  --bg-icon-purple: rgba(168, 85, 247, 0.15);
+
+  --table-hover: rgba(255, 255, 255, 0.03);
+}
+
+/* ==========================================================
+   2. Typography & Utilities
+========================================================== */
+.text-main {
+  color: var(--text-main);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.tracking-tight {
+  letter-spacing: -0.02em;
+}
+.tracking-wide {
+  letter-spacing: 0.05em;
+}
+.h-full {
+  height: 100%;
+}
+.flex-grow {
+  flex-grow: 1;
+}
+.opacity-20 {
+  opacity: 0.2;
+}
+.opacity-50 {
+  opacity: 0.5;
+}
+.text-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bg-icon-primary {
+  background-color: var(--bg-icon-primary);
+}
+.bg-icon-positive {
+  background-color: var(--bg-icon-positive);
+}
+.bg-icon-warning {
+  background-color: var(--bg-icon-warning);
+}
+.bg-icon-negative {
+  background-color: var(--bg-icon-negative);
+}
+.bg-icon-purple {
+  background-color: var(--bg-icon-purple);
+}
+.bg-card-soft {
+  background-color: var(--bg-card-soft);
+}
+
+.icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Filter Toggle */
+.filter-toggle {
+  border: 1px solid var(--border-color);
+}
+.filter-toggle :deep(.q-btn) {
+  padding: 0 12px;
+}
+
+/* ==========================================================
+   3. Cards & Containers
+========================================================== */
+.dashboard-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+/* stat card hover — เหมือน Journal */
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+}
+
+.header-divider {
+  border-bottom: 1px solid var(--border-color);
+}
+.custom-banner {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-card);
+}
+
+/* ==========================================================
+   Goal Card — Minimal Modern
+========================================================== */
+.goal-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+.badge-done {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.badge-on-track {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+}
+.badge-behind {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+}
+
+.body--dark .badge-done {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+.body--dark .badge-on-track {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+.body--dark .badge-behind {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.badge-failed {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.body--dark .badge-failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.goal-result-banner {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.goal-result-success {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--q-positive);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.goal-result-fail {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--q-negative);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.goal-progress-bar :deep(.q-linear-progress__model) {
+  border-radius: 10px;
+}
+
+.goal-amount-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  flex: 1;
+}
+.goal-amount-block {
+  flex: 1;
+  padding: 12px 14px;
+}
+.goal-amount-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+.goal-amount-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.goal-remaining-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+/* Keep old gradient-progress for GoalPage compatibility */
+.gradient-progress :deep(.q-linear-progress__model) {
+  background: linear-gradient(90deg, #b864ff 0%, #ff5e98 50%, #ffb169 100%) !important;
+  border-radius: 10px;
+}
+
+/* ==========================================================
+   5. Calendar Styles
+========================================================== */
+.calendar-nav {
+  background: var(--bg-page);
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  padding: 2px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+/* Fixed-height calendar: always 6 rows regardless of month */
+.calendar-fixed-grid {
+  grid-template-rows: repeat(6, 1fr);
+  height: 420px; /* 6 rows × ~65px + 5 gaps × 6px */
+}
+
+.calendar-fixed-grid .calendar-cell {
+  height: auto; /* let grid control height instead */
+}
+
+.calendar-cell {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  height: 65px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.calendar-cell.is-empty {
+  border: none;
+  background-color: transparent !important;
+}
+
+.calendar-cell:not(.is-empty):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-color: var(--q-primary);
+}
+:global(.body--dark) .calendar-cell:not(.is-empty):hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.cell-positive {
+  background-color: var(--bg-icon-positive) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.cell-negative {
+  background-color: var(--bg-icon-negative) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.day-number {
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.pnl-amount {
+  text-align: right;
+  font-size: 0.9em;
+  letter-spacing: -0.01em;
+}
+
+/* ==========================================================
+   6. Table Styles
+========================================================== */
+.custom-table {
+  color: var(--text-main);
+}
+.custom-table :deep(th) {
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+  font-size: 11px;
+  padding: 8px 16px;
+}
+.custom-table :deep(td) {
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 16px;
+}
+.custom-table :deep(tbody tr:hover) {
+  background-color: var(--table-hover) !important;
+}
+
+.custom-chip {
+  border-radius: 6px;
+  padding: 2px 10px;
+}
+.chip-buy {
+  background-color: var(--bg-icon-positive);
+  color: var(--q-positive);
+}
+.chip-sell {
+  background-color: var(--bg-icon-negative);
+  color: var(--q-negative);
+}
+
+/* ==========================================================
+   7. Custom Mobile Responsiveness & Layout
+========================================================== */
+.stat-val {
+  font-size: 2.125rem;
+  line-height: 2.5rem;
+}
+.stat-sub-label {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+@media (max-width: 599px) {
+  .stat-val {
+    font-size: 1.25rem;
+    line-height: 1.5rem;
+  }
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+  .icon-box {
+    width: 28px;
+    height: 28px;
+  }
+  .icon-box .q-icon {
+    font-size: 14px !important;
+  }
+  .stat-sub-label {
+    font-size: 9px;
+  }
+
+  .calendar-cell {
+    height: 55px;
+    padding: 4px;
+  }
+  .calendar-fixed-grid {
+    height: 360px;
+  }
+  .pnl-amount {
+    font-size: 0.75em;
+  }
+  .calendar-grid {
+    gap: 4px;
+  }
+}
+
+:global(.body--dark) .chart-container .apexcharts-tooltip {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc;
+}
+:global(.body--dark) .chart-container .apexcharts-tooltip-title {
+  background: #0f172a !important;
+  border-bottom: 1px solid #334155 !important;
+}
+/* ==========================================================
+   New Minimal & Modern Classes (Row 3 Additions)
+========================================================== */
+.inner-card {
+  border-radius: 16px;
+  border: 1px solid transparent;
+}
+:global(.body--dark) .inner-card {
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.insight-pill {
+  border-radius: 8px;
+  padding: 4px 10px; /* ลด Padding ให้บางลง */
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.insight-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04) !important;
+}
+:global(.body--dark) .insight-pill {
+  background: var(--bg-card) !important;
+}
+
+.icon-micro {
+  width: 18px; /* เล็กลงกว่าเดิม */
+  height: 18px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-box-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shadow-sm {
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.05);
+}
+:global(.body--dark) .shadow-sm {
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+}
+
+.z-top {
+  z-index: 1;
+  position: relative;
+}
+/* ==========================================================
+   Goal Card Dark Mode (ม่วงเข้มพรีเมียม)
+========================================================== */
+.bg-goal-dark {
+  /* สีม่วงเข้มๆ อมน้ำเงิน ให้ดูตัดกับความมืดแต่ไม่โดดเกินไป */
+  background-color: rgba(49, 46, 129, 0.3) !important;
+  border: 1px solid rgba(99, 102, 241, 0.15) !important;
+}
+/* ==========================================================
+   Share Stats Card v3 — Warm Minimal, Mobile-Ready
+========================================================== */
+
+/* Share button in header */
+.share-btn-main {
+  border-radius: 10px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.25);
+}
+.share-btn-main:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.35);
+}
+
+/* Dialog wrapper — responsive width */
+.share-dialog-wrapper {
+  width: min(400px, 94vw);
+}
+
+/* ── Card shell ── */
+.share-card-v3 {
+  background: #fafaf8;
+  border-radius: 20px;
+  box-shadow:
+    0 20px 40px -8px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(15, 23, 42, 0.07);
+  width: 100%;
+  position: relative;
+}
+
+/* Warm parchment overlay — gives it texture without dark/light dependency */
+.share-warm-overlay {
+  background:
+    radial-gradient(ellipse at 10% 0%, rgba(251, 191, 36, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(99, 102, 241, 0.05) 0%, transparent 55%);
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Corner dots */
+.share-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1d5db;
+  z-index: 2;
+}
+.share-dot-tl {
+  top: 16px;
+  left: 16px;
+}
+.share-dot-br {
+  bottom: 16px;
+  right: 16px;
+}
+
+/* Header row */
+.share-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 14px;
+  position: relative;
+  z-index: 1;
+}
+.share-wm-top {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #c9cfd8;
+}
+.share-header-date {
+  font-size: 10px;
+  font-weight: 600;
+  color: #c9cfd8;
+  letter-spacing: 0.03em;
+}
+
+/* Account chip */
+.share-account-chip-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px 14px;
+  position: relative;
+  z-index: 1;
+}
+.share-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f0f4ff;
+  border: 1px solid #dde5ff;
+  border-radius: 99px;
+  padding: 4px 11px 4px 8px;
+}
+.share-account-at {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6366f1;
+}
+.share-account-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4f46e5;
+  letter-spacing: -0.01em;
+}
+.share-period-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 99px;
+  padding: 4px 10px;
+  letter-spacing: 0.02em;
+}
+
+/* Hero */
+.share-hero-section {
+  padding: 4px 22px 16px;
+  position: relative;
+  z-index: 1;
+}
+.share-hero-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.share-hero-num {
+  font-size: 36px;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.share-growth-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-top: 8px;
+  letter-spacing: 0.01em;
+}
+.tag-up {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.09);
+}
+.tag-down {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.09);
+}
+
+/* Thin divider */
+.share-thin-line {
+  height: 1px;
+  margin: 0 22px;
+  background: #e9eaec;
+  position: relative;
+  z-index: 1;
+}
+
+/* Big stats row */
+.share-big-stats {
+  display: flex;
+  align-items: center;
+  padding: 16px 22px;
+  position: relative;
+  z-index: 1;
+}
+.share-big-stat {
+  flex: 1;
+  text-align: center;
+}
+.share-big-stat-sep {
+  width: 1px;
+  height: 36px;
+  background: #e9eaec;
+  flex-shrink: 0;
+}
+.share-big-num {
+  font-size: 24px;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.share-big-unit {
+  font-size: 16px;
+  font-weight: 700;
+}
+.share-big-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+.num-green {
+  color: #059669;
+}
+.num-red {
+  color: #dc2626;
+}
+.num-amber {
+  color: #d97706;
+}
+
+/* Chips row */
+.share-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 22px 14px;
+  position: relative;
+  z-index: 1;
+}
+.share-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 99px;
+  padding: 4px 10px;
+}
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-green {
+  background: #10b981;
+}
+.dot-red {
+  background: #ef4444;
+}
+.dot-blue {
+  background: #6366f1;
+}
+.dot-amber {
+  background: #f59e0b;
+}
+.chip-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  letter-spacing: 0.01em;
+}
+
+/* Goal area */
+.share-goal-area {
+  margin: 0 22px 14px;
+  background: #f9fafb;
+  border: 1px solid #e9eaec;
+  border-radius: 12px;
+  padding: 12px 14px;
+  position: relative;
+  z-index: 1;
+}
+.share-goal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.share-goal-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: lowercase;
+  color: #9ca3af;
+}
+.share-goal-pct-v3 {
+  font-size: 13px;
+  font-weight: 800;
+  color: #6366f1;
+  letter-spacing: -0.02em;
+}
+.pct-done {
+  color: #059669;
+}
+.share-goal-bar {
+  height: 5px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.share-goal-bar-fill {
+  height: 100%;
+  background: #6366f1;
+  border-radius: 99px;
+  transition: width 0.5s ease;
+}
+.fill-done {
+  background: #10b981;
+}
+.share-goal-sub {
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+}
+.share-goal-of {
+  margin: 0 3px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* Footer */
+.share-footer-v3 {
+  padding: 10px 22px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+.share-footer-brand {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #d1d5db;
+}
+
+/* Action buttons */
+.gap-md {
+  gap: 12px;
+}
+.w-full {
+  width: 100%;
+}
+
+.share-action-close {
+  color: #6b7280;
+  font-size: 13px;
+}
+.share-action-save {
+  background: #111827;
+  color: #ffffff;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
+}
+.share-action-save:hover {
+  background: #1f2937;
+}
+
+/* Mobile tweaks */
+@media (max-width: 480px) {
+  .share-hero-num {
+    font-size: 28px;
+  }
+  .share-big-num {
+    font-size: 19px;
+  }
+  .share-big-unit {
+    font-size: 13px;
+  }
+  .share-header-row,
+  .share-account-chip-wrap,
+  .share-hero-section,
+  .share-chips-row {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .share-goal-area {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+  .share-thin-line {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+  .share-big-stats {
+    padding: 14px 16px;
+  }
+  .share-footer-v3 {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* ==========================================================
+   Tax Certificate Dialog
+========================================================== */
+
+/* Dialog card — solid, not transparent */
+.tax-cert-card {
+  background: #f5f0e8 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+}
+.body--dark .tax-cert-card {
+  background: #1a1a1a !important;
+}
+
+/* Paper area */
+.tax-paper {
+  background: #ffffff;
+  border: 1px solid #d4c9a8;
+  box-shadow: inset 0 0 40px rgba(180, 160, 100, 0.08);
+  padding: 28px 28px 20px;
+  font-family: 'Arial', sans-serif;
+  position: relative;
+}
+.body--dark .tax-paper {
+  background: #1e1e1e;
+  border-color: #3a3a3a;
+}
+
+/* Subtle watermark lines */
+.tax-paper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 28px,
+    rgba(0, 0, 0, 0.025) 28px,
+    rgba(0, 0, 0, 0.025) 29px
+  );
+  pointer-events: none;
+}
+
+/* Paper header */
+.tp-header {
+  border-bottom: 2px solid #1a1a1a;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  position: relative;
+}
+.body--dark .tp-header {
+  border-color: #e0e0e0;
+}
+.tp-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #0a0a0a;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.body--dark .tp-title {
+  color: #f0f0f0;
+}
+.tp-sub {
+  font-size: 11px;
+  color: #555;
+  letter-spacing: 0.02em;
+}
+.body--dark .tp-sub {
+  color: #aaa;
+}
+.tp-year-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #666;
+  text-align: right;
+  letter-spacing: 0.03em;
+}
+.body--dark .tp-year-badge {
+  color: #aaa;
+}
+
+/* Info bar */
+.tp-info-bar {
+  display: flex;
+  justify-content: space-between;
+  background: #f9f7f2;
+  border: 1px solid #e0d8c0;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-size: 12px;
+}
+.body--dark .tp-info-bar {
+  background: #2a2a2a;
+  border-color: #444;
+}
+.tp-info-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #888;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.tp-info-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111;
+}
+.body--dark .tp-info-val {
+  color: #eee;
+}
+
+/* Table */
+.tp-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 12px;
+  position: relative;
+}
+.tp-table thead tr {
+  border-bottom: 2px solid #111;
+}
+.body--dark .tp-table thead tr {
+  border-color: #ddd;
+}
+.tp-table thead th {
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #333;
+}
+.body--dark .tp-table thead th {
+  color: #ccc;
+}
+.tp-table thead th.r {
+  text-align: right;
+}
+.tp-table tbody tr {
+  border-bottom: 1px solid #ece8dc;
+}
+.body--dark .tp-table tbody tr {
+  border-color: #333;
+}
+.tp-table tbody td {
+  padding: 7px 8px;
+  color: #222;
+  font-size: 12px;
+}
+.body--dark .tp-table tbody td {
+  color: #ddd;
+}
+.tp-table tbody td.r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tp-month {
+  font-weight: 500;
+}
+.tp-profit {
+  color: #16a34a;
+  font-weight: 600;
+}
+.tp-loss {
+  color: #dc2626;
+  font-weight: 600;
+}
+.tp-neutral {
+  color: #374151;
+}
+.body--dark .tp-neutral {
+  color: #d1d5db;
+}
+
+/* Summary box */
+.tp-summary-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+.tp-summary-box {
+  width: 300px;
+  border: 1px solid #d4c9a8;
+  background: #faf8f3;
+  padding: 12px 16px;
+  font-size: 12px;
+}
+.body--dark .tp-summary-box {
+  background: #252525;
+  border-color: #444;
+}
+.tp-sum-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  color: #333;
+  font-size: 12px;
+}
+.body--dark .tp-sum-row {
+  color: #ccc;
+}
+.tp-sum-bold {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111;
+  padding: 4px 0;
+}
+.body--dark .tp-sum-bold {
+  color: #eee;
+}
+.tp-sum-sm {
+  font-size: 10px;
+  color: #777;
+}
+.tp-sum-divider {
+  border-top: 1px solid #d4c9a8;
+  margin: 6px 0;
+}
+.tp-sum-divider--dashed {
+  border-style: dashed;
+  border-color: #bbb;
+  margin: 8px 0;
+}
+.tp-sum-tax {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #dc2626;
+  padding-top: 4px;
+}
+
+/* Footer */
+.tp-footer {
+  font-size: 9px;
+  color: #999;
+  text-align: center;
+  padding-top: 10px;
+  border-top: 1px solid #e8e2d0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.body--dark .tp-footer {
+  color: #666;
+  border-color: #333;
+}
+
+.btn-outline-modern {
+  background: var(--bg-card);
+  color: var(--text-main);
+  border-radius: 10px;
+  padding: 0 14px;
+  height: 36px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+.btn-outline-modern:hover {
+  border-color: #7c3aed;
+  color: #7c3aed;
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.15) !important;
+  transform: translateY(-1px);
+}
+</style>

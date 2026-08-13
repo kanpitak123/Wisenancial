@@ -1,0 +1,989 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==========================================
+// Shared Enums
+// ==========================================
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SubscriptionTier {
+  PACK_159
+  PACK_219
+  PACK_279
+  PACK_399
+}
+
+enum PortfolioType {
+  TRADER
+  INVESTOR
+}
+
+enum NewsImportance {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum NewsSentiment {
+  BULLISH
+  BEARISH
+  NEUTRAL
+}
+
+enum AiTrend {
+  UP
+  DOWN
+  SIDEWAY
+}
+
+enum Sentiment {
+  BULLISH
+  BEARISH
+  NEUTRAL
+}
+
+enum PostReferenceType {
+  NONE
+  TRADE
+  STOCK_PURCHASE
+  STOCK_SALE
+  DIVIDEND
+  PORTFOLIO
+}
+
+enum MissionZone {
+  DAILY
+  MONTHLY
+  INVITE
+  ACHIEVEMENT
+}
+
+enum MissionFrequency {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum MissionStatus {
+  IN_PROGRESS
+  COMPLETED
+  CLAIMED
+  EXPIRED
+}
+
+enum MissionAudience {
+  ALL
+  TRADER
+  INVESTOR
+}
+
+enum MissionEventType {
+  LOGIN
+  TRADE_CREATED
+  TRADE_CLOSED
+  JOURNAL_COMPLETED
+  TRADE_IMPORTED
+  STOCK_PURCHASED
+  STOCK_SOLD
+  DIVIDEND_RECEIVED
+  PORTFOLIO_REVIEWED
+  GOAL_COMPLETED
+  POST_CREATED
+  COMMENT_CREATED
+  PROFILE_COMPLETED
+}
+
+enum CoachSessionStatus {
+  UPCOMING
+  COMPLETED
+  CANCELLED
+}
+
+// ==========================================
+// User & Subscription Management
+// ==========================================
+
+model users {
+  id                     Int               @id @default(autoincrement())
+  username               String            @unique @db.VarChar(50)
+  full_name              String            @db.VarChar(100)
+  email                  String            @unique @db.VarChar(255)
+  password               String
+  role                   Role              @default(USER)
+  current_plan_id        Int?
+  subscription_tier      SubscriptionTier?
+  stripe_customer_id     String?           @unique @db.VarChar(255)
+  stripe_subscription_id String?           @db.VarChar(255)
+  avatar_url             String?           @db.VarChar(500)
+  bio                    String?           @db.Text
+  is_public_profile      Boolean           @default(false)
+
+  // Keep TJAPP balance names as canonical during the merge to avoid breaking existing code.
+  points_balance   Int       @default(0)
+  ai_token_balance Int       @default(0)
+  current_streak   Int       @default(0)
+  longest_streak   Int       @default(0)
+  last_active_date DateTime?
+
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+
+  current_plan       plans?                    @relation(fields: [current_plan_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  portfolios         portfolios[]
+  subscriptions      subscriptions[]
+  trades             trades[]
+  posts              posts[]
+  comments           comments[]
+  post_likes         post_likes[]
+  chat_messages      chat_messages[]
+  user_missions      user_missions[]
+  point_transactions point_transactions[]
+  token_transactions token_transactions[]
+  pinned_news        user_pinned_news[]
+  pinned_market_news user_pinned_market_news[]
+  share_logs         share_logs[]
+
+  watchlist             watchlist[]
+  lesson_progress       lesson_progress[]
+  readiness_assessments readiness_assessments[]
+  coach_sessions        coach_sessions[]
+  dividends             dividends[]
+  ai_usage_logs         ai_usage_logs[]
+}
+
+model plans {
+  id            Int             @id @default(autoincrement())
+  name          String          @db.VarChar(50)
+  price         Decimal         @db.Decimal(10, 2)
+  duration_days Int
+  description   String?
+  created_at    DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamp(6)
+  subscriptions subscriptions[]
+  users         users[]
+}
+
+model subscriptions {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  plan_id    Int?
+  status     String?   @default("ACTIVE") @db.VarChar(20)
+  start_date DateTime  @default(now()) @db.Timestamp(6)
+  end_date   DateTime  @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+
+  plans plans? @relation(fields: [plan_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  users users? @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+// ==========================================
+// Portfolio & Goals
+// ==========================================
+
+model portfolios {
+  id                   Int           @id @default(autoincrement())
+  user_id              Int?
+  name                 String        @db.VarChar(100)
+  initial_balance      Decimal       @db.Decimal(15, 2)
+  current_balance      Decimal       @db.Decimal(15, 2)
+  currency             String?       @default("USD") @db.VarChar(10)
+  portfolio_type       PortfolioType @default(TRADER)
+  investor_cost_method String        @default("FIFO") @db.VarChar(10)
+  icon                 String?       @db.VarChar(50)
+  color                String?       @db.VarChar(20)
+  is_default           Boolean       @default(false)
+  created_at           DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?     @default(now()) @db.Timestamp(6)
+
+  users           users?            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goals           goals[]
+  trades          trades[]
+  trade_imports   trade_imports[]
+  stock_purchases stock_purchases[]
+  stock_sales     stock_sales[]
+  records         records[]
+  dividends       dividends[]
+  posts           posts[]
+  share_logs      share_logs[]
+
+  @@index([user_id, portfolio_type])
+}
+
+model goals {
+  id            Int           @id @default(autoincrement())
+  portfolio_id  Int?
+  year          Int
+  month         Int
+  target_profit Decimal       @db.Decimal(15, 2)
+  goal_type     PortfolioType @default(TRADER)
+  created_at    DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?     @default(now()) @db.Timestamp(6)
+
+  portfolios portfolios? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([portfolio_id, year, month])
+}
+
+// ==========================================
+// 🚀 Trading Core
+// ==========================================
+
+model trade_imports {
+  id             Int       @id @default(autoincrement())
+  portfolio_id   Int?
+  broker         String?   @db.VarChar(50)
+  account_id     String?   @db.VarChar(50)
+  source         String?   @db.VarChar(30)
+  filename       String?   @db.VarChar(255)
+  imported_count Int?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+
+  portfolios portfolios? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  trades     trades[]
+}
+
+model trades {
+  id           Int  @id @default(autoincrement())
+  user_id      Int? // 🟢 เพิ่มเพื่อให้ผูกกับสิทธิ์ของ User โดยตรง ค้นหาไม้ได้รวดเร็ว
+  portfolio_id Int?
+  import_id    Int?
+
+  broker     String? @db.VarChar(50)
+  account_id String? @db.VarChar(50)
+  ticket_id  String? @db.VarChar(100)
+  source     String? @default("manual") @db.VarChar(30) // "manual" หรือ "import"
+
+  pair        String   @db.VarChar(30) // คู่เงินหรือสินทรัพย์ เช่น 'XAU/USD', 'BTC/USDT'
+  trade_type  String   @db.VarChar(15) // 'BUY' หรือ 'SELL'
+  volume      Decimal? @db.Decimal(10, 2) // Lot size หรือ Position size 
+  open_price  Decimal? @db.Decimal(18, 8) // ราคาฝั่งขาเข้า (Entry Price)
+  close_price Decimal? @db.Decimal(18, 8) // ราคาฝั่งขาออก (Exit Price)
+  stop_loss   Decimal? @db.Decimal(18, 8)
+  take_profit Decimal? @db.Decimal(18, 8) // ราคาเป้าหมาย (Target Price)
+
+  commission    Decimal? @db.Decimal(15, 2)
+  swap          Decimal? @db.Decimal(15, 2)
+  pnl           Decimal? @db.Decimal(15, 2)
+  result_status String?  @default("OPEN") @db.VarChar(10) // 🟢 ตั้ง Default เป็น "OPEN" เพื่อบ่งบอกว่าเป็นไม้ที่กำลังถืออยู่ (Active)
+
+  opened_at DateTime? @db.Timestamp(6) // เวลาเปิดไม้
+  closed_at DateTime? @db.Timestamp(6) // เวลาปิดไม้
+
+  // 🧠 บันทึกอารมณ์ กลยุทธ์ และเหตุผลตอนเทรด
+  timeframe    String? @db.VarChar(20)
+  trend        String? @db.VarChar(50)
+  strategy     String? @db.VarChar(100)
+  emotion      String? @db.VarChar(50)
+  entry_reason String? @db.Text
+  note         String? @db.Text
+
+  // 📊 ฟิลด์ทางเทคนิค (ย้ายมาจากตาราง active_positions เดิม)
+  asset_name    String? @db.VarChar(100) // ชื่อเต็มของสินทรัพย์ เช่น 'Gold', 'Bitcoin'
+  rsi           Int? // ค่า RSI ณ ตอนที่กดเข้าไม้
+  macd          String? @db.VarChar(50) // สถานะ MACD เช่น 'Bullish Cross'
+  target_points String? @db.VarChar(50) // จำนวนจุดกำไรที่คาดหวัง เช่น '+1500'
+
+  raw_data Json?
+
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+
+  users         users?              @relation(fields: [user_id], references: [id], onDelete: Cascade) // 🟢 ความสัมพันธ์ตรงกับตาราง Users
+  portfolios    portfolios?         @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  trade_imports trade_imports?      @relation(fields: [import_id], references: [id], onDelete: Cascade)
+  screenshots   trade_screenshots[]
+
+  // 💡 เปลี่ยนจาก @@unique มาเป็น @@index ปกติ เพื่อป้องกันข้อผิดพลาดกรณีคีย์ไม้เอง (Manual) แล้วฟิลด์ ticket_id ว่างเปล่า
+  @@index([user_id])
+  @@index([portfolio_id])
+  @@index([ticket_id])
+  @@index([closed_at])
+}
+
+model trade_screenshots {
+  id         Int       @id @default(autoincrement())
+  trade_id   Int
+  image_url  String    @db.Text
+  image_type String?   @db.VarChar(20)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  trades trades @relation(fields: [trade_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 💬 Community Board
+// ==========================================
+
+model posts {
+  id             Int           @id @default(autoincrement())
+  user_id        Int
+  portfolio_id   Int
+  portfolio_type PortfolioType
+
+  asset_symbol String?   @db.VarChar(50)
+  content      String    @db.Text
+  sentiment    Sentiment @default(NEUTRAL)
+  post_type    String    @default("GENERAL") @db.VarChar(30)
+  visibility   String    @default("PUBLIC") @db.VarChar(20)
+
+  reference_type PostReferenceType @default(NONE)
+  reference_id   Int?
+
+  likes_count    Int      @default(0)
+  comments_count Int      @default(0)
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  users       users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  portfolios  portfolios    @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  post_images post_images[]
+  comments    comments[]
+  post_likes  post_likes[]
+
+  @@index([user_id])
+  @@index([portfolio_id, portfolio_type])
+  @@index([asset_symbol])
+  @@index([reference_type, reference_id])
+  @@index([created_at])
+}
+
+model share_logs {
+  id             Int           @id @default(autoincrement())
+  user_id        Int
+  portfolio_id   Int
+  portfolio_type PortfolioType
+  platform       String        @db.VarChar(30)
+  content_type   String        @default("MESSAGE") @db.VarChar(30)
+  message        String?       @db.Text
+  image_url      String?       @db.VarChar(500)
+  public_url     String?       @db.VarChar(500)
+  stats_snapshot Json?
+  created_at     DateTime      @default(now()) @db.Timestamp(6)
+
+  users      users      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  portfolios portfolios @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([portfolio_id, created_at])
+  @@index([platform])
+}
+
+model post_images {
+  id         Int      @id @default(autoincrement())
+  post_id    Int
+  image_url  String   @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  posts posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+}
+
+model comments {
+  id         Int      @id @default(autoincrement())
+  post_id    Int
+  user_id    Int
+  content    String   @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  posts posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model post_likes {
+  id         Int      @id @default(autoincrement())
+  post_id    Int
+  user_id    Int
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  posts posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([post_id, user_id])
+}
+
+// ==========================================
+// 💬 Live Chat Rooms (Messenger Style)
+// ==========================================
+
+model chat_messages {
+  id         Int       @id @default(autoincrement())
+  room_name  String    @db.VarChar(50) // ชื่อห้องแชท (เช่น 'BTC/USD', 'XAU/USD', 'General')
+  user_id    Int
+  message    String    @db.Text
+  image_url  String?   @db.VarChar(500)
+  edited_at  DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([room_name])
+  @@index([created_at])
+  @@index([user_id])
+}
+
+// ==========================================
+// 🎯 Missions, Points & AI Token System
+// ==========================================
+
+model missions {
+  id           Int              @id @default(autoincrement())
+  code         String           @unique @db.VarChar(80)
+  title        String           @db.VarChar(100)
+  description  String?          @db.VarChar(255)
+  points       Int
+  target_count Int              @default(1)
+  frequency    MissionFrequency @default(ONCE)
+  zone         MissionZone      @default(DAILY)
+  audience     MissionAudience  @default(ALL)
+  event_type   MissionEventType
+  is_active    Boolean          @default(true)
+  starts_at    DateTime?        @db.Timestamp(6)
+  ends_at      DateTime?        @db.Timestamp(6)
+  created_at   DateTime         @default(now()) @db.Timestamp(6)
+  updated_at   DateTime         @default(now()) @updatedAt @db.Timestamp(6)
+
+  user_missions user_missions[]
+
+  @@index([is_active, frequency])
+  @@index([audience, event_type])
+}
+
+model user_missions {
+  id           Int           @id @default(autoincrement())
+  user_id      Int
+  mission_id   Int
+  period_key   String        @db.VarChar(20)
+  current_val  Int           @default(0)
+  status       MissionStatus @default(IN_PROGRESS)
+  completed_at DateTime?     @db.Timestamp(6)
+  claimed_at   DateTime?     @db.Timestamp(6)
+  expires_at   DateTime?     @db.Timestamp(6)
+  created_at   DateTime      @default(now()) @db.Timestamp(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamp(6)
+
+  users    users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  missions missions @relation(fields: [mission_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, mission_id, period_key])
+  @@index([user_id, status])
+  @@index([period_key, expires_at])
+}
+
+model point_transactions {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  amount      Int
+  type        String   @db.VarChar(20)
+  description String?
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model token_transactions {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  amount      Int
+  type        String   @db.VarChar(20)
+  description String?  @db.VarChar(255)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 📰 Economic Calendar & News
+// ==========================================
+
+model news {
+  id       Int      @id @default(autoincrement())
+  title    String   @db.VarChar(255)
+  country  String?  @db.VarChar(10)
+  impact   String?  @db.VarChar(20)
+  forecast String?  @db.VarChar(50)
+  previous String?  @db.VarChar(50)
+  actual   String?  @db.VarChar(50)
+  date     DateTime @db.Timestamp(6)
+
+  // Trader news now uses the same AI enrichment contract as Investor news.
+  content                String?        @db.Text
+  source                 String?        @db.VarChar(100)
+  url                    String?        @db.VarChar(1000)
+  importance             NewsImportance @default(MEDIUM)
+  sentiment              NewsSentiment  @default(NEUTRAL)
+  ai_summary             String?        @db.Text
+  market_impact_analysis String?        @db.Text
+  ai_trend               AiTrend?
+  ai_impact_probability  Float?
+  ai_translated_summary  Json?
+  related_symbols        String[]       @default([])
+  ai_analyzed_at         DateTime?      @db.Timestamp(6)
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  pinned_by user_pinned_news[]
+
+  @@unique([title, date])
+  @@index([country])
+  @@index([impact])
+  @@index([sentiment, importance])
+  @@index([date])
+}
+
+model user_pinned_news {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  news_id    Int
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  news  news  @relation(fields: [news_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, news_id])
+}
+
+// ==========================================
+// 📈 Asset Explorer (Market Data)
+// ==========================================
+
+model assets {
+  id         Int     @id @default(autoincrement())
+  symbol     String  @unique @db.VarChar(50) // เช่น 'BTC/USD', 'XAU/USD'
+  name       String? @db.VarChar(100) // เช่น 'Bitcoin', 'Gold'
+  asset_type String  @db.VarChar(30) // เช่น 'CRYPTO', 'FOREX', 'INDICES'
+  is_active  Boolean @default(true) // ปิด/เปิดให้แสดงในระบบ
+
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+
+  monthly_data asset_monthly_data[]
+}
+
+model asset_monthly_data {
+  id          Int      @id @default(autoincrement())
+  asset_id    Int
+  record_date DateTime @db.Date // ใช้วันที่ 1 ของเดือนเป็นหลักบอกเดือนนั้นๆ
+
+  open_price  Decimal  @db.Decimal(18, 8)
+  high_price  Decimal  @db.Decimal(18, 8)
+  low_price   Decimal  @db.Decimal(18, 8)
+  close_price Decimal  @db.Decimal(18, 8)
+  volume      Decimal? @db.Decimal(18, 2) // ปริมาณการเทรด (ถ้ามี)
+
+  assets assets @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@unique([asset_id, record_date])
+  @@index([asset_id])
+}
+
+// ==========================================
+// Investor Workspace
+// ==========================================
+
+model stock_purchases {
+  id               Int       @id @default(autoincrement())
+  portfolio_id     Int
+  stock_symbol     String    @db.VarChar(50)
+  stock_name       String?   @db.VarChar(100)
+  shares_count     Decimal   @db.Decimal(18, 8)
+  remaining_shares Decimal   @db.Decimal(18, 8)
+  purchase_price   Decimal   @db.Decimal(18, 8)
+  total_amount     Decimal   @db.Decimal(18, 2)
+  fees             Decimal   @default(0) @db.Decimal(18, 2)
+  currency         String    @default("USD") @db.VarChar(10)
+  purchase_reason  String?   @db.Text
+  expectation      String?   @db.Text
+  target_price     Decimal?  @db.Decimal(18, 8)
+  stop_loss        Decimal?  @db.Decimal(18, 8)
+  strategy         String?   @db.VarChar(100)
+  emotion          String?   @db.VarChar(50)
+  notes            String?   @db.Text
+  folder_name      String?   @db.VarChar(50)
+  status           String    @default("OPEN") @db.VarChar(20)
+  sold_price       Decimal?  @db.Decimal(18, 8)
+  sold_date        DateTime? @db.Timestamp(6)
+  closed_at        DateTime? @db.Timestamp(6)
+  purchase_date    DateTime  @default(now()) @db.Timestamp(6)
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+
+  portfolios       portfolios               @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sale_allocations stock_sale_allocations[]
+
+  @@index([portfolio_id, stock_symbol])
+  @@index([status])
+}
+
+enum RecordType {
+  DEPOSIT
+  WITHDRAW
+  FEE
+  ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
+  TRADE_PNL
+  STOCK_BUY
+  STOCK_SELL
+  DIVIDEND
+  TAX
+  REVERSAL
+}
+
+enum RecordSource {
+  MANUAL
+  TRADE
+  STOCK_PURCHASE
+  DIVIDEND
+  TRANSFER
+  SYSTEM
+}
+
+enum RecordStatus {
+  ACTIVE
+  REVERSED
+}
+
+model records {
+  id                 Int          @id @default(autoincrement())
+  portfolio_id       Int
+  type               RecordType
+  source             RecordSource @default(MANUAL)
+  source_id          Int?
+  amount             Decimal      @db.Decimal(20, 8)
+  currency           String       @default("USD")
+  description        String?
+  occurred_at        DateTime     @default(now())
+  status             RecordStatus @default(ACTIVE)
+  reversal_of_id     Int?         @unique
+  transfer_group_id  String?
+  created_by_user_id Int?
+  created_at         DateTime     @default(now())
+  updated_at         DateTime     @updatedAt
+
+  portfolio portfolios @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+
+  @@unique([portfolio_id, source, source_id, type])
+  @@index([portfolio_id, occurred_at])
+}
+
+model dividends {
+  id                 Int          @id @default(autoincrement())
+  user_id            Int
+  portfolio_id       Int?
+  symbol             String       @db.VarChar(50)
+  name               String?      @db.VarChar(100)
+  payment_date       DateTime     @db.Date
+  shares             Decimal      @db.Decimal(18, 8)
+  dividend_per_share Decimal      @db.Decimal(18, 8)
+  gross_amount       Decimal      @db.Decimal(18, 2)
+  wht_rate           Decimal      @default(0.10) @db.Decimal(6, 4)
+  tax_withheld       Decimal      @db.Decimal(18, 2)
+  net_amount         Decimal      @db.Decimal(18, 2)
+  status             RecordStatus @default(ACTIVE)
+  created_at         DateTime     @default(now()) @db.Timestamp(6)
+
+  users      users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  portfolios portfolios? @relation(fields: [portfolio_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([user_id, payment_date])
+  @@index([portfolio_id])
+  @@index([portfolio_id, status])
+}
+
+model stock_sales {
+  id             Int      @id @default(autoincrement())
+  portfolio_id   Int
+  stock_symbol   String   @db.VarChar(50)
+  shares_sold    Decimal  @db.Decimal(18, 8)
+  sold_price     Decimal  @db.Decimal(18, 8)
+  gross_proceeds Decimal  @db.Decimal(18, 2)
+  fees           Decimal  @default(0) @db.Decimal(18, 2)
+  net_proceeds   Decimal  @db.Decimal(18, 2)
+  cost_basis     Decimal  @db.Decimal(18, 2)
+  realized_pnl   Decimal  @db.Decimal(18, 2)
+  cost_method    String   @db.VarChar(10)
+  sold_date      DateTime @db.Timestamp(6)
+  notes          String?  @db.Text
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+
+  portfolios  portfolios               @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  allocations stock_sale_allocations[]
+
+  @@index([portfolio_id, sold_date])
+  @@index([portfolio_id, stock_symbol])
+}
+
+model stock_sale_allocations {
+  id          Int      @id @default(autoincrement())
+  sale_id     Int
+  purchase_id Int
+  shares      Decimal  @db.Decimal(18, 8)
+  unit_cost   Decimal  @db.Decimal(18, 8)
+  cost_basis  Decimal  @db.Decimal(18, 2)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  sale     stock_sales     @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  purchase stock_purchases @relation(fields: [purchase_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([sale_id])
+  @@index([purchase_id])
+}
+
+model market_prices {
+  id         Int      @id @default(autoincrement())
+  symbol     String   @db.VarChar(50)
+  currency   String   @default("USD") @db.VarChar(10)
+  price      Decimal  @db.Decimal(18, 8)
+  price_date DateTime @db.Timestamp(6)
+  source     String?  @db.VarChar(50)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@unique([symbol, currency])
+  @@index([price_date])
+}
+
+model watchlist {
+  id            Int      @id @default(autoincrement())
+  user_id       Int
+  symbol        String   @db.VarChar(50)
+  name          String?  @db.VarChar(100)
+  asset_type    String   @default("STOCK") @db.VarChar(30)
+  market_region String   @default("GLOBAL") @db.VarChar(20)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, symbol])
+  @@index([user_id, asset_type])
+}
+
+// ==========================================
+// Market Reference & Article News
+// ==========================================
+
+model stocks {
+  id         Int      @id @default(autoincrement())
+  symbol     String   @unique @db.VarChar(50)
+  name       String   @db.VarChar(150)
+  sector     String?  @db.VarChar(100)
+  industry   String?  @db.VarChar(100)
+  exchange   String?  @db.VarChar(50)
+  currency   String?  @db.VarChar(10)
+  country    String?  @db.VarChar(50)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@index([sector])
+  @@index([exchange])
+  @@index([is_active])
+}
+
+model trending_stocks {
+  id               Int      @id @default(autoincrement())
+  stock_symbol     String   @unique @db.VarChar(50)
+  stock_name       String?  @db.VarChar(150)
+  sector           String?  @db.VarChar(100)
+  recommendation   String   @db.VarChar(20)
+  estimated_growth Decimal? @db.Decimal(7, 2)
+  reason           String?  @db.Text
+  created_at       DateTime @default(now()) @db.Timestamp(6)
+  updated_at       DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@index([recommendation, sector])
+}
+
+model corporate_events {
+  id           Int      @id @default(autoincrement())
+  stock_symbol String   @db.VarChar(50)
+  event_type   String   @db.VarChar(30)
+  event_date   DateTime @db.Timestamp(6)
+  description  String?  @db.Text
+  amount       Decimal? @db.Decimal(18, 8)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([stock_symbol, event_date])
+}
+
+// Separate from `news`, which remains TJAPP's economic calendar table.
+model market_news {
+  id                    Int            @id @default(autoincrement())
+  title                 String         @db.VarChar(255)
+  content               String?        @db.Text
+  source                String?        @db.VarChar(100)
+  url                   String?        @db.VarChar(1000)
+  importance            NewsImportance @default(MEDIUM)
+  sentiment             NewsSentiment  @default(NEUTRAL)
+  ai_summary            String?        @db.Text
+  stock_impact_analysis String?        @db.Text
+  ai_trend              AiTrend?
+  ai_impact_probability Float?
+  ai_translated_summary Json?
+  sector                String?        @db.VarChar(100)
+  stock_symbols         String[]       @default([])
+  published_at          DateTime       @default(now()) @db.Timestamp(6)
+  created_at            DateTime       @default(now()) @db.Timestamp(6)
+  updated_at            DateTime       @default(now()) @updatedAt @db.Timestamp(6)
+
+  pinned_by user_pinned_market_news[]
+
+  @@index([sentiment, sector])
+  @@index([importance])
+  @@index([published_at])
+}
+
+model user_pinned_market_news {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  market_news_id Int
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+
+  users       users       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  market_news market_news @relation(fields: [market_news_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, market_news_id])
+  @@index([market_news_id])
+}
+
+// ==========================================
+// Learning, Readiness & Coach
+// ==========================================
+
+model lesson_progress {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  lesson_id  String   @db.VarChar(50)
+  completed  Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, lesson_id])
+}
+
+model readiness_assessments {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  assess_date DateTime @db.Date
+  answers     Json
+  score       Int      @default(0)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, assess_date])
+  @@index([user_id])
+}
+
+model coaches {
+  id               Int      @id @default(autoincrement())
+  name             String   @db.VarChar(100)
+  avatar_url       String?  @db.VarChar(500)
+  headline_en      String   @db.VarChar(255)
+  headline_th      String   @db.VarChar(255)
+  bio_en           String   @db.Text
+  bio_th           String   @db.Text
+  specialties      String[] @default([])
+  rating           Decimal  @default(0) @db.Decimal(3, 2)
+  review_count     Int      @default(0)
+  years_experience Int      @default(0)
+  hourly_rate_thb  Int      @default(0)
+  languages        String[] @default([])
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now()) @db.Timestamp(6)
+  updated_at       DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  availability coach_availability[]
+  reviews      coach_reviews[]
+  sessions     coach_sessions[]
+
+  @@index([is_active])
+}
+
+model coach_availability {
+  id         Int      @id @default(autoincrement())
+  coach_id   Int
+  slot       DateTime @db.Timestamp(6)
+  is_booked  Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  coaches coaches @relation(fields: [coach_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([coach_id, slot])
+  @@index([coach_id, is_booked])
+}
+
+model coach_reviews {
+  id         Int      @id @default(autoincrement())
+  coach_id   Int
+  author     String   @db.VarChar(100)
+  rating     Int      @default(5)
+  comment    String   @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  coaches coaches @relation(fields: [coach_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([coach_id])
+}
+
+model coach_sessions {
+  id               Int                @id @default(autoincrement())
+  coach_id         Int
+  user_id          Int
+  scheduled_at     DateTime           @db.Timestamp(6)
+  duration_minutes Int                @default(60)
+  status           CoachSessionStatus @default(UPCOMING)
+  topic            String?            @db.Text
+  meeting_url      String?            @db.VarChar(500)
+  created_at       DateTime           @default(now()) @db.Timestamp(6)
+  updated_at       DateTime           @default(now()) @updatedAt @db.Timestamp(6)
+
+  coaches coaches @relation(fields: [coach_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users   users   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, status])
+  @@index([coach_id])
+}
+
+// ==========================================
+// AI Usage
+// ==========================================
+
+model ai_usage_logs {
+  id               Int      @id @default(autoincrement())
+  user_id          Int
+  model_used       String   @db.VarChar(64)
+  provider         String?  @db.VarChar(50)
+  tokens_input     Int      @default(0)
+  tokens_output    Int      @default(0)
+  credits_deducted Float    @default(0)
+  latency_ms       Int?
+  status           String   @default("SUCCESS") @db.VarChar(20)
+  error_code       String?  @db.VarChar(50)
+  created_at       DateTime @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, created_at])
+  @@index([model_used])
+  @@index([status])
+}
