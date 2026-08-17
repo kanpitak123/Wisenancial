@@ -7,6 +7,7 @@ import type {
   CreateDividendResponse,
   Dividend,
   DividendSummary,
+  DividendTaxSummary,
   RemoveDividendResponse,
   UpdateDividendPayload,
   UpdateDividendResponse,
@@ -46,6 +47,18 @@ export const dividendService = {
   async getSummary(portfolioId: number, year?: number): Promise<DividendSummary> {
     const response = await api.get<DividendSummary>(
       `${DIVIDENDS_API_PATH}/portfolio/${portfolioId}/summary`,
+      {
+        params: year !== undefined ? { year } : undefined,
+      },
+    );
+
+    return response.data;
+  },
+
+  /** รายงานภาษีเงินปันผลรายปี — รายรายการ + ยอดรวมสำหรับส่งออก CSV */
+  async getTaxSummary(portfolioId: number, year?: number): Promise<DividendTaxSummary> {
+    const response = await api.get<DividendTaxSummary>(
+      `${DIVIDENDS_API_PATH}/portfolio/${portfolioId}/tax-summary`,
       {
         params: year !== undefined ? { year } : undefined,
       },

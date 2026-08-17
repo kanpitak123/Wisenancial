@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { investorPortfolioService } from 'src/services/investor-portfolio.service';
+import { stockPurchasesService } from 'src/services/stock-purchases.service';
 import type {
   BuyStockInput,
   InvestorActivity,
@@ -7,6 +8,7 @@ import type {
   InvestorPerformancePoint,
   InvestorSale,
   SellStockInput,
+  StockPurchase,
 } from 'src/types/investor-portfolio.types';
 
 interface ApiError {
@@ -33,6 +35,7 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
     sales: [] as InvestorSale[],
     timeline: [] as InvestorActivity[],
     performance: [] as InvestorPerformancePoint[],
+    purchases: [] as StockPurchase[],
     loading: false,
     submitting: false,
     error: null as string | null,
@@ -41,6 +44,22 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
   getters: {
     holdings: (state) => state.dashboard?.holdings ?? [],
     summary: (state) => state.dashboard?.summary ?? null,
+
+    /** lot ที่ยังถืออยู่ (ยังขายไม่หมด) */
+    openPurchases: (state) => state.purchases.filter((item) => item.status === 'OPEN'),
+
+    /** ชื่อโฟลเดอร์ทั้งหมดที่เคยใช้ — ใช้เป็นตัวเลือกในฟอร์มและตัวกรอง */
+    folders(): string[] {
+      const names = new Set<string>();
+
+      for (const purchase of this.openPurchases) {
+        if (purchase.folder_name) {
+          names.add(purchase.folder_name);
+        }
+      }
+
+      return [...names].sort((a, b) => a.localeCompare(b));
+    },
   },
 
   actions: {
@@ -49,11 +68,13 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
       this.error = null;
 
       try {
-        const [dashboard, sales, timeline, performance] = await Promise.all([
+        const [dashboard, sales, timeline, performance, purchases] = await Promise.all([
           investorPortfolioService.getDashboard(portfolioId),
           investorPortfolioService.getSales(portfolioId),
           investorPortfolioService.getTimeline(portfolioId),
           investorPortfolioService.getPerformance(portfolioId),
+          // lot ดิบ — หน้า StockRecord ใช้จัดกลุ่มตามโฟลเดอร์และแสดง target/stop
+          stockPurchasesService.getAll(portfolioId).catch(() => []),
         ]);
 
         this.portfolioId = portfolioId;
@@ -61,6 +82,7 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
         this.sales = sales.data;
         this.timeline = timeline.data;
         this.performance = performance.data;
+        this.purchases = purchases;
       } catch (error: unknown) {
         this.error = getErrorMessage(error, 'โหลดข้อมูลพอร์ตนักลงทุนไม่สำเร็จ');
         throw error;
@@ -120,6 +142,7 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
       this.sales = [];
       this.timeline = [];
       this.performance = [];
+      this.purchases = [];
       this.loading = false;
       this.submitting = false;
       this.error = null;

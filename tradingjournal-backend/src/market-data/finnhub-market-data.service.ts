@@ -73,14 +73,39 @@ export class FinnhubMarketDataService {
           AbortSignal.timeout(10_000),
       });
     } catch (error) {
+      // ของเดิมกลืน error ทิ้งทั้งก้อน เหลือแต่ "Finnhub request failed" ที่ไม่บอกอะไรเลย
+      // ว่าเป็น timeout / DNS / TLS / ถูกบล็อก — ต้องเห็นของจริงถึงจะไล่ต่อได้
+      const cause = (error as { cause?: { code?: string } } | undefined)?.cause;
+      const detail = [
+        `name=${error instanceof Error ? error.name : typeof error}`,
+        `message=${error instanceof Error ? error.message : String(error)}`,
+        `causeCode=${cause?.code ?? 'none'}`,
+      ].join(' ');
+
+      this.logger.error(
+        `Finnhub request failed for ${symbol} (url=${url.pathname}?symbol=${symbol}): ${detail}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+
       throw new ServiceUnavailableException(
-        `Finnhub request failed for ${symbol}`,
+        `Finnhub request failed for ${symbol}: ${detail}`,
       );
     }
 
     if (!response.ok) {
+      // body ของ Finnhub บอกสาเหตุจริง (เช่น "You don't have access to this resource"
+      // ตอน symbol อยู่นอกแพ็กเกจฟรี หรือ rate limit) — ไม่เก็บไว้ก็ไล่ต่อไม่ได้
+      const body = await response
+        .text()
+        .then((text) => text.slice(0, 300))
+        .catch(() => '<unreadable>');
+
+      this.logger.error(
+        `Finnhub returned HTTP ${response.status} for ${symbol}: ${body}`,
+      );
+
       throw new ServiceUnavailableException(
-        `Finnhub returned HTTP ${response.status}`,
+        `Finnhub returned HTTP ${response.status} for ${symbol}: ${body}`,
       );
     }
 

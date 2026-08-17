@@ -21,6 +21,7 @@ import type {
   WinRateBreakdown,
 } from '../types/analytics.types';
 import type { PortfolioRecord } from '../types/records.types';
+import { isPaidTierError } from '../utils/paid-tier';
 
 export function getAnalyticsErrorMessage(error: unknown, fallback = 'เกิดข้อผิดพลาด'): string {
   const axiosError = error as AxiosError<AnalyticsApiError>;
@@ -34,11 +35,8 @@ export function getAnalyticsErrorMessage(error: unknown, fallback = 'เกิ�
   return message ?? axiosError.message ?? fallback;
 }
 
-export function isAnalyticsPaidTierError(error: unknown): boolean {
-  const axiosError = error as AxiosError;
-
-  return axiosError.response?.status === 402 || axiosError.response?.status === 403;
-}
+/** alias ของ isPaidTierError ที่ใช้ร่วมกันทั้งแอพ — คงชื่อเดิมไว้ให้ผู้เรียกไม่ต้องแก้ */
+export const isAnalyticsPaidTierError = isPaidTierError;
 
 export const analyticsService = {
   async getOverview(

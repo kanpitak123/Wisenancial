@@ -103,6 +103,11 @@ export class AssetsController {
     );
   }
 
+  @Get('valuation/:symbol')
+  getSymbolValuation(@Param('symbol') symbol: string) {
+    return this.assetsService.getSymbolValuation(symbol);
+  }
+
   @Get('portfolio/:portfolioId/investor/valuation/:symbol')
   getStockValuation(
     @CurrentUser() user: AuthUser,

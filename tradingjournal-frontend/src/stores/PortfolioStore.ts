@@ -9,6 +9,7 @@ import { getPortfolioErrorMessage, portfolioService } from '../services/portfoli
 import type {
   CreatePortfolioPayload,
   Portfolio,
+  PortfolioQuota,
   PortfolioState,
   PortfolioType,
   UpdatePortfolioPayload,
@@ -100,11 +101,63 @@ export const usePortfolioStore = defineStore('portfolio', {
     currentPortfolios(state): Portfolio[] {
       return state.portfolios.filter((portfolio) => portfolio.portfolio_type === state.activeType);
     },
+
+    // ── โควต้า ────────────────────────────────────────────────────────────────
+    // โควต้าเป็นก้อนเดียวรวมทั้งสองโหมด backend เป็นเจ้าของตัวเลขจริงเสมอ
+    // ระหว่างที่ยังโหลดไม่เสร็จ (quota = null) ให้ถือว่ายังสร้างได้ จะได้ไม่ disable ปุ่มมั่ว
+
+    quotaMax: (state): number | null => state.quota?.max ?? null,
+
+    quotaUsed(state): number {
+      return state.quota?.used ?? state.portfolios.length;
+    },
+
+    quotaRemaining: (state): number | null => state.quota?.remaining ?? null,
+
+    hasReachedQuota(state): boolean {
+      return state.quota !== null && state.quota.remaining <= 0;
+    },
+
+    quotaByType(state): Record<PortfolioType, number> {
+      if (state.quota) {
+        return state.quota.byType;
+      }
+
+      // ยังไม่มีข้อมูลจาก backend -> นับจากพอร์ตที่โหลดมาแล้วไปก่อน
+      return {
+        TRADER: state.portfolios.filter((p) => p.portfolio_type === 'TRADER').length,
+        INVESTOR: state.portfolios.filter((p) => p.portfolio_type === 'INVESTOR').length,
+      };
+    },
   },
 
   actions: {
     clearError() {
       this.error = null;
+    },
+
+    /**
+     * โหลดโควต้าจาก backend
+     *
+     * ไม่ throw ต่อ — โควต้าโหลดไม่ได้ไม่ควรทำให้หน้าพอร์ตทั้งหน้าพัง
+     * (quota คงเป็น null แล้ว getter จะ fallback ไปนับจากพอร์ตที่โหลดมาแทน)
+     */
+    async loadQuota(): Promise<PortfolioQuota | null> {
+      this.isLoadingQuota = true;
+
+      try {
+        const quota = await portfolioService.getQuota();
+
+        this.quota = quota;
+
+        return quota;
+      } catch (error) {
+        console.error(PORTFOLIO_MESSAGES.quotaFailed, error);
+
+        return null;
+      } finally {
+        this.isLoadingQuota = false;
+      }
     },
 
     async loadPortfolios(type?: PortfolioType, force = false) {
@@ -118,6 +171,9 @@ export const usePortfolioStore = defineStore('portfolio', {
 
       this.isLoading = true;
       this.error = null;
+
+      // โควต้ามาคู่กับรายการพอร์ตเสมอ ยิงขนานกันไปเลยไม่ต้องรอ
+      void this.loadQuota();
 
       try {
         if (type) {
@@ -188,6 +244,10 @@ export const usePortfolioStore = defineStore('portfolio', {
         this.upsertPortfolio(created);
         this.loadedTypes[created.portfolio_type] = true;
 
+        // ขยับตัวเลขทันทีเพื่อให้แถบโควต้าอัปเดตแบบ real-time แล้วค่อยยืนยันกับ backend
+        this.applyQuotaDelta(created.portfolio_type, 1);
+        void this.loadQuota();
+
         if (created.is_default || !this.activePortfolioIds[created.portfolio_type]) {
           this.selectPortfolio(created.id);
         } else {
@@ -250,6 +310,9 @@ export const usePortfolioStore = defineStore('portfolio', {
         this.removePortfolioFromState(id);
         this.ensureActivePortfolio(portfolio.portfolio_type);
 
+        this.applyQuotaDelta(portfolio.portfolio_type, -1);
+        void this.loadQuota();
+
         return result;
       } catch (error) {
         this.error = getPortfolioErrorMessage(error, PORTFOLIO_MESSAGES.deleteFailed);
@@ -277,12 +340,43 @@ export const usePortfolioStore = defineStore('portfolio', {
       return true;
     },
 
+    /** ผู้ใช้กดสลับโหมดอยู่ — ใช้กันกดซ้อน ทุกจุดเห็นค่าเดียวกัน */
+    setSwitchingWorkspace(value: boolean) {
+      this.isSwitchingWorkspace = value;
+    },
+
+    /** กำลัง initialize ตอนเปิดแอพ — ใช้โชว์ busy เท่านั้น ไม่บล็อกการกดสลับ */
+    setInitializingWorkspace(value: boolean) {
+      this.isInitializingWorkspace = value;
+    },
+
     setActiveType(type: PortfolioType) {
       this.activeType = type;
 
       localStorage.setItem(PORTFOLIO_STORAGE_KEYS.activeType, type);
 
       this.ensureActivePortfolio(type);
+    },
+
+    /** ขยับตัวเลขโควต้าในเครื่องหลังสร้าง/ลบ ไม่ต้องรอ round trip */
+    applyQuotaDelta(type: PortfolioType, delta: number) {
+      if (!this.quota) {
+        return;
+      }
+
+      const byType = {
+        ...this.quota.byType,
+        [type]: Math.max(0, this.quota.byType[type] + delta),
+      };
+
+      const used = byType.TRADER + byType.INVESTOR;
+
+      this.quota = {
+        ...this.quota,
+        byType,
+        used,
+        remaining: Math.max(0, this.quota.max - used),
+      };
     },
 
     getByType(type: PortfolioType): Portfolio[] {

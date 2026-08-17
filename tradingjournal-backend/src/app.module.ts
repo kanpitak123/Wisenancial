@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,9 +20,13 @@ import { WatchlistModule } from './watchlist/watchlist.module';
 import { BillingModule } from './billing/billing.module';
 import { PaymentsModule } from './payments/payments.module';
 import { GamificationModule } from './gamification/gamification.module';
+import { CoachModule } from './coach/coach.module';
+import { StocksModule } from './stocks/stocks.module';
+import { MarketInsightsModule } from './market-insights/market-insights.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
@@ -40,6 +45,9 @@ import { GamificationModule } from './gamification/gamification.module';
     BillingModule,
     PaymentsModule,
     GamificationModule,
+    CoachModule,
+    StocksModule,
+    MarketInsightsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

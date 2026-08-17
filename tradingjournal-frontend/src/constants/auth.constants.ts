@@ -9,5 +9,10 @@ export const AUTH_ENDPOINTS = {
   me: '/auth/me',
 } as const;
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? 'http://localhost:3001/api';
+// backend ฟังที่พอร์ต 3000 (main.ts) และไม่มี global prefix
+// ('/api' คือ route ของ Swagger UI ไม่ใช่ prefix ของ API)
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+
+export const API_BASE_URL = configuredApiUrl
+  ? configuredApiUrl.replace(/\/$/, '')
+  : 'http://localhost:3000';

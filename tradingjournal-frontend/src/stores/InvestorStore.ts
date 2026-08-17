@@ -9,6 +9,15 @@ export const useInvestorStore = defineStore('investor', {
     loading: false,
     initialized: false,
     error: null as string | null,
+
+    /**
+     * เลขรอบของการ initialize — กัน request ที่ค้างอยู่เขียนทับ store หลังผู้ใช้สลับโหมดไปแล้ว
+     * reset() จะบวกเลขนี้ ทำให้รอบที่กำลัง await อยู่กลายเป็น "ล้าสมัย" แล้วถูกทิ้ง
+     */
+    generation: 0,
+
+    /** รอบที่กำลังทำงานอยู่ — เรียกซ้ำจะได้รอตัวนี้ แทนที่จะ return เงียบๆ */
+    pending: null as Promise<unknown> | null,
   }),
 
   getters: {
@@ -35,32 +44,63 @@ export const useInvestorStore = defineStore('investor', {
     },
 
     async initialize() {
+      // มีรอบที่ค้างอยู่ -> รอตัวนั้นให้เสร็จ ไม่ใช่ return เงียบๆ
+      // (ของเดิม return ทันทีทำให้ setActiveType ไม่ถูกเรียก โหมดเลยไม่เปลี่ยนแต่ไม่มี error)
+      if (this.pending) {
+        return this.pending;
+      }
+
+      const generation = ++this.generation;
+
       this.loading = true;
       this.error = null;
 
-      try {
-        const portfolioStore = usePortfolioStore();
+      const run = async () => {
+        try {
+          const portfolioStore = usePortfolioStore();
 
-        portfolioStore.setActiveType('INVESTOR');
-        await portfolioStore.loadPortfolios('INVESTOR');
+          portfolioStore.setActiveType('INVESTOR');
+          await portfolioStore.loadPortfolios('INVESTOR');
 
-        const portfolio = portfolioStore.activeInvestorPortfolio;
+          // ผู้ใช้สลับโหมดไปแล้วระหว่างรอ -> ทิ้งผลลัพธ์ ไม่แตะ store
+          if (generation !== this.generation) {
+            return null;
+          }
 
-        if (portfolio) {
-          await this.loadPortfolioData(portfolio.id);
-        } else {
-          this.clearDomainStores();
+          const portfolio = portfolioStore.activeInvestorPortfolio;
+
+          if (portfolio) {
+            await this.loadPortfolioData(portfolio.id);
+
+            // เช็คซ้ำหลังโหลด — ถ้าสลับไปแล้วต้องล้างของที่เพิ่งเขียนลงไปทิ้ง
+            if (generation !== this.generation) {
+              this.clearDomainStores();
+              return null;
+            }
+          } else {
+            this.clearDomainStores();
+          }
+
+          this.initialized = true;
+          return portfolio;
+        } catch (error) {
+          if (generation === this.generation) {
+            this.error =
+              error instanceof Error ? error.message : 'เริ่มต้น Investor workspace ไม่สำเร็จ';
+          }
+          throw error;
+        } finally {
+          if (generation === this.generation) {
+            this.loading = false;
+          }
+
+          this.pending = null;
         }
+      };
 
-        this.initialized = true;
-        return portfolio;
-      } catch (error) {
-        this.error =
-          error instanceof Error ? error.message : 'เริ่มต้น Investor workspace ไม่สำเร็จ';
-        throw error;
-      } finally {
-        this.loading = false;
-      }
+      this.pending = run();
+
+      return this.pending;
     },
 
     async selectPortfolio(portfolioId: number) {
@@ -113,6 +153,10 @@ export const useInvestorStore = defineStore('investor', {
     },
 
     reset() {
+      // บวก generation เพื่อทำให้ initialize ที่ยัง await อยู่กลายเป็นล้าสมัย
+      // ไม่งั้นพอ request ค้างตอบกลับมา มันจะยัดข้อมูลโหมดนี้กลับเข้า store ทั้งที่สลับไปแล้ว
+      this.generation += 1;
+      this.pending = null;
       this.loading = false;
       this.initialized = false;
       this.error = null;

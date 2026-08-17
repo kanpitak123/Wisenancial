@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AI_MODEL_REGISTRY,
+  AI_SYSTEM_FALLBACK_ORDER,
   MIN_CREDITS_PER_CALL,
   MIN_CREDIT_BALANCE,
   calculateCredits,
@@ -21,6 +22,10 @@ import {
   type AiModelPricing,
   type AiProviderId,
 } from './ai.models';
+import {
+  classifyAiFailure,
+  type AiFailureKind,
+} from './ai-retry';
 import type {
   AiTokenUsage,
   IAiProvider,
@@ -166,13 +171,14 @@ export class AiManagerService {
             request.maxOutputTokens,
         });
     } catch (error) {
+      const kind = classifyAiFailure(error);
       const reason =
         error instanceof Error
           ? error.message
           : String(error);
 
       this.logger.error(
-        `[${pricing.id}] request failed for user ${request.userId}: ${reason}`,
+        `[${pricing.id}] ${kind} for user ${request.userId}: ${reason}`,
       );
 
       await this.logFailure(
@@ -182,8 +188,13 @@ export class AiManagerService {
         reason,
       );
 
-      throw new ServiceUnavailableException(
-        `AI provider "${pricing.provider}" is unavailable right now.`,
+      // ไม่ fallback ข้าม provider ให้อัตโนมัติ — เรตเครดิตต่าง model ห่างกันถึง 300 เท่า
+      // (groq 1 vs claude 300 ต่อ 1k output) การสลับเงียบๆ = คิดเงินผู้ใช้เกินที่เขาเลือก
+      // แทนที่ด้วยการบอกให้ชัดว่าเลือกตัวไหนแทนได้บ้าง
+      throw this.providerUnavailable(
+        pricing,
+        kind,
+        reason,
       );
     }
 
@@ -228,65 +239,135 @@ export class AiManagerService {
     model: AiModelId;
     usage: AiTokenUsage;
   }> {
-    const available =
-      this.listAvailableModels();
-    const selectedModel =
-      request.modelId ??
-      available.find(
-        (model) =>
-          model.id === 'groq-llama3',
-      )?.id ??
-      available.find(
-        (model) =>
-          model.id ===
-          'gemini-2.5-flash',
-      )?.id ??
-      available[0]?.id;
+    const chain = this.buildSystemChain(
+      request.modelId,
+    );
 
-    if (!selectedModel) {
+    if (chain.length === 0) {
       throw new ServiceUnavailableException(
         'No AI provider is configured on this server.',
       );
     }
 
-    const pricing =
-      this.resolveModel(selectedModel);
-    const provider =
-      this.resolveProvider(pricing);
+    const attempted: string[] = [];
 
-    try {
-      const result =
-        await provider.generateJsonResponse<T>({
-          upstreamModel:
-            pricing.upstreamModel,
-          prompt: request.prompt,
-          systemPrompt:
-            request.systemPrompt,
-          temperature:
-            request.temperature,
-          maxOutputTokens:
-            request.maxOutputTokens,
-        });
-
-      return {
-        data: result.data,
-        model: pricing.id,
-        usage: result.usage,
-      };
-    } catch (error) {
-      const reason =
-        error instanceof Error
-          ? error.message
-          : String(error);
-
-      this.logger.error(
-        `[system:${pricing.id}] ${reason}`,
+    for (const [
+      index,
+      pricing,
+    ] of chain.entries()) {
+      const provider = this.providers.get(
+        pricing.provider,
       );
 
-      throw new ServiceUnavailableException(
-        `AI provider "${pricing.provider}" is unavailable right now.`,
-      );
+      // buildSystemChain กรอง isConfigured() ไว้แล้ว แต่กันไว้ให้ type แคบลง
+      if (!provider) {
+        continue;
+      }
+
+      try {
+        const result =
+          await provider.generateJsonResponse<T>(
+            {
+              upstreamModel:
+                pricing.upstreamModel,
+              prompt: request.prompt,
+              systemPrompt:
+                request.systemPrompt,
+              temperature:
+                request.temperature,
+              maxOutputTokens:
+                request.maxOutputTokens,
+            },
+          );
+
+        if (index > 0) {
+          this.logger.log(
+            `[system] served by ${pricing.id} after ${index} fallback(s); tried ${attempted.join(' -> ')}`,
+          );
+        }
+
+        return {
+          data: result.data,
+          model: pricing.id,
+          usage: result.usage,
+        };
+      } catch (error) {
+        const kind =
+          classifyAiFailure(error);
+        const reason =
+          error instanceof Error
+            ? error.message
+            : String(error);
+
+        attempted.push(
+          `${pricing.id}(${kind})`,
+        );
+
+        if (kind === 'permanent') {
+          // คำขอเองมีปัญหา (prompt ผิด, model ไม่รองรับ, key ใช้ไม่ได้)
+          // เจ้าอื่นก็ตอบเหมือนกัน วนต่อมีแต่เสียเวลาและเสียเงิน
+          this.logger.error(
+            `[system:${pricing.id}] permanent failure, not retrying: ${reason}`,
+          );
+
+          throw new ServiceUnavailableException(
+            `AI provider "${pricing.provider}" rejected the request: ${reason}`,
+          );
+        }
+
+        const next = chain[index + 1];
+
+        if (next) {
+          this.logger.warn(
+            `[system:${pricing.id}] ${kind}: ${reason} — falling back to ${next.id}`,
+          );
+        } else {
+          this.logger.error(
+            `[system:${pricing.id}] ${kind}: ${reason} — no provider left`,
+          );
+        }
+      }
     }
+
+    throw new ServiceUnavailableException(
+      `All AI providers are unavailable right now (tried ${attempted.join(', ')}).`,
+    );
+  }
+
+  /**
+   * ลำดับ model ที่จะลองสำหรับงานเบื้องหลัง
+   *
+   * ตัวที่ระบุมา (ถ้ามี) มาก่อนเสมอ แล้วต่อด้วย AI_SYSTEM_FALLBACK_ORDER ที่เหลือ
+   * ข้าม provider ที่ไม่มี API key เพื่อไม่ให้เสีย attempt ไปกับตัวที่ล้มแน่นอน
+   */
+  private buildSystemChain(
+    preferredModelId?: string,
+  ): AiModelPricing[] {
+    const ordered: AiModelId[] = [];
+
+    if (
+      preferredModelId &&
+      isAiModelId(preferredModelId)
+    ) {
+      ordered.push(preferredModelId);
+    }
+
+    for (const modelId of AI_SYSTEM_FALLBACK_ORDER) {
+      if (!ordered.includes(modelId)) {
+        ordered.push(modelId);
+      }
+    }
+
+    return ordered
+      .map((modelId) =>
+        getModelPricing(modelId),
+      )
+      .filter(
+        (pricing) =>
+          this.providers
+            .get(pricing.provider)
+            ?.isConfigured() === true,
+      );
   }
 
   private async chargeAndLog(
@@ -400,6 +481,45 @@ export class AiManagerService {
     } catch {
       // Logging must never mask the provider error.
     }
+  }
+
+  /**
+   * error ของฝั่งผู้ใช้ — ต้องบอกได้ว่าลองรุ่นไหนแทนได้
+   *
+   * ของเดิมคืนแค่ "provider X is unavailable" ผู้ใช้จึงไม่รู้ว่าควรทำอะไรต่อ
+   * ทั้งที่ปกติมีอีก 3 รุ่นให้เลือกอยู่ในเมนู
+   */
+  private providerUnavailable(
+    pricing: AiModelPricing,
+    kind: AiFailureKind,
+    reason: string,
+  ) {
+    const alternatives = this.listAvailableModels()
+      .filter((model) => model.id !== pricing.id)
+      .map((model) => model.id);
+
+    const detail =
+      kind === 'rate-limit'
+        ? `Model "${pricing.id}" hit its rate limit.`
+        : kind === 'permanent'
+          ? `Model "${pricing.id}" rejected the request: ${reason}`
+          : `Provider "${pricing.provider}" is unavailable right now.`;
+
+    const hint =
+      alternatives.length > 0
+        ? ` Try another model: ${alternatives.join(', ')}.`
+        : '';
+
+    return new ServiceUnavailableException({
+      statusCode:
+        HttpStatus.SERVICE_UNAVAILABLE,
+      error: 'AI_PROVIDER_UNAVAILABLE',
+      message: `${detail}${hint}`,
+      model: pricing.id,
+      provider: pricing.provider,
+      failureKind: kind,
+      availableModels: alternatives,
+    });
   }
 
   private insufficientCredits(

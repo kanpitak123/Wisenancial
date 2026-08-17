@@ -8,6 +8,7 @@ import {
 } from '../constants/news.constants';
 import { getNewsErrorMessage, newsService } from '../services/news.service';
 import { newsSocketService } from '../services/news-socket.service';
+import { isMockEnabled } from 'src/mocks/mock.config';
 import type {
   FetchNewsOptions,
   NewsFilters,
@@ -290,6 +291,11 @@ export const useNewsStore = defineStore('news', {
 
     connectSocket() {
       if (this.socketConnected) {
+        return;
+      }
+
+      // mock mode ไม่มี backend ให้ต่อ — ข้ามไปเลย ไม่งั้น console จะเต็มไปด้วย connect error
+      if (isMockEnabled()) {
         return;
       }
 

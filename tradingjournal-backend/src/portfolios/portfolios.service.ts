@@ -1,16 +1,128 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PortfolioType, Prisma } from '@prisma/client';
+import { PortfolioType, Prisma, SubscriptionTier } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePortfolioDto, UpdatePortfolioDto } from './dto/portfolio.dto';
+import {
+  maxPortfoliosForTier,
+  tierFromPlanName,
+  tierLabel,
+} from './portfolio-quota.config';
+
+export interface PortfolioQuota {
+  max: number;
+  used: number;
+  remaining: number;
+  byType: Record<PortfolioType, number>;
+}
 
 @Injectable()
 export class PortfoliosService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * tier ที่ใช้คิดโควต้าจริง
+   *
+   * users.subscription_tier เป็นแหล่งหลัก (Stripe webhook เขียนตัวนี้)
+   * ถ้าเป็น null ค่อยดูตาราง subscriptions ที่ยัง ACTIVE อยู่ ไม่งั้นสมาชิกที่ถูกเพิ่ม
+   * ด้วยมือ (ซึ่ง PaidTierGuard ยอมให้ผ่าน) จะโดนตัดเหลือโควต้า free
+   */
+  private async resolveTier(
+    userId: number,
+  ): Promise<SubscriptionTier | null> {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        subscription_tier: true,
+        subscriptions: {
+          where: { status: 'ACTIVE', end_date: { gte: new Date() } },
+          orderBy: { end_date: 'desc' },
+          select: { plans: { select: { name: true } } },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('ไม่พบบัญชีผู้ใช้');
+    }
+
+    if (user.subscription_tier !== null) {
+      return user.subscription_tier;
+    }
+
+    // มีหลาย subscription ได้ — เลือกแพ็กที่โควต้าสูงสุด
+    let best: SubscriptionTier | null = null;
+
+    for (const subscription of user.subscriptions) {
+      const tier = tierFromPlanName(subscription.plans?.name);
+
+      if (
+        tier !== null &&
+        (best === null ||
+          maxPortfoliosForTier(tier) > maxPortfoliosForTier(best))
+      ) {
+        best = tier;
+      }
+    }
+
+    return best;
+  }
+
+  /** โยน ForbiddenException ถ้าพอร์ตรวมทั้งสองโหมดเต็มเพดานของ tier แล้ว */
+  private async assertQuotaAvailable(
+    client: Pick<PrismaService, 'portfolios'> | Prisma.TransactionClient,
+    userId: number,
+    tier: SubscriptionTier | null,
+    max: number,
+  ) {
+    const used = await client.portfolios.count({
+      where: { user_id: userId },
+    });
+
+    if (used >= max) {
+      throw new ForbiddenException(
+        `สร้างพอร์ตไม่ได้ ${tierLabel(tier)} ของคุณสร้างได้สูงสุด ${max} พอร์ต ` +
+          `(ใช้ไปแล้ว ${used} พอร์ต นับรวมทั้งโหมด Forex และ Stock) ` +
+          `กรุณาอัปเกรดแพ็กเกจหรือลบพอร์ตที่ไม่ได้ใช้ก่อน`,
+      );
+    }
+  }
+
+  /** โควต้าพอร์ตของผู้ใช้ — รวมทั้งสองโหมดเป็นก้อนเดียว */
+  async getQuota(userId: number): Promise<PortfolioQuota> {
+    const [tier, grouped] = await Promise.all([
+      this.resolveTier(userId),
+      this.prisma.portfolios.groupBy({
+        by: ['portfolio_type'],
+        where: { user_id: userId },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const byType: Record<PortfolioType, number> = {
+      [PortfolioType.TRADER]: 0,
+      [PortfolioType.INVESTOR]: 0,
+    };
+
+    for (const row of grouped) {
+      byType[row.portfolio_type] = row._count._all;
+    }
+
+    const max = maxPortfoliosForTier(tier);
+    const used = byType.TRADER + byType.INVESTOR;
+
+    return {
+      max,
+      used,
+      remaining: Math.max(0, max - used),
+      byType,
+    };
+  }
 
   async findAll(userId: number, type?: PortfolioType) {
     return this.prisma.portfolios.findMany({
@@ -39,6 +151,16 @@ export class PortfoliosService {
     const portfolioType = data.portfolio_type ?? PortfolioType.TRADER;
     const currency = data.currency?.trim().toUpperCase() ?? 'USD';
 
+    // เช็คโควต้ารวม (TRADER+INVESTOR) ก่อนเสมอ — ผู้ใช้แบ่งสัดส่วนเองได้
+    // ขอแค่ผลรวมไม่เกินเพดานของ tier
+    //
+    // เช็คสองรอบ: รอบนี้เพื่อตอบ error ให้ไวโดยไม่ต้องเปิด transaction
+    // แล้วเช็คซ้ำอีกทีข้างใน transaction กันสองรีเควสต์ที่ยิงพร้อมกันแทรกกันได้
+    const tier = await this.resolveTier(userId);
+    const max = maxPortfoliosForTier(tier);
+
+    await this.assertQuotaAvailable(this.prisma, userId, tier, max);
+
     const duplicate = await this.prisma.portfolios.findFirst({
       where: {
         user_id: userId,
@@ -63,6 +185,8 @@ export class PortfoliosService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await this.assertQuotaAvailable(tx, userId, tier, max);
+
         if (shouldBeDefault) {
           await tx.portfolios.updateMany({
             where: {

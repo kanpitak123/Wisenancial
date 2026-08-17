@@ -54,8 +54,12 @@ export class PaymentsService {
           quantity: 1,
         },
       ],
-      success_url: `${this.frontendBaseUrl}/app/Upgrade?success=true`,
-      cancel_url: `${this.frontendBaseUrl}/app/Upgrade?canceled=true`,
+      // ต้องมี '#' เพราะ frontend ตั้ง vueRouterMode: 'hash' (quasar.config.ts)
+      // createWebHashHistory() อ่านเส้นทางจาก location.hash — ถ้าเด้งกลับมาแบบไม่มี #
+      // จะไปโผล่หน้า Login/Dashboard แทน และ ?success=true ที่อยู่นอก hash จะไม่เข้า route.query
+      // ถ้าเปลี่ยนไปใช้ history mode เมื่อไหร่ ให้เอา '#' ออกจากทั้งสองบรรทัดนี้
+      success_url: `${this.frontendBaseUrl}/#/Upgrade?success=true`,
+      cancel_url: `${this.frontendBaseUrl}/#/Upgrade?canceled=true`,
       client_reference_id: String(userId),
       metadata: {
         type: 'SUBSCRIPTION',

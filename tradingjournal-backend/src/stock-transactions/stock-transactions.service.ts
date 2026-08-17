@@ -60,6 +60,17 @@ export class StockTransactionsService {
           notes: dto.notes ?? null,
           strategy: dto.strategy ?? null,
           emotion: dto.emotion ?? null,
+          target_price:
+            dto.target_price === undefined
+              ? null
+              : new Prisma.Decimal(dto.target_price),
+          stop_loss:
+            dto.stop_loss === undefined
+              ? null
+              : new Prisma.Decimal(dto.stop_loss),
+          folder_name: dto.folder_name?.trim() || null,
+          purchase_reason: dto.purchase_reason?.trim() || null,
+          expectation: dto.expectation?.trim() || null,
           status: 'OPEN',
           purchase_date: date,
         },

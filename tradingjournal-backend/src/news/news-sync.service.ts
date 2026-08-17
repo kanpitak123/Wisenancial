@@ -7,11 +7,82 @@ import { NewsScope } from './dto/news-query.dto';
 import { NewsEnrichmentService } from './news-enrichment.service';
 import { NewsGateway } from './news.gateway';
 
+/**
+ * 10 วิสั้นเกินไปสำหรับ endpoint ข่าวภายนอก — Finnhub/NewsAPI ตอบช้ากว่านั้นได้บ่อย
+ * ตอน US market open ทำให้ cron ตาย timeout ทั้งรอบทั้งที่ปลายทางยังตอบอยู่
+ */
+const NEWS_HTTP_TIMEOUT_MS = 30_000;
+const NEWS_HTTP_MAX_ATTEMPTS = 3;
+const NEWS_HTTP_BASE_BACKOFF_MS = 1_000;
+
 @Injectable()
 export class NewsSyncService {
   private readonly logger = new Logger(NewsSyncService.name);
   private readonly finnhubApiKey = process.env.FINNHUB_API_KEY;
   private readonly newsApiKey = process.env.NEWS_API_KEY;
+
+  /**
+   * ยิง HTTP พร้อม retry แบบ exponential backoff
+   *
+   * ลองใหม่เฉพาะความล้มเหลวชั่วคราว (timeout / network / 5xx / 429) — ส่วน 4xx อื่น
+   * เช่น key ผิดหรือ param ผิด ลองกี่ครั้งก็ได้ผลเดิม จึงโยนออกทันทีไม่ต้องเสียเวลา
+   */
+  private async fetchWithRetry<T>(
+    label: string,
+    url: string,
+    config: Parameters<typeof axios.get>[1],
+  ): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= NEWS_HTTP_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await axios.get<T>(url, {
+          ...config,
+          timeout: NEWS_HTTP_TIMEOUT_MS,
+        });
+
+        return response.data;
+      } catch (error) {
+        lastError = error;
+
+        const status = axios.isAxiosError(error)
+          ? error.response?.status
+          : undefined;
+        const retryable =
+          status === undefined || status === 429 || status >= 500;
+
+        if (!retryable || attempt === NEWS_HTTP_MAX_ATTEMPTS) {
+          break;
+        }
+
+        const delay = NEWS_HTTP_BASE_BACKOFF_MS * 2 ** (attempt - 1);
+
+        this.logger.warn(
+          `${label} attempt ${attempt}/${NEWS_HTTP_MAX_ATTEMPTS} failed (${this.describeHttpError(error)}); retrying in ${delay}ms`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    throw new Error(`${label} failed: ${this.describeHttpError(lastError)}`);
+  }
+
+  /** ข้อความ error ที่บอกได้จริงว่าพังเพราะอะไร ไม่ใช่แค่ "request failed" */
+  private describeHttpError(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const code = error.code ?? 'no-code';
+      const body =
+        typeof error.response?.data === 'string'
+          ? error.response.data.slice(0, 200)
+          : JSON.stringify(error.response?.data ?? {}).slice(0, 200);
+
+      return `status=${status ?? 'none'} code=${code} message=${error.message} body=${body}`;
+    }
+
+    return error instanceof Error ? error.message : String(error);
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -25,7 +96,7 @@ export class NewsSyncService {
       result.trader = await this.syncForexCalendar(language);
     }
     if (scope === NewsScope.ALL || scope === NewsScope.INVESTOR) {
-      result.investor = await this.syncInvestorMarketNews(language);
+      result.investor = await this.runInvestorSync(language);
     }
     return { success: true, ...result };
   }
@@ -42,12 +113,84 @@ export class NewsSyncService {
     }
   }
 
+  /**
+   * ข่าวหุ้นซิงก์ชั่วโมงละครั้ง ไม่ใช่ทุก 5 นาทีแบบฝั่ง Forex เพราะ:
+   *   - NewsAPI free tier จำกัด 100 request/วัน — ทุก 5 นาทีคือ 288 ครั้ง เกินโควตาแน่
+   *   - แต่ละรอบเรียก enrichInvestorArticle() 20 ครั้ง = 20 AI call ทุก 5 นาทีคือ
+   *     ~240 call/ชม. ซึ่งชนเพดาน TPM ของ Groq free tier ที่เจอ 429 อยู่แล้ว
+   *   - ข่าวหุ้นทั่วไปไม่ได้เปลี่ยนทุก 5 นาที ต่างจากปฏิทินเศรษฐกิจที่ actual
+   *     ทยอยประกาศระหว่างวัน
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async scheduledInvestorSync() {
+    try {
+      await this.runInvestorSync('th');
+    } catch (error) {
+      this.logger.error(
+        'Investor news cron failed',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  /**
+   * กันรอบซ้อนกัน — รอบหนึ่งใช้เวลา ~50 วินาที (AI enrich ทีละบทความ) และถ้า
+   * provider ช้าอาจลากยาวข้ามชั่วโมงจนชนรอบถัดไป สองรอบพร้อมกันจะยิง NewsAPI
+   * และ AI ซ้ำสองเท่าโดยได้ข่าวชุดเดิม
+   *
+   * ธงนี้ครอบทั้ง cron และ POST /news/sync/:scope เพื่อไม่ให้กดมือชนกับรอบอัตโนมัติ
+   */
+  private investorSyncRunning = false;
+
+  private async runInvestorSync(language: 'en' | 'th') {
+    if (this.investorSyncRunning) {
+      this.logger.warn(
+        'Investor news sync already running; skipping this run',
+      );
+
+      return {
+        fetched: 0,
+        persisted: 0,
+        skipped: true,
+        reason: 'sync already running',
+      };
+    }
+
+    this.investorSyncRunning = true;
+
+    try {
+      return await this.syncInvestorMarketNews(language);
+    } finally {
+      this.investorSyncRunning = false;
+    }
+  }
+
+  /** กันรอบซ้อนแบบเดียวกับฝั่ง investor — รอบ 5 นาทีชนกันได้ถ้าปลายทางช้า */
+  private forexSyncRunning = false;
+
   async syncForexCalendar(language: 'en' | 'th' = 'th') {
-    const response = await axios.get(
+    if (this.forexSyncRunning) {
+      this.logger.warn('Forex calendar sync already running; skipping this run');
+
+      return { created: 0, updated: 0, enriched: 0, skipped: true };
+    }
+
+    this.forexSyncRunning = true;
+
+    try {
+      return await this.runForexCalendarSync(language);
+    } finally {
+      this.forexSyncRunning = false;
+    }
+  }
+
+  private async runForexCalendarSync(language: 'en' | 'th' = 'th') {
+    const data = await this.fetchWithRetry<unknown>(
+      'ForexFactory calendar',
       'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
-      { timeout: 10_000 },
+      {},
     );
-    const items = Array.isArray(response.data) ? response.data : [];
+    const items = Array.isArray(data) ? data : [];
     let created = 0;
     let updated = 0;
     let enriched = 0;
@@ -141,37 +284,58 @@ export class NewsSyncService {
 
     const raw: any[] = [];
 
+    // สองแหล่งนี้ต้องแยกขาดจากกัน — ของเดิม Finnhub พังแล้ว throw ออกทั้งเมธอด
+    // ทำให้ NewsAPI ไม่ถูกเรียกเลยทั้งที่ยังใช้ได้ ผลคือรอบนั้นได้ข่าว 0 ข่าว
     if (this.finnhubApiKey) {
-      const response = await axios.get('https://finnhub.io/api/v1/news', {
-        params: { category: 'general', token: this.finnhubApiKey },
-        timeout: 10_000,
-      });
-      raw.push(...(Array.isArray(response.data) ? response.data : []));
+      try {
+        const data = await this.fetchWithRetry<unknown>(
+          'Finnhub news',
+          'https://finnhub.io/api/v1/news',
+          { params: { category: 'general', token: this.finnhubApiKey } },
+        );
+
+        raw.push(...(Array.isArray(data) ? data : []));
+      } catch (error) {
+        this.logger.error(
+          `Finnhub news source failed; continuing with remaining sources: ${this.describeHttpError(error)}`,
+        );
+      }
     }
 
     if (this.newsApiKey) {
-      const response = await axios.get(
-        'https://newsapi.org/v2/top-headlines',
-        {
-          params: {
-            country: 'us',
-            category: 'business',
-            apiKey: this.newsApiKey,
+      try {
+        const data = await this.fetchWithRetry<{ articles?: any[] }>(
+          'NewsAPI top-headlines',
+          'https://newsapi.org/v2/top-headlines',
+          {
+            params: {
+              country: 'us',
+              category: 'business',
+              apiKey: this.newsApiKey,
+            },
           },
-          timeout: 10_000,
-        },
-      );
+        );
 
-      for (const article of response.data?.articles ?? []) {
-        raw.push({
-          headline: article.title,
-          summary: article.description,
-          source: article.source?.name,
-          url: article.url,
-          datetime: Math.floor(new Date(article.publishedAt).getTime() / 1000),
-          related: [],
-        });
+        for (const article of data?.articles ?? []) {
+          raw.push({
+            headline: article.title,
+            summary: article.description,
+            source: article.source?.name,
+            url: article.url,
+            datetime: Math.floor(new Date(article.publishedAt).getTime() / 1000),
+            related: [],
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          `NewsAPI source failed; continuing with remaining sources: ${this.describeHttpError(error)}`,
+        );
       }
+    }
+
+    if (raw.length === 0) {
+      this.logger.warn('Investor news sync fetched 0 articles from all sources');
+      return { fetched: 0, persisted: 0, warning: 'All news sources failed' };
     }
 
     const deduped = this.removeDuplicates(raw).slice(0, 20);

@@ -12,6 +12,7 @@ export class DividendsController {
   constructor(private readonly service: DividendsService) {}
   @Get('portfolio/:portfolioId') findAll(@Param('portfolioId', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) { return this.service.findAll(id, user.userId); }
   @Get('portfolio/:portfolioId/summary') summary(@Param('portfolioId', ParseIntPipe) id: number, @CurrentUser() user: AuthUser, @Query('year') year?: string) { return this.service.summary(id, user.userId, year ? Number(year) : undefined); }
+  @Get('portfolio/:portfolioId/tax-summary') taxSummary(@Param('portfolioId', ParseIntPipe) id: number, @CurrentUser() user: AuthUser, @Query('year') year?: string) { return this.service.taxSummary(id, user.userId, year ? Number(year) : undefined); }
   @Post('portfolio/:portfolioId') create(@Param('portfolioId', ParseIntPipe) id: number, @CurrentUser() user: AuthUser, @Body() dto: CreateDividendDto) { return this.service.create(id, user.userId, dto); }
   @Patch(':id') update(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser, @Body() dto: UpdateDividendDto) { return this.service.update(id, user.userId, dto); }
   @Delete(':id') remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) { return this.service.remove(id, user.userId); }

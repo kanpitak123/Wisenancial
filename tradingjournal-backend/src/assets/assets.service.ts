@@ -319,6 +319,10 @@ export class AssetsService {
     symbol: string,
   ): Promise<ValuationResponse> {
     await this.requireInvestorAsset(userId, portfolioId, symbol);
+    return this.getSymbolValuation(symbol);
+  }
+
+  async getSymbolValuation(symbol: string): Promise<ValuationResponse> {
     const normalized = this.normalizeSymbol(symbol);
 
     try {

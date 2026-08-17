@@ -68,10 +68,13 @@ export class GeminiProvider implements IAiProvider {
             temperature: options.temperature ?? DEFAULT_TEMPERATURE,
             maxOutputTokens:
               options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-            // gemini-2.5-flash เป็น thinking model — thinking tokens ถูกหักจาก
-            // maxOutputTokens ทำให้ JSON ถูกตัดกลางคันแบบสุ่ม จึงปิด thinking
-            // สำหรับ structured JSON calls (เร็วขึ้นและถูกลงด้วย)
-            thinkingConfig: { thinkingBudget: 0 },
+            // เป็น thinking model — thinking tokens ถูกหักจาก maxOutputTokens
+            // ทำให้ JSON ถูกตัดกลางคันแบบสุ่ม จึงกดการคิดให้ต่ำที่สุดสำหรับงาน
+            // structured JSON (เร็วขึ้นและถูกลงด้วย)
+            //
+            // ตระกูล Gemini 3.x ไม่รับ thinkingBudget: 0 อีกแล้ว (ตอบ 400
+            // "Request contains an invalid argument") ต้องใช้ thinkingLevel แทน
+            thinkingConfig: { thinkingLevel: 'low' },
           },
         },
         { headers: { 'x-goog-api-key': this.apiKey } },

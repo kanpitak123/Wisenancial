@@ -64,6 +64,8 @@ export const useAnalyticsStore = defineStore('analytics', {
     isLoadingAdvanced: false,
     isSimulatingDca: false,
     paidAccessDenied: false,
+    /** behavioral โดน PaidTierGuard ปฏิเสธ — แยกจาก paidAccessDenied ที่เป็นของทั้งหน้า */
+    behavioralAccessDenied: false,
     error: null as string | null,
   }),
 
@@ -84,7 +86,9 @@ export const useAnalyticsStore = defineStore('analytics', {
       categories: state.performance.map((point) => String(point.date)),
       series: [
         {
-          name: state.portfolioType === 'TRADER' ? 'Equity' : 'Cash ledger',
+          // ฝั่ง INVESTOR ไม่ใช่ cash ledger แล้ว — backend คืน total equity
+          // (เงินสด + มูลค่าตลาดของหุ้นที่ถืออยู่) ตั้งแต่แก้ investor-analytics.performance()
+          name: state.portfolioType === 'TRADER' ? 'Equity' : 'Total equity',
           data: state.performance.map((point) => point.value),
         },
       ],
@@ -175,34 +179,65 @@ export const useAnalyticsStore = defineStore('analytics', {
 
       try {
         if (this.portfolioType === 'TRADER') {
-          const [monthlyGrowth, behavioral, winRate] = await Promise.all([
+          // behavioral เป็นตัวเดียวในชุดนี้ที่ยัง gate ด้วย PaidTierGuard
+          // ถ้าใช้ Promise.all แพ็กฟรีจะโดน 403 แล้วลาก monthlyGrowth/winRate
+          // ที่เป็นของฟรีร่วงไปด้วย -> แท็บ Monthly Growth กับ Win Rate ว่างทั้งที่ควรเห็น
+          const [monthlyGrowth, behavioral, winRate] = await Promise.allSettled([
             analyticsService.getMonthlyGrowth(portfolioId, range),
             analyticsService.getBehavioral(portfolioId, range),
             analyticsService.getWinRate(portfolioId, range),
           ]);
 
-          this.monthlyGrowth = monthlyGrowth;
-          this.behavioral = behavioral;
-          this.winRate = winRate;
+          const failure = [monthlyGrowth, winRate].find((item) => item.status === 'rejected');
+
+          if (failure?.status === 'rejected') {
+            throw failure.reason;
+          }
+
+          this.monthlyGrowth =
+            monthlyGrowth.status === 'fulfilled' ? monthlyGrowth.value : [];
+          this.winRate = winRate.status === 'fulfilled' ? winRate.value : null;
+
+          if (behavioral.status === 'fulfilled') {
+            this.behavioral = behavioral.value;
+            this.behavioralAccessDenied = false;
+          } else {
+            this.behavioral = null;
+            this.behavioralAccessDenied = isAnalyticsPaidTierError(behavioral.reason);
+
+            if (!this.behavioralAccessDenied) {
+              throw behavioral.reason;
+            }
+          }
 
           return {
-            monthlyGrowth,
-            behavioral,
-            winRate,
+            monthlyGrowth: this.monthlyGrowth,
+            behavioral: this.behavioral,
+            winRate: this.winRate,
           };
         }
 
-        const [timeline, allocation] = await Promise.all([
+        // แพทเทิร์นเดียวกับฝั่ง TRADER ข้างบน — แท็บ Allocation กับ Timeline เป็นคนละแท็บ
+        // ตัวหนึ่งพังไม่ควรลบข้อมูลของอีกตัวที่โหลดสำเร็จแล้วทิ้ง
+        const [timeline, allocation] = await Promise.allSettled([
           analyticsService.getTimeline(portfolioId, range),
           analyticsService.getAllocation(portfolioId),
         ]);
 
-        this.timeline = timeline;
-        this.allocation = allocation;
+        this.timeline = timeline.status === 'fulfilled' ? timeline.value : [];
+        this.allocation = allocation.status === 'fulfilled' ? allocation.value : [];
+
+        const investorFailure = [timeline, allocation].find(
+          (item) => item.status === 'rejected',
+        );
+
+        if (investorFailure?.status === 'rejected') {
+          throw investorFailure.reason;
+        }
 
         return {
-          timeline,
-          allocation,
+          timeline: this.timeline,
+          allocation: this.allocation,
         };
       } catch (error) {
         this.handleError(error, ANALYTICS_MESSAGES.detailsFailed);
@@ -340,6 +375,7 @@ export const useAnalyticsStore = defineStore('analytics', {
     clearDetails() {
       this.monthlyGrowth = [];
       this.behavioral = null;
+      this.behavioralAccessDenied = false;
       this.winRate = null;
       this.allocation = [];
     },

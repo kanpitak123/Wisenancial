@@ -1,5 +1,7 @@
 export type CostMethod = 'FIFO' | 'LIFO' | 'AVERAGE';
 
+export type StockPurchaseStatus = 'OPEN' | 'CLOSED';
+
 export interface BuyStockInput {
   stock_symbol: string;
   stock_name?: string;
@@ -9,6 +11,43 @@ export interface BuyStockInput {
   currency?: string;
   purchase_date?: string;
   notes?: string;
+  strategy?: string;
+  emotion?: string;
+  // รอบ 2 — คอลัมน์มีอยู่แล้วใน stock_purchases ไม่ต้อง migrate
+  target_price?: number;
+  stop_loss?: number;
+  folder_name?: string;
+  purchase_reason?: string;
+  expectation?: string;
+}
+
+/** แถวดิบจาก stock_purchases (GET /stock-purchases/portfolio/:id) */
+export interface StockPurchase {
+  id: number;
+  portfolio_id: number;
+  stock_symbol: string;
+  stock_name: string | null;
+  shares_count: number | string;
+  remaining_shares: number | string;
+  purchase_price: number | string;
+  total_amount: number | string;
+  fees: number | string;
+  currency: string;
+  purchase_reason: string | null;
+  expectation: string | null;
+  target_price: number | string | null;
+  stop_loss: number | string | null;
+  strategy: string | null;
+  emotion: string | null;
+  notes: string | null;
+  folder_name: string | null;
+  status: StockPurchaseStatus;
+  sold_price: number | string | null;
+  sold_date: string | null;
+  closed_at: string | null;
+  purchase_date: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SellStockInput {

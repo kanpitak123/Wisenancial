@@ -16,7 +16,23 @@ import { AnalyticsService } from './analytics.service';
 import type { AnalyticsTimeframe } from './analytics.types';
 import { DcaSimulatorDto } from './dto/dca-simulator.dto';
 
-@UseGuards(JwtAuthGuard, PaidTierGuard)
+/**
+ * การแบ่งชั้นสิทธิ์ของ Analytics
+ *
+ * ระดับ controller ใส่แค่ JwtAuthGuard — "ดูข้อมูลพอร์ตของตัวเอง" ไม่ควรต้องเสียเงิน
+ * เดิม PaidTierGuard ครอบทั้ง controller ทำให้ผู้ใช้ free tier โดน 403 ทุกเส้น
+ * แม้แต่ overview/performance ที่เป็นแค่การอ่านยอดพอร์ตตัวเองกลับมาแสดง
+ *
+ *   ฟรี  = สรุปพอร์ตของผู้ใช้เอง คำนวณจาก record ที่ผู้ใช้กรอกเอง
+ *          overview, performance, daily-pnl, monthly-growth, win-rate, timeline, allocation
+ *          (รวม legacy alias 3 ตัวท้ายไฟล์ ที่ห่อ service ตัวเดียวกับกลุ่มฟรี)
+ *
+ *   เสียเงิน = ของที่ต้องใช้ข้อมูลตลาดภายนอก หรือเป็นการวิเคราะห์เชิงลึกที่เป็นจุดขาย
+ *          behavioral, return-vs-benchmark, time-weighted-return, monthly-heatmap,
+ *          performers, holding-period, cash-flow, dca-simulator
+ *          -> ใส่ @UseGuards(PaidTierGuard) รายตัว
+ */
+@UseGuards(JwtAuthGuard)
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
@@ -74,6 +90,7 @@ export class AnalyticsController {
     );
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/behavioral')
   behavioral(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -117,6 +134,7 @@ export class AnalyticsController {
     return this.analytics.allocation(user.userId, portfolioId);
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/return-vs-benchmark')
   returnVsBenchmark(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -130,6 +148,7 @@ export class AnalyticsController {
     );
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/time-weighted-return')
   timeWeightedReturn(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -138,6 +157,7 @@ export class AnalyticsController {
     return this.analytics.timeWeightedReturn(user.userId, portfolioId);
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/monthly-heatmap')
   monthlyHeatmap(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -146,6 +166,7 @@ export class AnalyticsController {
     return this.analytics.monthlyHeatmap(user.userId, portfolioId);
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/performers')
   performers(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -154,6 +175,7 @@ export class AnalyticsController {
     return this.analytics.performers(user.userId, portfolioId);
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/holding-period')
   holdingPeriod(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -162,6 +184,7 @@ export class AnalyticsController {
     return this.analytics.holdingPeriod(user.userId, portfolioId);
   }
 
+  @UseGuards(PaidTierGuard)
   @Get('portfolio/:portfolioId/cash-flow')
   cashFlow(
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
@@ -170,6 +193,7 @@ export class AnalyticsController {
     return this.analytics.cashFlow(user.userId, portfolioId);
   }
 
+  @UseGuards(PaidTierGuard)
   @Post('dca-simulator')
   simulateDca(@Body() dto: DcaSimulatorDto) {
     return this.analytics.simulateDca(dto);

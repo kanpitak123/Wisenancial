@@ -1,4 +1,5 @@
-import axios, { type AxiosError } from 'axios';
+import { type AxiosError } from 'axios';
+import { api } from 'src/boot/axios';
 import { COMMUNITY_API_PATH } from '../constants/community.constants';
 import type {
   ApiErrorResponse,
@@ -11,30 +12,6 @@ import type {
   PostsResponse,
   UpdatePostPayload,
 } from '../types/community.types';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-});
-
-function getAccessToken(): string {
-  let token = localStorage.getItem('access_token') ?? localStorage.getItem('token');
-
-  if (!token) {
-    throw new Error('ไม่พบ Token กรุณาเข้าสู่ระบบใหม่');
-  }
-
-  token = token.replace(/^"(.*)"$/, '$1');
-
-  return token;
-}
-
-function authHeaders() {
-  return {
-    Authorization: `Bearer ${getAccessToken()}`,
-  };
-}
 
 function toFormData(payload: CreatePostPayload): FormData {
   const formData = new FormData();
@@ -90,66 +67,45 @@ export const communityService = {
   async fetchPosts(query: PostsQuery): Promise<PostsResponse> {
     const response = await api.get<PostsResponse>(COMMUNITY_API_PATH, {
       params: query,
-      headers: authHeaders(),
     });
 
     return response.data;
   },
 
   async fetchPost(postId: number): Promise<Post> {
-    const response = await api.get<Post>(`${COMMUNITY_API_PATH}/${postId}`, {
-      headers: authHeaders(),
-    });
+    const response = await api.get<Post>(`${COMMUNITY_API_PATH}/${postId}`);
 
     return response.data;
   },
 
   async createPost(payload: CreatePostPayload): Promise<Post> {
-    const response = await api.post<Post>(COMMUNITY_API_PATH, toFormData(payload), {
-      headers: authHeaders(),
-    });
+    const response = await api.post<Post>(COMMUNITY_API_PATH, toFormData(payload));
 
     return response.data;
   },
 
   async updatePost(postId: number, payload: UpdatePostPayload): Promise<Post> {
-    const response = await api.patch<Post>(`${COMMUNITY_API_PATH}/${postId}`, payload, {
-      headers: authHeaders(),
-    });
+    const response = await api.patch<Post>(`${COMMUNITY_API_PATH}/${postId}`, payload);
 
     return response.data;
   },
 
   async deletePost(postId: number): Promise<DeletePostResponse> {
-    const response = await api.delete<DeletePostResponse>(`${COMMUNITY_API_PATH}/${postId}`, {
-      headers: authHeaders(),
-    });
+    const response = await api.delete<DeletePostResponse>(`${COMMUNITY_API_PATH}/${postId}`);
 
     return response.data;
   },
 
   async toggleLike(postId: number): Promise<LikeResponse> {
-    const response = await api.post<LikeResponse>(
-      `${COMMUNITY_API_PATH}/${postId}/like`,
-      {},
-      {
-        headers: authHeaders(),
-      },
-    );
+    const response = await api.post<LikeResponse>(`${COMMUNITY_API_PATH}/${postId}/like`, {});
 
     return response.data;
   },
 
   async addComment(postId: number, content: string): Promise<Comment> {
-    const response = await api.post<Comment>(
-      `${COMMUNITY_API_PATH}/${postId}/comments`,
-      {
-        content,
-      },
-      {
-        headers: authHeaders(),
-      },
-    );
+    const response = await api.post<Comment>(`${COMMUNITY_API_PATH}/${postId}/comments`, {
+      content,
+    });
 
     return response.data;
   },

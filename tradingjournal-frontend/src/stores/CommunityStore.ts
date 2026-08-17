@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { DEFAULT_PAGINATION, DEFAULT_POSTS_QUERY } from '../constants/community.constants';
 import { communityService, getCommunityErrorMessage } from '../services/community.service';
+import { usePortfolioStore } from './PortfolioStore';
 import type {
   CreatePostPayload,
   Pagination,
@@ -67,6 +68,9 @@ export const useCommunityStore = defineStore('community', {
       try {
         const params = {
           ...this.filters,
+          // feed ต้องเป็นของโหมดที่ active อยู่เท่านั้น (backend รองรับ portfolio_type อยู่แล้ว)
+          // ผู้เรียกที่ส่ง portfolio_type มาเองยังชนะ เผื่ออยากดูข้ามโหมด
+          portfolio_type: usePortfolioStore().activeType,
           ...Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)),
         } as PostsQuery;
 

@@ -33,6 +33,12 @@ export class PortfoliosController {
     return this.portfoliosService.findAll(user.userId, query.type);
   }
 
+  // ต้องประกาศก่อน @Get(':id') ไม่งั้น 'quota' จะถูกจับเป็น :id แล้วตายที่ ParseIntPipe
+  @Get('quota')
+  getQuota(@CurrentUser() user: AuthUser) {
+    return this.portfoliosService.getQuota(user.userId);
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { usePortfolioStore } from './PortfolioStore';
 import { useUserStore } from './UserStore';
 import {
   DEFAULT_GAMIFICATION_QUERY,
@@ -56,6 +57,21 @@ export const useGamificationStore = defineStore('gamification', {
       this.error = null;
     },
 
+    /**
+     * ภารกิจถูกแบ่ง audience ตาม portfolio_type ฝั่ง backend อยู่แล้ว
+     * (ALL / TRADER / INVESTOR) แต่ต้องส่ง portfolio_type ไปด้วยถึงจะกรองให้
+     * ไม่ส่ง = ได้ภารกิจของทั้งสองโหมดปนกัน เช่น STOCK_BUY โผล่ในโหมด Forex
+     *
+     * ค่าที่ผู้เรียกส่งมาเองยังชนะเสมอ เผื่อหน้าไหนอยากขอข้ามโหมด
+     */
+    resolveQuery(query: Partial<GamificationQuery>): GamificationQuery {
+      return {
+        ...this.filters,
+        portfolio_type: usePortfolioStore().activeType,
+        ...query,
+      };
+    },
+
     setFilters(filters: Partial<GamificationQuery>) {
       this.filters = {
         ...this.filters,
@@ -74,10 +90,7 @@ export const useGamificationStore = defineStore('gamification', {
       this.error = null;
 
       try {
-        const params = {
-          ...this.filters,
-          ...query,
-        };
+        const params = this.resolveQuery(query);
 
         const overview = await gamificationService.fetchOverview(params);
 
@@ -101,10 +114,7 @@ export const useGamificationStore = defineStore('gamification', {
       this.error = null;
 
       try {
-        const params = {
-          ...this.filters,
-          ...query,
-        };
+        const params = this.resolveQuery(query);
 
         const missions = await gamificationService.fetchMissions(params);
 
@@ -199,7 +209,11 @@ export const useGamificationStore = defineStore('gamification', {
       this.error = null;
 
       try {
-        const result = await gamificationService.recordEvent(payload);
+        // เหมือน resolveQuery — ไม่ส่ง portfolio_type ไป backend จะนับให้เฉพาะภารกิจ audience ALL
+        const result = await gamificationService.recordEvent({
+          portfolio_type: usePortfolioStore().activeType,
+          ...payload,
+        });
 
         await this.fetchMissions();
 

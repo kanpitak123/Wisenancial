@@ -22,7 +22,12 @@ export const PORTFOLIO_MESSAGES = {
   updateFailed: 'ไม่สามารถแก้ไขพอร์ตได้',
   deleteFailed: 'ไม่สามารถลบพอร์ตได้',
   notFound: 'ไม่พบพอร์ตที่เลือก',
+  quotaFailed: 'ไม่สามารถโหลดโควต้าพอร์ตได้',
+  quotaReached: 'ใช้โควต้าพอร์ตครบแล้ว',
 } as const;
+
+/** route ของหน้าอัปเกรดแพ็กเกจ — ต้องตรงกับ routes.ts และ redirect ของ payments.service.ts */
+export const UPGRADE_ROUTE = '/Upgrade';
 
 export const INITIAL_PORTFOLIO_STATE: PortfolioState = {
   portfolios: [],
@@ -31,7 +36,11 @@ export const INITIAL_PORTFOLIO_STATE: PortfolioState = {
     INVESTOR: null,
   },
   activeType: PORTFOLIO_DEFAULTS.type,
+  quota: null,
+  isSwitchingWorkspace: false,
+  isInitializingWorkspace: false,
   isLoading: false,
+  isLoadingQuota: false,
   isSubmitting: false,
   hasLoadedAll: false,
   loadedTypes: {

@@ -83,6 +83,39 @@ export interface DividendQuery {
   year?: number;
 }
 
+/** หนึ่งรายการเงินปันผลในรายงานภาษี (GET /dividends/portfolio/:id/tax-summary) */
+export interface DividendTaxRecord {
+  id: number;
+  symbol: string;
+  name: string;
+  /** yyyy-mm-dd */
+  paymentDate: string;
+  shares: number;
+  dividendPerShare: number;
+  grossAmount: number;
+  /** สัดส่วน ไม่ใช่เปอร์เซ็นต์ — 0.1 = 10% */
+  whtRate: number;
+  taxWithheld: number;
+  netAmount: number;
+}
+
+export interface DividendWhtRateBucket {
+  whtRate: number;
+  count: number;
+  grossAmount: number;
+  taxWithheld: number;
+}
+
+export interface DividendTaxSummary {
+  portfolio_id: number;
+  year: number;
+  records: DividendTaxRecord[];
+  totalGross: number;
+  totalTaxWithheld: number;
+  totalNet: number;
+  byWhtRate: DividendWhtRateBucket[];
+}
+
 export interface ApiErrorResponse {
   message?: string | string[];
 }

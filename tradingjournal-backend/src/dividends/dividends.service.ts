@@ -65,6 +65,80 @@ export class DividendsService {
     };
   }
 
+  /**
+   * สรุปเงินปันผลรายปีสำหรับยื่นภาษี — รายรายการ + ยอดรวม gross/ภาษีหัก ณ ที่จ่าย/สุทธิ
+   *
+   * ต่างจาก summary() ตรงที่คืน records[] ออกไปด้วย (summary() คืนแค่ยอดรวม) และใช้ชื่อ
+   * ฟิลด์แบบ camelCase ตาม contract ที่ DividendTaxCard ฝั่ง frontend คาดหวังไว้
+   */
+  async taxSummary(portfolioId: number, userId: number, year?: number) {
+    await this.assertInvestorPortfolio(portfolioId, userId);
+
+    const taxYear = year ?? new Date().getFullYear();
+
+    const rows = await this.prisma.dividends.findMany({
+      where: {
+        portfolio_id: portfolioId,
+        user_id: userId,
+        status: RecordStatus.ACTIVE,
+        payment_date: {
+          gte: new Date(`${taxYear}-01-01T00:00:00.000Z`),
+          lt: new Date(`${taxYear + 1}-01-01T00:00:00.000Z`),
+        },
+      },
+      orderBy: [{ payment_date: 'asc' }, { id: 'asc' }],
+    });
+
+    const records = rows.map((row) => ({
+      id: row.id,
+      symbol: row.symbol,
+      name: row.name ?? row.symbol,
+      paymentDate: row.payment_date.toISOString().slice(0, 10),
+      shares: Number(row.shares),
+      dividendPerShare: Number(row.dividend_per_share),
+      grossAmount: Number(row.gross_amount),
+      whtRate: Number(row.wht_rate),
+      taxWithheld: Number(row.tax_withheld),
+      netAmount: Number(row.net_amount),
+    }));
+
+    const sum = (pick: (item: (typeof records)[number]) => number) =>
+      Number(records.reduce((total, item) => total + pick(item), 0).toFixed(2));
+
+    // แยกตามอัตราภาษีหัก ณ ที่จ่าย — หุ้นไทยปกติ 10% แต่ผู้ใช้ตั้งอัตราอื่นได้ตอนบันทึก
+    const rateBuckets = new Map<number, { grossAmount: number; taxWithheld: number; count: number }>();
+
+    for (const record of records) {
+      const bucket = rateBuckets.get(record.whtRate) ?? {
+        grossAmount: 0,
+        taxWithheld: 0,
+        count: 0,
+      };
+
+      bucket.grossAmount += record.grossAmount;
+      bucket.taxWithheld += record.taxWithheld;
+      bucket.count += 1;
+      rateBuckets.set(record.whtRate, bucket);
+    }
+
+    return {
+      portfolio_id: portfolioId,
+      year: taxYear,
+      records,
+      totalGross: sum((item) => item.grossAmount),
+      totalTaxWithheld: sum((item) => item.taxWithheld),
+      totalNet: sum((item) => item.netAmount),
+      byWhtRate: [...rateBuckets.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([whtRate, bucket]) => ({
+          whtRate,
+          count: bucket.count,
+          grossAmount: Number(bucket.grossAmount.toFixed(2)),
+          taxWithheld: Number(bucket.taxWithheld.toFixed(2)),
+        })),
+    };
+  }
+
   async create(portfolioId: number, userId: number, dto: CreateDividendDto) {
     const portfolio = await this.assertInvestorPortfolio(portfolioId, userId);
     const currency = (portfolio.currency ?? 'USD').toUpperCase();

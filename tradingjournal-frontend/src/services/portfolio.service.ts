@@ -1,4 +1,5 @@
-import axios, { type AxiosError } from 'axios';
+import { type AxiosError } from 'axios';
+import { api } from 'src/boot/axios';
 import { PORTFOLIO_API_PATH } from '../constants/portfolio.constants';
 import type {
   ApiErrorResponse,
@@ -6,33 +7,11 @@ import type {
   DeletePortfolioResponse,
   ListPortfoliosQuery,
   Portfolio,
+  PortfolioQuota,
   UpdatePortfolioPayload,
 } from '../types/portfolio.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-});
-
-function getAccessToken(): string {
-  let token = localStorage.getItem('access_token') ?? localStorage.getItem('token');
-
-  if (!token) {
-    throw new Error('ไม่พบ Token กรุณาเข้าสู่ระบบใหม่');
-  }
-
-  token = token.replace(/^"(.*)"$/, '$1');
-
-  return token;
-}
-
-function authHeaders() {
-  return {
-    Authorization: `Bearer ${getAccessToken()}`,
-  };
-}
-
+// ใช้ instance กลางจาก boot/axios — แนบ token, จัดการ 401 และรองรับ mock mode ให้อัตโนมัติ
 function normalizeCreatePayload(payload: CreatePortfolioPayload): CreatePortfolioPayload {
   return {
     ...payload,
@@ -80,28 +59,26 @@ export const portfolioService = {
   async getAll(query: ListPortfoliosQuery = {}): Promise<Portfolio[]> {
     const response = await api.get<Portfolio[]>(PORTFOLIO_API_PATH, {
       params: query,
-      headers: authHeaders(),
     });
 
     return response.data;
   },
 
   async getOne(id: number): Promise<Portfolio> {
-    const response = await api.get<Portfolio>(`${PORTFOLIO_API_PATH}/${id}`, {
-      headers: authHeaders(),
-    });
+    const response = await api.get<Portfolio>(`${PORTFOLIO_API_PATH}/${id}`);
+
+    return response.data;
+  },
+
+  /** โควต้ารวมทั้งสองโหมดตาม subscription tier ของผู้ใช้ */
+  async getQuota(): Promise<PortfolioQuota> {
+    const response = await api.get<PortfolioQuota>(`${PORTFOLIO_API_PATH}/quota`);
 
     return response.data;
   },
 
   async create(payload: CreatePortfolioPayload): Promise<Portfolio> {
-    const response = await api.post<Portfolio>(
-      PORTFOLIO_API_PATH,
-      normalizeCreatePayload(payload),
-      {
-        headers: authHeaders(),
-      },
-    );
+    const response = await api.post<Portfolio>(PORTFOLIO_API_PATH, normalizeCreatePayload(payload));
 
     return response.data;
   },
@@ -110,18 +87,13 @@ export const portfolioService = {
     const response = await api.patch<Portfolio>(
       `${PORTFOLIO_API_PATH}/${id}`,
       normalizeUpdatePayload(payload),
-      {
-        headers: authHeaders(),
-      },
     );
 
     return response.data;
   },
 
   async delete(id: number): Promise<DeletePortfolioResponse> {
-    const response = await api.delete<DeletePortfolioResponse>(`${PORTFOLIO_API_PATH}/${id}`, {
-      headers: authHeaders(),
-    });
+    const response = await api.delete<DeletePortfolioResponse>(`${PORTFOLIO_API_PATH}/${id}`);
 
     return response.data;
   },

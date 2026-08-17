@@ -87,9 +87,20 @@ async function main() {
       create: mission,
     });
   }
+
+  return missions.length;
 }
 
+// เดิมมีแต่ .finally() ไม่มี .catch() — seed ที่ล้มเหลวจึงเงียบและ exit 0
+// (ตาราง missions ว่างอยู่นานโดยไม่มีใครรู้ว่า seed ไม่เคยรันสำเร็จ)
 main()
+  .then((count) => {
+    console.log(`Seeded missions: ${count}`);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });

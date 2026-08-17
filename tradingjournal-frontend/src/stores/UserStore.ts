@@ -31,6 +31,10 @@ export const useUserStore = defineStore('user', {
       state.profile?.plan?.name ??
       (state.profile?.subscription_tier ? state.profile.subscription_tier : 'Free'),
 
+    planColor(): string {
+      return this.isPaidUser ? 'amber-8' : 'grey-7';
+    },
+
     isPlanActive: (state): boolean => {
       if (state.profile?.subscription_tier) {
         return true;

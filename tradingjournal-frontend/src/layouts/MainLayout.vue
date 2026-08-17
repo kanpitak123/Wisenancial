@@ -14,6 +14,10 @@
 
         <q-toolbar-title class="text-weight-bolder tracking-tight" />
 
+        <MockModeToggle class="q-mr-sm" />
+
+        <WorkspaceSwitcher class="q-mr-sm" />
+
         <GlobalDateFilter class="q-mr-sm" />
 
         <q-btn
@@ -98,11 +102,14 @@
               <q-tooltip v-if="miniState">Expand sidebar</q-tooltip>
             </div>
 
-            <div
-              v-show="!miniState"
-              class="text-subtitle1 text-weight-bolder text-main tracking-tight q-ml-sm"
-            >
-              Trading Journal
+            <div v-show="!miniState" class="q-ml-sm">
+              <div class="text-subtitle1 text-weight-bolder text-main tracking-tight lh-1">
+                Trading Journal
+              </div>
+              <div class="text-caption text-weight-bold workspace-tag">
+                <q-icon :name="workspaceMeta.icon" size="12px" class="q-mr-xs" />
+                {{ workspaceMeta.label }}
+              </div>
             </div>
           </div>
 
@@ -197,7 +204,7 @@
 
         <q-scroll-area style="height: 50vh; min-height: 350px">
           <div v-if="loadingLeaderboard" class="flex flex-center q-py-xl full-height">
-            <q-spinner-edge color="primary" size="40px" />
+            <q-spinner-dots color="primary" size="40px" />
           </div>
 
           <div v-else-if="leaderboardList.length === 0" class="text-center text-muted q-py-xl">
@@ -253,37 +260,49 @@
       </q-card>
     </q-dialog>
     <MissionDialog v-model="missionsDialogOpen" />
+
+    <CommandPalette />
+    <PrivacyMode />
   </q-layout>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
-import EssentialLink, { type EssentialLinkProps } from 'components/EssentialLink.vue';
+import EssentialLink from 'components/EssentialLink.vue';
+import WorkspaceSwitcher from 'components/WorkspaceSwitcher.vue';
+import MockModeToggle from 'components/MockModeToggle.vue';
+import { useWorkspace } from 'src/composables/useWorkspace';
+import { tradeService } from 'src/services/trade.service';
+import type { LeaderboardUser } from 'src/types/trade.types';
 import { useUserStore } from 'stores/UserStore';
-import { useMissionStore } from 'stores/MissionsStore';
+import { useGamificationStore } from 'stores/GamificationStore';
 import GlobalDateFilter from 'components/GlobalDateFilter.vue';
 import MissionDialog from 'components/MissionDialog.vue';
+import CommandPalette from 'components/CommandPalette.vue';
+import PrivacyMode from 'components/PrivacyMode.vue';
+import { useKeyboardShortcuts } from 'src/composables/useKeyboardShortcuts';
+
+useKeyboardShortcuts();
 
 const $q = useQuasar();
 const userStore = useUserStore();
-const missionsStore = useMissionStore();
+const missionsStore = useGamificationStore();
 const missionsDialogOpen = ref(false);
 
-const linksList: EssentialLinkProps[] = [
-  { title: 'Dashboard', icon: 'space_dashboard', link: 'Dashboard' },
-  { title: 'Journal', icon: 'edit_note', link: 'Journal' }, // เปลี่ยนเป็นสมุดจดบันทึกการเทรด
-  { title: 'ActivePositions', icon: 'trending_up', link: 'ActivePositions' }, // เปลี่ยนเป็นกราฟขาขึ้น/สถานะที่กำลังวิ่งอยู่
-  { title: 'Asset Explorer', icon: 'candlestick_chart', link: 'AssetExplorer' }, // เปลี่ยนเป็นกราฟแท่งเทียนสำหรับส่องสินทรัพย์
-  { title: 'Watchlist', icon: 'star', link: 'Watchlist' }, // เปลี่ยนเป็นดาว (Favorites/Watchlist) หรือใช้ 'visibility' ก็ได้ครับ
-  { title: 'Analytics', icon: 'analytics', link: 'Analytics' }, // เปลี่ยนเป็นไอคอนวิเคราะห์ข้อมูลโดยตรง
-  { title: 'Goals', icon: 'track_changes', link: 'Goals' },
-  { title: 'Portfolios', icon: 'account_balance_wallet', link: 'Portfolio' },
-  { title: 'News', icon: 'newspaper', link: 'News' },
-  { title: 'Lot Calculator', icon: 'calculate', link: 'Lotcalculator' },
-  { title: 'Classroom', icon: 'school', link: 'Classroom' }, // คงไว้สำหรับห้องเรียน
-  { title: 'Community Board', icon: 'forum', link: '/Community' },
-];
+// เมนูมาจาก WORKSPACE_NAV_LINKS ตามโหมดที่ active (Forex = TRADER, Stock = INVESTOR)
+// แก้รายการเมนูที่ src/constants/workspace.constants.ts ที่เดียว
+const {
+  navLinks: linksList,
+  meta: workspaceMeta,
+  initializeActive,
+  activeType: workspaceType,
+} = useWorkspace();
+
+// ภารกิจถูกกรองตามโหมด (audience) เลยต้องดึงใหม่ทุกครั้งที่สลับ ไม่งั้นค้างของโหมดเดิม
+watch(workspaceType, () => {
+  void missionsStore.fetchMissions();
+});
 
 function handleLogoClick() {
   if (miniState.value) {
@@ -297,41 +316,31 @@ const logoHover = ref(false);
 const leaderboardDialogOpen = ref(false);
 
 // State สำหรับข้อมูล Leaderboard จริงจาก API
-const leaderboardList = ref<any[]>([]);
+const leaderboardList = ref<Omit<LeaderboardUser, 'totalPnl'>[]>([]);
 const loadingLeaderboard = ref(false);
 
 // ฟังก์ชันดึงข้อมูลจาก API ฝั่ง Backend จริง
 async function loadLeaderboardData() {
   loadingLeaderboard.value = true;
   try {
-    const token = localStorage.getItem('access_token');
+    // ใช้ tradeService (instance กลาง) แทน fetch ที่ hardcode URL ไว้
+    // จะได้แนบ token / จัดการ 401 / รองรับ mock mode เหมือนที่อื่น
+    const data = await tradeService.leaderboard();
 
-    const response = await fetch('http://localhost:3000/trades/leaderboard', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-
-      leaderboardList.value = data
-        .sort((a: any, b: any) => Number(b.current_balance || 0) - Number(a.current_balance || 0))
-        .slice(0, 100)
-        .map((item: any, index: number) => {
-          const name = item.username || item.displayName || 'Anonymous';
-          return {
-            rank: index + 1,
-            username: name,
-            initials: name.substring(0, 2).toUpperCase(),
-            initial: Number(item.initial_balance || 0),
-            net: Number(item.current_balance || 0),
-            winRate: item.win_rate || null,
-          };
-        });
-    }
+    leaderboardList.value = [...data]
+      .sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0))
+      .slice(0, 100)
+      .map((item, index) => {
+        const name = item.username || 'Anonymous';
+        return {
+          rank: index + 1,
+          username: name,
+          initials: name.substring(0, 2).toUpperCase(),
+          initial: Number(item.initial_balance || 0),
+          net: Number(item.current_balance || 0),
+          winRate: item.win_rate ?? null,
+        };
+      });
   } catch (error) {
     console.error('Failed to load leaderboard database:', error);
   } finally {
@@ -377,6 +386,11 @@ onMounted(() => {
   $q.dark.set(isDark);
   void userStore.fetchProfile();
   void missionsStore.fetchMissions();
+
+  // โหลดพอร์ต/ข้อมูลของโหมดที่ค้างอยู่ใน localStorage หลังรีเฟรช
+  void initializeActive().catch((error: unknown) => {
+    console.error('Workspace initialize failed:', error);
+  });
 });
 </script>
 

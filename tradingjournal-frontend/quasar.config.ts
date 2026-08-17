@@ -12,7 +12,10 @@ export default defineConfig((ctx) => {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['i18n', 'axios', 'pinia'],
+    // ไม่ต้องมี boot 'pinia' — Quasar ติดตั้ง pinia ให้เองจาก src/stores/index.ts
+    // ถ้าใส่กลับเข้าไปจะได้ pinia สองตัว ทำให้ store ที่ component เห็นกับที่ boot/axios เห็น
+    // เป็นคนละ instance กัน (เตือนว่า 'App already provides property with key Symbol(pinia)')
+    boot: ['i18n', 'axios'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],

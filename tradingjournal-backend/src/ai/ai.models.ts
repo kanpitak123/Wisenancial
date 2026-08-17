@@ -32,19 +32,25 @@ export interface AiModelPricing {
 }
 
 export const AI_MODEL_REGISTRY: Readonly<Record<AiModelId, AiModelPricing>> = {
+  // id คงเดิมโดยตั้งใจ (ถูกเก็บใน ai_usage_logs.model_used และหน้าบ้านจำไว้ใน
+  // localStorage) — ที่เปลี่ยนคือ upstreamModel ซึ่งแยกออกมาเพื่อการนี้อยู่แล้ว
+  //
+  // Groq ถอด llama-3.1-8b-instant ออกจากบัญชีนี้แล้ว (404 model_not_found)
+  // รุ่นที่ยังเรียกได้จริงเหลือตระกูล openai/gpt-oss-* — ตรวจกับ /v1/models แล้ว
   'groq-llama3': {
     id: 'groq-llama3',
     provider: 'groq',
-    label: 'Llama 3.1 8B (Fast)',
-    upstreamModel: 'llama-3.1-8b-instant',
+    label: 'GPT-OSS 20B (Fast)',
+    upstreamModel: 'openai/gpt-oss-20b',
     creditsPer1kInput: 1,
     creditsPer1kOutput: 1,
   },
+  // gemini-2.5-flash ถูกปิดสำหรับผู้ใช้ใหม่ (404 พร้อมข้อความให้ย้ายไป gemini-3.6-flash)
   'gemini-2.5-flash': {
     id: 'gemini-2.5-flash',
     provider: 'gemini',
-    label: 'Gemini 2.5 Flash (Balanced)',
-    upstreamModel: 'gemini-2.5-flash',
+    label: 'Gemini 3.6 Flash (Balanced)',
+    upstreamModel: 'gemini-3.6-flash',
     creditsPer1kInput: 5,
     creditsPer1kOutput: 15,
   },
@@ -65,6 +71,22 @@ export const AI_MODEL_REGISTRY: Readonly<Record<AiModelId, AiModelPricing>> = {
     creditsPer1kOutput: 300,
   },
 } as const;
+
+/**
+ * ลำดับ fallback ของงานเบื้องหลัง (news enrichment ฯลฯ) ที่ระบบเป็นคนจ่าย ไม่ใช่ผู้ใช้
+ *
+ * เรียงจากถูกไปแพง — Groq free tier มี TPM แค่ 6000 ชนเพดานบ่อย พอ 429 แล้ว
+ * ของเดิมล้มทั้งงานเลย ทั้งที่มี key ของอีก 3 เจ้าพร้อมใช้อยู่ใน .env
+ *
+ * ใช้กับ executeSystemAiRequest เท่านั้น — ฝั่งผู้ใช้ (executeAiRequest) ห้าม fallback
+ * ข้าม provider เพราะเรตเครดิตต่อ model ต่างกันถึง 300 เท่า ผู้ใช้ต้องเป็นคนเลือกเอง
+ */
+export const AI_SYSTEM_FALLBACK_ORDER: readonly AiModelId[] = [
+  'groq-llama3',
+  'gemini-2.5-flash',
+  'gpt-4o',
+  'claude-sonnet-5',
+];
 
 /**
  * Balance a user must hold before we will start any request. Charging happens

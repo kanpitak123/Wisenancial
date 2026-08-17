@@ -1,4 +1,6 @@
 import { API_BASE_URL, AUTH_ENDPOINTS, AUTH_STORAGE_KEYS } from 'src/constants/auth.constants';
+import { MOCK_LATENCY_MS, isMockEnabled } from 'src/mocks/mock.config';
+import { mockAuthResponse } from 'src/mocks/auth.mock';
 import type {
   AuthResponse,
   CurrentUserResponse,
@@ -12,6 +14,17 @@ interface ErrorPayload {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // ไฟล์นี้ใช้ fetch ตรง ๆ ไม่ได้ผ่าน axios จึงต้องเช็ค mock mode เอง
+  // ไม่งั้นเปิด mock แล้วจะล็อกอินไม่ได้ถ้า backend ไม่ได้รัน
+  if (isMockEnabled()) {
+    const mocked = mockAuthResponse(path, options);
+
+    if (mocked !== null) {
+      await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
+      return mocked as T;
+    }
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {

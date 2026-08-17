@@ -1,10 +1,12 @@
 // src/stores/ChatStore.ts
 import { defineStore } from 'pinia';
-import axios from 'axios';
 import type { Socket } from 'socket.io-client';
 import { io } from 'socket.io-client';
+import { api } from 'src/boot/axios';
+import { API_BASE_URL } from 'src/constants/auth.constants';
+import { isMockEnabled } from 'src/mocks/mock.config';
 
-const API = 'http://localhost:3000';
+const API = API_BASE_URL;
 
 // 📋 กำหนดโครงสร้างข้อมูลข้อความแชทให้ตรงกับที่หลังบ้าน (Prisma) ส่งมา
 export interface ChatMessage {
@@ -44,6 +46,9 @@ export const useChatStore = defineStore('chat', {
     connectSocket() {
       // ป้องกันการเชื่อมต่อซ้ำซ้อนถ้าเชื่อมต่ออยู่แล้ว
       if (this.socket?.connected) return;
+
+      // mock mode ไม่มี backend ให้ต่อ — ข้ามไปเลย ไม่งั้น console จะเต็มไปด้วย connect error
+      if (isMockEnabled()) return;
 
       let token = localStorage.getItem('token') || localStorage.getItem('access_token');
       if (token) {
@@ -100,9 +105,8 @@ export const useChatStore = defineStore('chat', {
     async fetchChatHistory(roomName: string) {
       this.isLoading = true;
       try {
-        const res = await axios.get(`${API}/chat/history/${encodeURIComponent(roomName)}`, {
-          headers: this.getHeaders(),
-        });
+        // ใช้ instance กลาง — token/401/mock mode ถูกจัดการให้อัตโนมัติ
+        const res = await api.get(`/chat/history/${encodeURIComponent(roomName)}`);
         this.messages = res.data;
       } catch (error) {
         console.error('Error fetching chat history:', error);

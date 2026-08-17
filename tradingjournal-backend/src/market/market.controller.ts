@@ -23,6 +23,23 @@ export class MarketController {
     );
   }
 
+  /**
+   * ราคาล่าสุดสำหรับหน้าที่เปิดกราฟค้างไว้แล้ว poll เป็นช่วง ๆ
+   *
+   * ผลลัพธ์มาจากแคชกลางอายุสั้นใน MarketService — client ห้ามยิง Yahoo เองตรง ๆ
+   */
+  @Get('quotes/realtime')
+  getRealtimeQuotes(@Query('symbols') symbols?: string) {
+    if (!symbols?.trim()) return [];
+
+    return this.market.getRealtimeQuotes(
+      symbols
+        .split(',')
+        .map((symbol) => symbol.trim())
+        .filter(Boolean),
+    );
+  }
+
   @Get('history/:symbol')
   getHistoricalPrices(
     @Param('symbol') symbol: string,
