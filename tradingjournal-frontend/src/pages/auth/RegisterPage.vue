@@ -193,11 +193,11 @@ body.body--dark .dash-card {
   box-shadow: var(--shadow-card);
 }
 
-/* Rainbow Top Bar */
+/* Rainbow Top Bar — rebrand 2026-08-17: light-to-dark teal sweep (accent-400 -> 600 -> 900) */
 .rainbow-bar {
   height: 5px;
   width: 100%;
-  background: linear-gradient(90deg, #b864ff 0%, #ff5e98 50%, #ffb169 100%);
+  background: linear-gradient(90deg, var(--accent-400) 0%, var(--accent-600) 50%, var(--accent-900) 100%);
   position: absolute;
   top: 0;
   left: 0;
@@ -220,7 +220,7 @@ body.body--dark .dash-text-muted {
 
 /* Custom Gradient Button */
 .custom-theme-btn {
-  background: linear-gradient(135deg, #b864ff 0%, #ff5e98 50%, #ffb169 100%);
+  background: linear-gradient(135deg, var(--accent-400) 0%, var(--accent-600) 50%, var(--accent-900) 100%);
   background-size: 200% auto;
   transition: all 0.4s ease-in-out;
   font-size: 1.05rem;
@@ -228,7 +228,7 @@ body.body--dark .dash-text-muted {
 .custom-theme-btn:hover {
   background-position: right center;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(255, 94, 152, 0.35) !important;
+  box-shadow: 0 8px 20px rgba(51, 97, 96, 0.35) !important;
 }
 
 /* Custom Inputs */
@@ -238,22 +238,22 @@ body.body--dark .dash-text-muted {
   border-radius: 10px;
 }
 .custom-input :deep(.q-field__control:hover:before) {
-  border-color: #ff5e98 !important;
+  border-color: var(--accent-600) !important;
 }
 .custom-input :deep(.q-field__control:after) {
-  border-color: #b864ff;
+  border-color: var(--accent-800);
   border-width: 2px;
   border-radius: 10px;
 }
 
 /* Links */
 .login-link {
-  color: #ff5e98;
+  color: var(--accent-700);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 .login-link:hover {
-  color: #b864ff;
+  color: var(--accent-900);
   text-decoration: underline;
 }
 

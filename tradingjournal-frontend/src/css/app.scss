@@ -1,9 +1,105 @@
+// Font stack shared by both locales: Inter, IBM Plex Sans Thai, Kanit, JetBrains Mono
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* ==================================================================
+   Global neutral palette (light default). Pages and components read
+   these; anything that defines the same name in a narrower scope
+   (MainLayout's .q-layout, per-page scoped blocks) still wins.
+================================================================== */
 :root {
+  /* Rebrand 2026-08-17: teal/sage brand tokens, sampled pixel-level from the
+     real logo files and contrast-checked (WCAG AA) against every pairing
+     below. See claude/ui-rebrand-light-dark-mode.md for the full derivation. */
   --bg-dialog: #ffffff;
-  --border-dialog: #e2e8f0;
+  --border-dialog: #dae7e5;
+
+  --bg-page: #f6f9f9;
+  --bg-card: #fdfefe;
+  --bg-card-soft: #f0f5f4;
+  --bg-subtle: #f6f9f9;
+  --border-color: #dae7e5;
+  --text-primary: #1b3636;
+  --text-secondary: #496565;
+  --text-muted: #789191;
+
+  /* Brand accent scale (derived from logo colors #85B6B0 -> #1B3636).
+     Same 10-step scale used in both themes; each pairing below is already
+     contrast-verified, see the design-token doc for the full table. */
+  --accent-50: #f4fafa;
+  --accent-100: #e7f4f2;
+  --accent-200: #cde5e2;
+  --accent-300: #b0d4cf;
+  --accent-400: #9bc5c0;
+  --accent-500: #85b6b0;
+  --accent-600: #64a6a0;
+  --accent-700: #4c8a87;
+  --accent-800: #336160;
+  --accent-900: #1b3636;
+}
+
+// Thai locale: extra vertical room for vowels / tone marks
+html[lang='th'],
+body.lang-th {
+  font-family: 'IBM Plex Sans Thai', 'Kanit', 'Inter', sans-serif !important;
+  letter-spacing: 0 !important;
+  line-height: 1.6;
+
+  p,
+  .text-subtitle1,
+  .text-subtitle2,
+  .text-body1,
+  .text-body2,
+  .text-caption,
+  li,
+  .q-item__label,
+  .q-field__native,
+  .q-tab__label {
+    line-height: 1.6 !important;
+  }
+
+  .text-caption,
+  .q-badge,
+  .ws-badge,
+  .kpi-label,
+  .meta-label,
+  .section-eyebrow,
+  .page-eyebrow,
+  .ai-brief__eyebrow {
+    font-size: max(0.75rem, 12px) !important;
+    letter-spacing: 0 !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .text-h4,
+  .text-h5,
+  .text-h6 {
+    letter-spacing: -0.01em !important;
+    line-height: 1.45 !important;
+  }
+
+  .text-uppercase,
+  [class*='eyebrow'],
+  [class*='-eyebrow'] {
+    letter-spacing: 0.04em !important;
+  }
 }
 
 .body--dark {
-  --bg-dialog: #1a2540;
-  --border-dialog: #2a3a58;
+  /* "Black that isn't too black, a bit gray" — a warm-neutral charcoal with
+     only a faint teal undertone, not a saturated dark teal and not pure
+     black. accent-* scale stays identical to light mode (see note above). */
+  --bg-dialog: #262c2c;
+  --border-dialog: #3a4444;
+
+  --bg-page: #151819;
+  --bg-card: #1f2323;
+  --bg-card-soft: #282e2e;
+  --bg-subtle: #101314;
+  --border-color: #394141;
+  --text-primary: #f4f6f5;
+  --text-secondary: #b7c2bf;
+  --text-muted: #7d8c89;
 }

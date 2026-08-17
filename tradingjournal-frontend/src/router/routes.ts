@@ -103,6 +103,14 @@ const routes: RouteRecordRaw[] = [
     ],
   },
 
+  // ---------- Dev-only: ดูตัวอย่าง design token/component ใหม่ (rebrand 2026-08-17) ----------
+  // ไม่ผูก auth, ไม่มีลิงก์จาก sidebar — เข้าตรง URL เท่านั้น ตัวหน้าเองบล็อกการแสดงผลถ้า
+  // import.meta.env.PROD (ดู DesignPreviewPage.vue) กันไม่ให้หลุดไปโผล่ใน production build จริง
+  {
+    path: '/dev/design-preview',
+    component: () => import('pages/dev/DesignPreviewPage.vue'),
+  },
+
   {
     path: '/:catchAll(.*)*',
     component: () => import('pages/system/ErrorNotFound.vue'),

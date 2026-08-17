@@ -2233,7 +2233,7 @@ const downloadStatsImage = async () => {
 
 /* Keep old gradient-progress for GoalPage compatibility */
 .gradient-progress :deep(.q-linear-progress__model) {
-  background: linear-gradient(90deg, #b864ff 0%, #ff5e98 50%, #ffb169 100%) !important;
+  background: linear-gradient(90deg, var(--accent-400) 0%, var(--accent-600) 50%, var(--accent-900) 100%) !important;
   border-radius: 10px;
 }
 

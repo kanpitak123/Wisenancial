@@ -497,6 +497,27 @@ onMounted(() => {
 .tracking-tight {
   letter-spacing: -0.02em;
 }
+.lh-1 {
+  line-height: 1.15;
+}
+
+/* ป้ายโหมดปัจจุบัน (Forex / Stock) ใต้ชื่อแอพในหัว drawer */
+.workspace-tag {
+  display: flex;
+  align-items: center;
+  line-height: 1.1;
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--accent-500) 0%, var(--accent-900) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.workspace-tag .q-icon {
+  -webkit-text-fill-color: var(--accent-700);
+}
 
 /* ==========================================================
    Menu Items Customization
@@ -517,7 +538,9 @@ onMounted(() => {
 }
 
 .sidebar-list .q-item.q-router-link--exact-active {
-  background-color: rgba(59, 130, 246, 0.12); /* สีฟ้าอ่อนๆ */
+  /* accent-500 @ 16% แทนฟ้าอ่อนเดิม — ใช้ rgba (ไม่ใช่ solid accent-100) เพราะต้องเบลนด์
+     เข้ากับพื้นหลังทั้งสองธีมได้ ให้เอฟเฟกต์ใกล้เคียงของเดิมที่สุด */
+  background-color: rgba(133, 182, 176, 0.16);
   color: var(--q-primary);
   font-weight: 700;
 }
@@ -534,7 +557,7 @@ onMounted(() => {
 }
 
 .account-avatar {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-900) 100%);
   color: #ffffff;
 }
 

@@ -12,9 +12,13 @@
 // to match your app's branding.
 // Tip: Use the "Theme Builder" on Quasar's documentation website.
 
-$primary: #1976d2;
+// Rebrand 2026-08-17: teal/sage identity sampled from the real logo files
+// (#85B6B0 / #1B3636). $primary is set dark enough (accent-800) that Quasar's
+// default "bg-{color} text-white" solid-button styling keeps AA contrast in
+// both light and dark mode (contrast ratio 6.95:1 verified against white).
+$primary: #336160;
 $secondary: #26a69a;
-$accent: #9c27b0;
+$accent: #4c8a87;
 
 $dark: #1d1d1d;
 $dark-page: #121212;

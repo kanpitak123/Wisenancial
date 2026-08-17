@@ -7,18 +7,18 @@
 </template>
 
 <style scoped>
-/* 🌟 Light Mode Background */
+/* 🌟 Light Mode Background — rebrand 2026-08-17: pale sage-teal tint instead
+   of the old pink/lavender, matching the accent-50 -> accent-100 scale */
 .bg-auth {
   min-height: 100vh;
-  /* ไล่สีพื้นหลังสำหรับโหมดสว่าง */
-  background: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 100%);
+  background: linear-gradient(135deg, var(--accent-50) 0%, var(--accent-100) 100%);
   transition: background 0.3s ease;
 }
 
-/* 🌙 Dark Mode Background */
+/* 🌙 Dark Mode Background — dark page bg into deep brand teal (accent-900),
+   instead of navy-into-purple */
 body.body--dark .bg-auth {
-  /* ไล่สีพื้นหลังสำหรับโหมดมืด (สีกรมท่าเข้ม ไปหา ม่วงเข้มจัดๆ ให้เข้ากับ Theme) */
-  background: linear-gradient(135deg, #0f172a 0%, #17102b 100%);
+  background: linear-gradient(135deg, var(--bg-page) 0%, var(--accent-900) 100%);
 }
 
 .transition-theme {
