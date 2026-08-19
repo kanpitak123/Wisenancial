@@ -33,12 +33,29 @@ export interface IAiProvider {
 }
 
 export const DEFAULT_TEMPERATURE = 0.3;
-export const DEFAULT_MAX_OUTPUT_TOKENS = 2048;
+// เดิม 2048 — ทำให้คำตอบยาวๆ (โดยเฉพาะ JSON ที่มี field เยอะ) ถูกตัดกลางคันบ่อย
+// จน parseJsonResponse หา { หรือ } ปิดไม่เจอ แล้วโดนจัดเป็น "permanent" (ดูหมายเหตุ
+// AiResponseParseError ด้านล่าง) เพิ่มเพดานให้มีที่ไปต่อจนจบ JSON ก่อนโดนตัด
+export const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 export const AI_REQUEST_TIMEOUT_MS = 30_000;
 
 /** Rough token count, used only when a provider omits usage metadata. ~4 chars/token. */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
+}
+
+/**
+ * โยนออกมาตอน parseJsonResponse หา JSON ที่ใช้ได้ในคำตอบไม่เจอเลย — ส่วนใหญ่เกิด
+ * จากคำตอบถูกตัดกลางคัน (ชน maxOutputTokens ก่อนโมเดลพิมพ์ปิด JSON ครบ) ไม่ใช่ว่า
+ * prompt หรือ request ผิดจริง — จึงแยก type ออกมาให้ ai-retry.ts classifyAiFailure
+ * จัดเป็น 'upstream-error' (ลองเจ้าอื่นต่อได้) แทนที่จะตกไปเป็น 'permanent' เหมือน
+ * Error ทั่วไปที่ไม่มี type ชัดเจน แล้วทำให้ fallback chain หยุดทั้งที่ยังลองเจ้าอื่นได้อยู่
+ */
+export class AiResponseParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AiResponseParseError';
+  }
 }
 
 /**
@@ -82,5 +99,5 @@ export function parseJsonResponse<T>(raw: string): T {
     }
   }
 
-  throw new Error('LLM response contained no JSON object');
+  throw new AiResponseParseError('LLM response contained no JSON object');
 }

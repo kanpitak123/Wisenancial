@@ -6,6 +6,9 @@
  * บางตัวใส่ไว้ใน .response.status, ส่วน error ระดับ network ไม่มีสถานะเลยมีแต่ .code)
  */
 
+import { AiResponseParseError } from './providers/ai-provider.interface';
+
+
 export type AiFailureKind =
   | 'rate-limit'
   | 'upstream-error'
@@ -71,8 +74,17 @@ function statusOf(error: ErrorLike): number | undefined {
  *
  * 401/403 ถูกจัดเป็น permanent โดยตั้งใจ: key ผิดคือปัญหา config ที่ต้องเห็นเสียงดัง
  * ไม่ใช่ปล่อยให้เงียบแล้วไปเผา provider ที่แพงกว่าแทนทุกครั้ง
+ *
+ * AiResponseParseError (parseJsonResponse หา JSON ปิดไม่เจอ — ส่วนใหญ่เพราะคำตอบ
+ * โดนตัดกลางคันตอนชน maxOutputTokens) ถูกจัดเป็น upstream-error โดยตั้งใจเช่นกัน:
+ * เป็นอาการฝั่งคำตอบของโมเดล/เจ้านั้นๆ ไม่ใช่ prompt หรือ request ผิด เจ้าอื่นมีโอกาส
+ * ตอบจบสมบูรณ์กว่า จึงควรลองต่อแทนที่จะหยุด fallback chain ทั้งที่ยังมีเจ้าอื่นให้ลอง
  */
 export function classifyAiFailure(error: unknown): AiFailureKind {
+  if (error instanceof AiResponseParseError) {
+    return 'upstream-error';
+  }
+
   if (error === null || typeof error !== 'object') {
     return 'permanent';
   }
