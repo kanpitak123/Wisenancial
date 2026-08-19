@@ -7,6 +7,8 @@ export const AUTH_ENDPOINTS = {
   login: '/auth/login',
   register: '/auth/register',
   me: '/auth/me',
+  refresh: '/auth/refresh',
+  logout: '/auth/logout',
 } as const;
 
 // backend ฟังที่พอร์ต 3000 (main.ts) และไม่มี global prefix

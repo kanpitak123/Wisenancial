@@ -44,3 +44,15 @@ export interface RegisterResponse {
 export interface CurrentUserResponse {
   user: AuthUser;
 }
+
+/**
+ * /auth/refresh คืนรูปแบบเดียวกับ /auth/login เป๊ะ (ตั้งใจให้เหมือนกันฝั่ง backend)
+ * จะได้ส่งเข้า AuthStore.setSession() ตัวเดิมได้เลยโดยไม่ต้องมี branch แยก
+ *
+ * refresh token เองไม่เคยโผล่มาใน body — อยู่ใน httpOnly cookie ที่ JS อ่านไม่ได้
+ */
+export type RefreshResponse = AuthResponse;
+
+export interface LogoutResponse {
+  message: string;
+}

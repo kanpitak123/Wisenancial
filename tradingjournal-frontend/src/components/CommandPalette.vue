@@ -245,8 +245,11 @@ const actions: CommandAction[] = [
     shortcut: 'Ctrl+Q',
     color: 'negative',
     action: () => {
-      authStore.logout();
-      void router.push('/Login');
+      // logout ยิง /auth/logout ให้ backend revoke refresh token ก่อน แล้วค่อยเด้งหน้า
+      // ไม่ await เพราะไม่อยากให้ผู้ใช้ค้างรอเน็ต — clearSession ทำงานใน finally อยู่แล้ว
+      void authStore.logout().finally(() => {
+        void router.push('/Login');
+      });
     },
     category: 'User',
   },

@@ -44,6 +44,20 @@ export function mockAuthResponse(path: string, options: RequestInit): unknown {
     return { user: MOCK_AUTH_USER };
   }
 
+  // ไม่มี cookie จริงในโหมด mock — ตอบสำเร็จไปเลย ไม่งั้น interceptor จะเตะออก
+  // หน้าหน้าล็อกอินทุกครั้งที่ endpoint ไหนสักตัวตอบ 401 ตอนรีวิว UI
+  if (path === AUTH_ENDPOINTS.refresh && method === 'POST') {
+    return {
+      message: 'ต่ออายุการเข้าใช้งานสำเร็จ (mock)',
+      access_token: MOCK_TOKEN,
+      user: MOCK_AUTH_USER,
+    };
+  }
+
+  if (path === AUTH_ENDPOINTS.logout && method === 'POST') {
+    return { message: 'ออกจากระบบเรียบร้อย (mock)' };
+  }
+
   return null;
 }
 

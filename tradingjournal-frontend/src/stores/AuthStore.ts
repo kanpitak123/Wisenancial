@@ -106,7 +106,30 @@ export const useAuthStore = defineStore('auth', {
 
         return user;
       } catch {
+        // /auth/me ยิงด้วย fetch ตรง ไม่ผ่าน axios interceptor จึงไม่มีใคร refresh ให้
+        // ถ้าไม่ลองตรงนี้ ผู้ใช้จะถูกเตะออกทุกครั้งที่รีเฟรชหน้าหลัง access token หมดอายุ
+        // ทั้งที่ refresh token ใน cookie ยังใช้ได้อยู่
+        return await this.refreshSession();
+      }
+    },
+
+    /**
+     * ขอ access token ใบใหม่ด้วย refresh token ใน httpOnly cookie
+     *
+     * คืน user เมื่อสำเร็จ / null เมื่อ session ตายแล้ว (พร้อมล้าง state ให้เรียบร้อย)
+     * ตัวเรียกหลักคือ axios interceptor ตอนเจอ 401 — ดู boot/axios.ts
+     */
+    async refreshSession() {
+      try {
+        const data = await authApi.refresh();
+
+        this.setSession(data.access_token, data.user);
+
+        return data.user;
+      } catch {
+        // refresh token หมดอายุ / ถูก revoke / ตรวจพบการใช้ซ้ำ — จบ session
         this.clearSession();
+
         return null;
       }
     },
@@ -124,8 +147,20 @@ export const useAuthStore = defineStore('auth', {
       return user;
     },
 
-    logout() {
-      this.clearSession();
+    /**
+     * บอก backend ให้ revoke refresh token จริง ไม่ใช่แค่ลบของในเครื่องทิ้งเฉย ๆ
+     * (ของเดิมลบแต่ localStorage — token ยังใช้งานได้บน server จนกว่าจะหมดอายุเอง)
+     *
+     * ยิงไม่ถึง backend ก็ยังต้องออกจากระบบฝั่งเครื่องได้ ไม่ปล่อยให้ผู้ใช้ค้าง
+     */
+    async logout() {
+      try {
+        await authApi.logout();
+      } catch {
+        // เงียบไว้ — จะออฟไลน์หรือ backend ล่มก็ต้องล้าง session ในเครื่องอยู่ดี
+      } finally {
+        this.clearSession();
+      }
     },
 
     setSession(accessToken: string, user: AuthUser) {

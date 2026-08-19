@@ -5,6 +5,8 @@ import type {
   AuthResponse,
   CurrentUserResponse,
   LoginPayload,
+  LogoutResponse,
+  RefreshResponse,
   RegisterPayload,
   RegisterResponse,
 } from 'src/types/auth.types';
@@ -27,6 +29,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
+    // refresh token อยู่ใน httpOnly cookie ที่ backend ตั้งให้ตอน login
+    // ถ้าไม่ใส่ตรงนี้ เบราว์เซอร์จะไม่แนบ cookie ข้าม origin (:9000 -> :3000)
+    // แล้ว /auth/refresh กับ /auth/logout จะมองไม่เห็น token เลย
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -67,6 +73,23 @@ export const authApi = {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+    });
+  },
+
+  /**
+   * ไม่ต้องส่งอะไรไปเลย — เบราว์เซอร์แนบ refresh token ให้เองผ่าน cookie
+   * และไม่ต้องแนบ access token เดิมด้วย เพราะตัวที่หมดอายุไปแล้วนั่นแหละคือเหตุผลที่เรียกอันนี้
+   */
+  refresh() {
+    return request<RefreshResponse>(AUTH_ENDPOINTS.refresh, {
+      method: 'POST',
+    });
+  },
+
+  /** backend จะ revoke refresh token ทั้ง family แล้วสั่งเบราว์เซอร์ลบ cookie ทิ้ง */
+  logout() {
+    return request<LogoutResponse>(AUTH_ENDPOINTS.logout, {
+      method: 'POST',
     });
   },
 
