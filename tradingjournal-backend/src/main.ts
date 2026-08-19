@@ -10,7 +10,24 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
-  app.enableCors();
+  // refresh token อยู่ใน httpOnly cookie เบราว์เซอร์จะแนบมาให้ก็ต่อเมื่อ credentials
+  // เปิดอยู่เท่านั้น และสเปก CORS ห้ามใช้ credentials คู่กับ origin '*' (ซึ่งคือค่าที่
+  // enableCors() เปล่าๆ ให้มาแต่เดิม) จึงต้องระบุ origin ให้ชัด
+  //
+  // อ่านจาก CORS_ORIGINS (คั่นด้วย comma) ก่อน ไม่มีก็ถอยไปใช้ FRONTEND_URL ที่ตั้งไว้อยู่แล้ว
+  const corsOrigins = (
+    process.env.CORS_ORIGINS ??
+    process.env.FRONTEND_URL ??
+    'http://localhost:9000'
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.enableCors({
+    origin: corsOrigins,
+    credentials: true,
+  });
 
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads',

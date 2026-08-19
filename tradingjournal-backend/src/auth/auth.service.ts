@@ -13,6 +13,10 @@ import {
 } from './constants/auth.constants';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import {
+  RefreshTokenContext,
+  RefreshTokenService,
+} from './refresh-token.service';
 import { JwtAccessPayload } from './types/auth-user.type';
 
 interface PublicUserSource {
@@ -31,11 +35,19 @@ interface PublicUserSource {
   created_at?: Date | null;
 }
 
+interface AccessPayloadSource {
+  id: number;
+  email: string;
+  username: string;
+  role: Role;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
   async register(data: RegisterDto) {
@@ -88,7 +100,11 @@ export class AuthService {
     };
   }
 
-  async login(data: LoginDto) {
+  /**
+   * คืน refresh_token ออกมาด้วยเพื่อให้ controller เอาไปตั้งเป็น httpOnly cookie
+   * ตัว service ไม่ยุ่งกับ res โดยตรง จะได้เทสได้โดยไม่ต้อง mock express
+   */
+  async login(data: LoginDto, context: RefreshTokenContext = {}) {
     const email = data.email.trim().toLowerCase();
 
     const user = await this.prisma.users.findUnique({
@@ -105,21 +121,72 @@ export class AuthService {
       throw new UnauthorizedException(AUTH_ERROR_MESSAGES.invalidCredentials);
     }
 
-    const payload: JwtAccessPayload = {
-      sub: user.id,
-      userId: user.id,
-      email: user.email,
-      username: user.username,
-      role: user.role,
-    };
+    const accessToken = await this.jwtService.signAsync(
+      this.buildAccessPayload(user),
+    );
 
-    const accessToken = await this.jwtService.signAsync(payload);
+    // ล็อกอินใหม่ = เริ่ม token family ใหม่ ไม่ต่อสายเดิม
+    // (คนละอุปกรณ์/คนละ session จะได้ revoke แยกกันได้)
+    const refreshToken = await this.refreshTokenService.issue(
+      user.id,
+      context,
+    );
 
     return {
       message: 'ล็อกอินสำเร็จ',
       access_token: accessToken,
+      refresh_token: refreshToken.token,
       user: this.toPublicUser(user),
     };
+  }
+
+  /**
+   * ต่ออายุ session — คืนรูปแบบเดียวกับ login เป๊ะ หน้าบ้านจะได้เอาไปเข้า
+   * setSession() ตัวเดิมได้เลยโดยไม่ต้องมี branch แยก
+   *
+   * อ่าน user จาก DB สดทุกครั้ง ไม่ได้ใช้ค่าใน payload ของ refresh token
+   * เพราะ role/แพ็กเกจอาจเปลี่ยนไปแล้วระหว่างอายุ 30 วันของ token
+   */
+  async refresh(rawToken: string | undefined, context: RefreshTokenContext = {}) {
+    if (!rawToken) {
+      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.missingRefreshToken);
+    }
+
+    const { userId, refreshToken } = await this.refreshTokenService.rotate(
+      rawToken,
+      context,
+    );
+
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.userNotFound);
+    }
+
+    const accessToken = await this.jwtService.signAsync(
+      this.buildAccessPayload(user),
+    );
+
+    return {
+      message: 'ต่ออายุการเข้าใช้งานสำเร็จ',
+      access_token: accessToken,
+      refresh_token: refreshToken.token,
+      user: this.toPublicUser(user),
+    };
+  }
+
+  /**
+   * ไม่มี refresh token ส่งมาก็ถือว่าสำเร็จ — ผู้ใช้ต้องออกจากระบบได้เสมอ
+   * ไม่ว่า cookie จะหายไปแล้วหรือหมดอายุไปก่อน
+   */
+  async logout(rawToken: string | undefined) {
+    if (rawToken) {
+      await this.refreshTokenService.revoke(rawToken);
+    }
+
+    return { message: 'ออกจากระบบเรียบร้อย' };
   }
 
   async getCurrentUser(userId: number) {
@@ -148,6 +215,16 @@ export class AuthService {
 
     return {
       user: this.toPublicUser(user),
+    };
+  }
+
+  private buildAccessPayload(user: AccessPayloadSource): JwtAccessPayload {
+    return {
+      sub: user.id,
+      userId: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role,
     };
   }
 

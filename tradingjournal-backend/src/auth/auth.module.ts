@@ -6,12 +6,17 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AUTH_CONSTANTS } from './constants/auth.constants';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RefreshTokenService } from './refresh-token.service';
+import { parseExpiresInSeconds } from './utils/expires-in.util';
 
 @Module({
   imports: [
     ConfigModule,
     PrismaModule,
 
+    // ค่าที่ register ไว้ตรงนี้ใช้กับ access token เท่านั้น
+    // refresh token เซ็น/ตรวจด้วย secret + อายุคนละชุด โดยส่ง options เข้าไป
+    // ตอนเรียก sign/verify ใน RefreshTokenService
     JwtModule.registerAsync({
       global: true,
       imports: [ConfigModule],
@@ -24,11 +29,10 @@ import { JwtAuthGuard } from './jwt-auth.guard';
           throw new Error('JWT_ACCESS_SECRET is required');
         }
 
-        const configuredExpiresIn =
-          configService.get<string>('JWT_ACCESS_EXPIRES_IN') ??
-          AUTH_CONSTANTS.defaultAccessTokenExpiresIn;
-
-        const expiresInSeconds = thisToSeconds(configuredExpiresIn);
+        const expiresInSeconds = parseExpiresInSeconds(
+          configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
+          parseExpiresInSeconds(AUTH_CONSTANTS.defaultAccessTokenExpiresIn, 900),
+        );
 
         return {
           secret,
@@ -40,40 +44,10 @@ import { JwtAuthGuard } from './jwt-auth.guard';
     }),
   ],
 
-  providers: [AuthService, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, RefreshTokenService],
 
   controllers: [AuthController],
 
-  exports: [AuthService, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, RefreshTokenService],
 })
 export class AuthModule {}
-
-function thisToSeconds(value: string | number): number {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-    return value;
-  }
-
-  const normalized = String(value).trim().toLowerCase();
-
-  if (/^\d+$/.test(normalized)) {
-    return Number(normalized);
-  }
-
-  const match = normalized.match(/^(\d+)(s|m|h|d)$/);
-
-  if (!match) {
-    return 900;
-  }
-
-  const amount = Number(match[1]);
-  const unit = match[2];
-
-  const multiplier: Record<string, number> = {
-    s: 1,
-    m: 60,
-    h: 60 * 60,
-    d: 24 * 60 * 60,
-  };
-
-  return amount * multiplier[unit];
-}
