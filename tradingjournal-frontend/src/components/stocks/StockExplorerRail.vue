@@ -12,6 +12,7 @@ import { useQuasar, type QTableProps } from 'quasar';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { EXCHANGE_OPTIONS, SECTOR_OPTIONS, stocksService } from 'src/services/stocks.service';
+import { symbolAvatarInitials } from 'src/utils/symbol-avatar';
 import type {
   StockExchange,
   StockListing,
@@ -278,9 +279,17 @@ onMounted(() => {
     >
       <template #body-cell-symbol="cellProps">
         <q-td :props="cellProps">
-          <div class="rail-symbol-cell" :class="{ 'rail-symbol-cell--active': isSelected(cellProps.row.symbol) }">
-            <span class="rail-symbol">{{ cellProps.row.symbol.replace('.BK', '') }}</span>
-            <span class="rail-name">{{ cellProps.row.name }}</span>
+          <div
+            class="rail-symbol-cell"
+            :class="{ 'rail-symbol-cell--active': isSelected(cellProps.row.symbol) }"
+          >
+            <span class="rail-badge" aria-hidden="true">
+              {{ symbolAvatarInitials(cellProps.row.symbol) }}
+            </span>
+            <span class="rail-symbol-text">
+              <span class="rail-symbol">{{ cellProps.row.symbol.replace('.BK', '') }}</span>
+              <span class="rail-name">{{ cellProps.row.name }}</span>
+            </span>
           </div>
         </q-td>
       </template>
@@ -370,17 +379,46 @@ onMounted(() => {
   background: var(--bg-card-soft);
 }
 
+/* ตามแบบ: ป้ายตัวย่ออยู่หน้าแถว แล้วสัญลักษณ์/ชื่อซ้อนกันสองบรรทัดถัดไป */
 .rail-symbol-cell {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   line-height: 1.2;
   border-left: 2px solid transparent;
   padding-left: 6px;
   margin-left: -6px;
 }
 
+.rail-symbol-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rail-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--q-primary);
+}
+
 .rail-symbol-cell--active {
   border-left-color: var(--q-primary);
+}
+
+.rail-symbol-cell--active .rail-badge {
+  background: rgba(133, 182, 176, 0.16);
+  border-color: transparent;
 }
 
 .rail-symbol {

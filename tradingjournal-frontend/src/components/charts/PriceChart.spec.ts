@@ -16,6 +16,8 @@ const chartApi = {
   removeSeries: vi.fn(),
   remove: vi.fn(),
   timeScale: vi.fn(),
+  // ใช้ตอนสลับธีม — ทาสีกราฟใหม่โดยไม่สร้าง instance ใหม่
+  applyOptions: vi.fn(),
 };
 
 const timeScaleApi = { fitContent: vi.fn(), applyOptions: vi.fn() };

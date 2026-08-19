@@ -147,13 +147,17 @@ onMounted(() => {
   display: flex;
   align-items: stretch;
   min-height: 100vh;
+  /* เดิมไม่ได้ระบุพื้นหลัง ทำให้ตอนยังไม่เลือกหุ้นเห็นพื้นของ layout ทะลุมา
+     คนละโทนกับตอนเลือกแล้ว (ซึ่ง StockAnalysisPage ทาพื้นของตัวเอง) */
+  background: var(--bg-page);
 }
 
 .terminal-rail {
   display: flex;
   flex-direction: column;
-  flex: 0 0 320px;
-  width: 320px;
+  /* 290px ตามแบบ — เดิม 320px กว้างกว่าที่ mockup วางไว้ */
+  flex: 0 0 290px;
+  width: 290px;
   border-right: 1px solid var(--border-color);
   background: var(--bg-card);
   color: var(--text-primary);

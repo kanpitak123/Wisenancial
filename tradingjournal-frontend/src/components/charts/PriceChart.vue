@@ -9,6 +9,7 @@
  * การผูก props เข้ากับ API ของไลบรารี
  */
 import { onMounted, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { useQuasar } from 'quasar';
 import {
   CandlestickSeries,
   CrosshairMode,
@@ -47,6 +48,8 @@ const props = withDefaults(
     intraday: false,
   },
 );
+
+const $q = useQuasar();
 
 const container = ref<HTMLDivElement | null>(null);
 
@@ -170,26 +173,39 @@ function applyOverlays() {
   }
 }
 
+/**
+ * เดิมสีของกราฟถูกฮาร์ดโค้ดเป็นโทนกรม (#0f172a / #1e293b) ชุดเดียวใช้ทั้งสองธีม
+ * พอเปิดโหมดสว่างจึงกลายเป็นสี่เหลี่ยมสีเข้มวางอยู่กลางการ์ดสีอ่อน
+ * ตอนนี้อ่านจากธีมปัจจุบัน โดยใช้ค่าชุดเดียวกับ --bg-card / --border-color ของแอป
+ */
+function chartTheme() {
+  return $q.dark.isActive
+    ? { background: '#1f2323', text: '#b7c2bf', line: '#2c3434', border: '#394141' }
+    : { background: '#fdfefe', text: '#496565', line: '#e7f4f2', border: '#dae7e5' };
+}
+
 function buildChart() {
   if (!container.value) return;
+
+  const theme = chartTheme();
 
   chart.value = createChart(container.value, {
     autoSize: true,
     height: props.height,
     layout: {
-      background: { color: '#0f172a' },
-      textColor: '#cbd5f5',
+      background: { color: theme.background },
+      textColor: theme.text,
       attributionLogo: false,
     },
     grid: {
-      vertLines: { color: '#1e293b' },
-      horzLines: { color: '#1e293b' },
+      vertLines: { color: theme.line },
+      horzLines: { color: theme.line },
     },
     rightPriceScale: {
-      borderColor: '#1e293b',
+      borderColor: theme.border,
     },
     timeScale: {
-      borderColor: '#1e293b',
+      borderColor: theme.border,
       timeVisible: props.intraday,
       secondsVisible: false,
       rightOffset: 6,
@@ -254,6 +270,22 @@ watch(
 
 watch(() => props.priceLines, applyPriceLines, { deep: true });
 watch(() => props.overlays, applyOverlays, { deep: true });
+
+// สลับธีมแล้วทาสีกราฟใหม่ด้วย applyOptions — ไม่สร้างกราฟใหม่ทั้งตัว
+// ผู้ใช้จึงไม่เสียตำแหน่งที่เลื่อน/ซูมไว้ และไม่เสี่ยงเจอ instance ที่ถูก dispose ค้าง
+watch(
+  () => $q.dark.isActive,
+  () => {
+    const theme = chartTheme();
+
+    chart.value?.applyOptions({
+      layout: { background: { color: theme.background }, textColor: theme.text },
+      grid: { vertLines: { color: theme.line }, horzLines: { color: theme.line } },
+      rightPriceScale: { borderColor: theme.border },
+      timeScale: { borderColor: theme.border },
+    });
+  },
+);
 
 watch(
   () => props.intraday,

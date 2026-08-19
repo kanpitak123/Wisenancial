@@ -2135,20 +2135,24 @@ onMounted(() => {
 /* =========================================
    PREMIUM FIN-TECH STYLING
    ========================================= */
+/* หน้านี้เคยมีธีมของตัวเองเป็นชุดกรม/คราม (#0b1120 / #111827 / #6366f1) ซึ่งเป็น
+   คนละอัตลักษณ์กับที่เหลือของแอป เวลาเข้า Stock Terminal จึงเหมือนหลุดไปอีกเว็บหนึ่ง
+   ยกมาใช้ teal/sage ชุดเดียวกับ app.scss แล้ว (ค่าเดียวกับที่ mockup ใช้)
+   โครง selector เดิมไม่แตะ — ค่า dark เป็นค่าตั้งต้น แล้ว :not(.dark-theme) ทับด้วยชุด light */
 .stock-analysis-page {
-  --bg-page: #0b1120;
-  --bg-card: #111827;
-  --bg-hover: #1f2937;
-  --bg-terminal: #0f172a;
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --border-color: rgba(148, 163, 184, 0.14);
-  --primary-color: #6366f1;
-  --profit-color: #00e676;
-  --loss-color: #ff5252;
-  --bull-bg: rgba(0, 230, 118, 0.08);
-  --bear-bg: rgba(255, 82, 82, 0.08);
-  --shadow-main: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --bg-page: #151819;
+  --bg-card: #1f2323;
+  --bg-hover: #282e2e;
+  --bg-terminal: #101314;
+  --text-main: #f4f6f5;
+  --text-muted: #7d8c89;
+  --border-color: #394141;
+  --primary-color: #85b6b0;
+  --profit-color: #4ade80;
+  --loss-color: #f87171;
+  --bull-bg: rgba(74, 222, 128, 0.08);
+  --bear-bg: rgba(248, 113, 113, 0.08);
+  --shadow-main: 0 1px 2px rgba(0, 0, 0, 0.2), 0 20px 44px -16px rgba(0, 0, 0, 0.55);
 
   background-color: var(--bg-page);
   min-height: 100vh;
@@ -2159,23 +2163,24 @@ onMounted(() => {
 
 .stock-analysis-page.dark-theme,
 .stock-analysis-page {
-  --bg-page: #0b1120;
-  --bg-card: #111827;
+  --bg-page: #151819;
+  --bg-card: #1f2323;
 }
 
 .stock-analysis-page:not(.dark-theme) {
-  --bg-page: #f1f5f9;
-  --bg-card: #ffffff;
-  --bg-hover: #f8fafc;
-  --bg-terminal: #0f172a;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-color: rgba(15, 23, 42, 0.1);
-  --profit-color: #059669;
-  --loss-color: #dc2626;
-  --bull-bg: rgba(5, 150, 105, 0.08);
-  --bear-bg: rgba(220, 38, 38, 0.08);
-  --shadow-main: 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --bg-page: #f6f9f9;
+  --bg-card: #fdfefe;
+  --bg-hover: #f0f5f4;
+  --bg-terminal: #f0f5f4;
+  --text-main: #1b3636;
+  --text-muted: #789191;
+  --border-color: #dae7e5;
+  --primary-color: #336160;
+  --profit-color: #178230;
+  --loss-color: #c10015;
+  --bull-bg: rgba(23, 130, 48, 0.08);
+  --bear-bg: rgba(193, 0, 21, 0.08);
+  --shadow-main: 0 1px 2px rgba(27, 54, 54, 0.04), 0 12px 32px -12px rgba(27, 54, 54, 0.1);
 }
 
 .mono-num {
@@ -2192,10 +2197,11 @@ onMounted(() => {
   gap: 12px;
 }
 
+/* mockup ใช้ --radius-md 16px กับการ์ดทุกใบ เดิมหน้านี้อยู่ที่ 10px */
 .premium-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 16px;
   box-shadow: var(--shadow-main);
   overflow: hidden;
 }
@@ -3641,18 +3647,19 @@ onMounted(() => {
   border-radius: 12px;
 }
 
-/* Ensure chart tooltip styling matches dark theme */
+/* tooltip ของกราฟ — เดิมฮาร์ดโค้ดโทน slate ไว้ จึงเป็นคนละสีกับการ์ดรอบตัว
+   ตอนนี้อ่านจากตัวแปรของหน้าเลย เปลี่ยนธีมแล้วตามไปเองทั้งสองโหมด */
 .tw-chart-container :deep(.tv-lightweight-charts-tooltip) {
-  background: #1e293b !important;
-  border: 1px solid #334155 !important;
-  border-radius: 8px !important;
-  color: #f8fafc !important;
-  font-family: 'Inter', system-ui, sans-serif !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 10px !important;
+  color: var(--text-main) !important;
+  font-family: 'Inter', 'IBM Plex Sans Thai', system-ui, sans-serif !important;
 }
 
 /* Price scale labels */
 .tw-chart-container :deep(.tv-lightweight-charts-price-axis) {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 /* --- Advanced Search Dialog --- */
