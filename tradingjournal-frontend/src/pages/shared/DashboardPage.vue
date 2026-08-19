@@ -436,6 +436,33 @@ const statCards = computed(() =>
   isInvestor.value ? investorStatCards.value : traderStatCards.value,
 );
 
+/**
+ * การ์ดใบแรกของ statCards (ยอดรวมพอร์ต) ถูกยกขึ้นไปเป็น hero ด้านบน ส่วนที่เหลือ
+ * เรียงเป็น KPI 3 ใบ — ไม่ได้เพิ่ม/ตัดข้อมูลใดๆ แค่แบ่งชุดเดิมไปวางคนละที่ตามแบบ
+ * ทั้งสองโหมดมี 4 ใบเท่ากัน (ใบ 0 = มูลค่า, ใบ 1 = กำไร/ขาดทุน) จึง map ได้ตรงกัน
+ */
+const heroCard = computed(() => statCards.value[0]);
+const heroDeltaCard = computed(() => statCards.value[1]);
+const kpiCards = computed(() => statCards.value.slice(1));
+
+/** เส้นกราฟจิ๋วใน hero — ใช้ series ชุดเดียวกับกราฟใหญ่ ไม่ได้ยิงข้อมูลเพิ่ม */
+const heroSparklineOptions = computed<ApexOptions>(() => ({
+  chart: {
+    type: 'area',
+    sparkline: { enabled: true },
+    background: 'transparent',
+    animations: { enabled: false },
+  },
+  colors: ['#4c8a87'],
+  stroke: { curve: 'smooth', width: 2.5, lineCap: 'round' },
+  fill: {
+    type: 'gradient',
+    gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0, stops: [0, 100] },
+  },
+  tooltip: { enabled: false },
+  theme: { mode: $q.dark.isActive ? 'dark' : 'light' },
+}));
+
 // ==========================================
 // 3c. โหมด Stock — Asset allocation / Top movers / ประวัติกิจกรรม
 // ==========================================
@@ -647,7 +674,8 @@ const chartOptions = computed<ApexOptions>(() => ({
     background: 'transparent',
     zoom: { enabled: false },
   },
-  colors: ['#1976D2'],
+  // accent-700 ของธีม teal/sage — เดิมเป็นน้ำเงิน #1976D2 ที่ค้างมาจากก่อน rebrand
+  colors: ['#4c8a87'],
   fill: {
     type: 'gradient',
     gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] },
@@ -660,7 +688,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     labels: {
       show: true, // เปิดให้แสดงวันที่
       style: {
-        colors: $q.dark.isActive ? '#94a3b8' : '#64748b',
+        colors: $q.dark.isActive ? '#7d8c89' : '#789191',
         fontSize: '12px', // ขนาดตัวหนังสือแกน X
         fontFamily: 'inherit',
         fontWeight: 500,
@@ -669,7 +697,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     },
     axisBorder: {
       show: true,
-      color: $q.dark.isActive ? '#334155' : '#e2e8f0',
+      color: $q.dark.isActive ? '#394141' : '#dae7e5',
     },
     axisTicks: { show: false },
     tooltip: { enabled: false },
@@ -681,7 +709,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     },
   },
   grid: {
-    borderColor: $q.dark.isActive ? '#334155' : '#f1f1f1',
+    borderColor: $q.dark.isActive ? '#394141' : '#dae7e5',
     strokeDashArray: 4,
   },
   theme: { mode: $q.dark.isActive ? 'dark' : 'light' },
@@ -795,17 +823,44 @@ const downloadStatsImage = async () => {
     </q-banner>
 
     <template v-else>
+      <q-card v-if="heroCard" class="hero-card q-mb-md" data-test="hero-card">
+        <div class="hero-left">
+          <div class="hero-eyebrow">{{ heroCard.label }}</div>
+          <div class="hero-value">{{ heroCard.value }}</div>
+
+          <div v-if="heroDeltaCard" class="hero-delta" :class="`text-${heroDeltaCard.tone}`">
+            <q-icon
+              :name="heroDeltaCard.icon"
+              size="16px"
+              :class="heroDeltaCard.tone === 'primary' ? 'text-main' : ''"
+            />
+            <span>{{ heroDeltaCard.value }}</span>
+            <span class="hero-delta-sub">{{ heroDeltaCard.label }}</span>
+          </div>
+
+          <div class="hero-sub">{{ heroCard.subLabel }}</div>
+        </div>
+
+        <div v-if="analyticsStore.chartData" class="hero-spark">
+          <VueApexCharts
+            type="area"
+            width="100%"
+            height="76"
+            :options="heroSparklineOptions"
+            :series="analyticsStore.chartData.series"
+          />
+        </div>
+      </q-card>
+
       <div class="row q-col-gutter-md q-mb-lg">
-        <div v-for="card in statCards" :key="card.label" class="col-6 col-sm-6 col-md-3">
+        <div v-for="card in kpiCards" :key="card.label" class="col-12 col-sm-4">
           <q-card class="dashboard-card stat-card h-full q-pa-md flex column justify-between">
-            <div class="row items-center justify-between q-mb-md">
-              <div
-                class="text-caption text-muted text-weight-bold text-uppercase tracking-wide stat-label"
-              >
-                {{ card.label }}
-              </div>
+            <div class="row items-center no-wrap q-mb-sm kpi-top">
               <div class="icon-box" :class="`bg-icon-${card.tone} text-${card.tone}`">
-                <q-icon :name="card.icon" size="20px" />
+                <q-icon :name="card.icon" size="17px" />
+              </div>
+              <div class="text-muted text-weight-bold stat-label q-ml-sm ellipsis">
+                {{ card.label }}
               </div>
             </div>
             <div>
@@ -1979,23 +2034,32 @@ const downloadStatsImage = async () => {
 /* ==========================================================
    1. CSS Variables สำหรับ Light Mode และ Dark Mode
 ========================================================== */
+/* หน้านี้เคยตั้ง palette ของตัวเองเป็นชุด slate/น้ำเงิน (#f8fafc / #1e293b / #eff6ff)
+   ซึ่งค้างมาตั้งแต่ก่อน rebrand แล้วไป override token teal/sage ที่ app.scss ตั้งไว้
+   ตอนนี้ยกค่ามาให้ตรงกับ --accent-* ชุดกลางแล้ว (ค่าเดียวกับที่ mockup ใช้เป๊ะ) */
 .dashboard-page {
-  --bg-page: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-card-soft: #f1f5f9;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.03), 0 2px 6px -2px rgba(0, 0, 0, 0.02);
-  --shadow-hover: 0 10px 20px -3px rgba(0, 0, 0, 0.05), 0 4px 8px -2px rgba(0, 0, 0, 0.03);
+  --bg-page: #f6f9f9;
+  --bg-card: #fdfefe;
+  --bg-card-soft: #f0f5f4;
+  --text-main: #1b3636;
+  --text-muted: #789191;
+  --border-color: #dae7e5;
+  --shadow-card: 0 1px 2px rgba(27, 54, 54, 0.04), 0 12px 32px -12px rgba(27, 54, 54, 0.1);
+  --shadow-hover: 0 1px 2px rgba(27, 54, 54, 0.05), 0 18px 40px -14px rgba(27, 54, 54, 0.18);
 
-  --bg-icon-primary: #eff6ff;
+  --accent-200: #cde5e2;
+  --accent-400: #9bc5c0;
+  --accent-500: #85b6b0;
+  --accent-700: #4c8a87;
+  --accent-800: #336160;
+
+  --bg-icon-primary: #e7f4f2;
   --bg-icon-positive: #f0fdf4;
   --bg-icon-warning: #fffbeb;
   --bg-icon-negative: #fef2f2;
   --bg-icon-purple: #faf5ff;
 
-  --table-hover: #f8fafc;
+  --table-hover: #f0f5f4;
 
   background-color: var(--bg-page);
   min-height: 100vh;
@@ -2004,19 +2068,19 @@ const downloadStatsImage = async () => {
 }
 
 .body--dark .dashboard-page {
-  --bg-page: #0f172a;
-  --bg-card: #151e32;
-  --bg-card-soft: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #23314b;
-  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.3);
-  --shadow-hover: 0 10px 20px -3px rgba(0, 0, 0, 0.4);
+  --bg-page: #151819;
+  --bg-card: #1f2323;
+  --bg-card-soft: #282e2e;
+  --text-main: #f4f6f5;
+  --text-muted: #7d8c89;
+  --border-color: #394141;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 20px 44px -16px rgba(0, 0, 0, 0.55);
+  --shadow-hover: 0 1px 2px rgba(0, 0, 0, 0.25), 0 26px 52px -18px rgba(0, 0, 0, 0.65);
 
-  --bg-icon-primary: rgba(59, 130, 246, 0.15);
-  --bg-icon-positive: rgba(34, 197, 94, 0.15);
-  --bg-icon-warning: rgba(245, 158, 11, 0.15);
-  --bg-icon-negative: rgba(239, 68, 68, 0.15);
+  --bg-icon-primary: rgba(133, 182, 176, 0.18);
+  --bg-icon-positive: rgba(74, 222, 128, 0.15);
+  --bg-icon-warning: rgba(251, 191, 36, 0.15);
+  --bg-icon-negative: rgba(248, 113, 113, 0.15);
   --bg-icon-purple: rgba(168, 85, 247, 0.15);
 
   --table-hover: rgba(255, 255, 255, 0.03);
@@ -2074,13 +2138,15 @@ const downloadStatsImage = async () => {
   background-color: var(--bg-card-soft);
 }
 
+/* ตามแบบ: ไอคอนย้ายมาอยู่ต้นแถวคู่กับ label ขนาดจึงเล็กลงจาก 40px เป็น 32px */
 .icon-box {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 /* Filter Toggle */
@@ -2106,6 +2172,106 @@ const downloadStatsImage = async () => {
 .stat-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
+}
+
+/* ==========================================================
+   3b. Hero — ยอดรวมพอร์ตใบใหญ่ตามแบบ mockup
+========================================================== */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  box-shadow: var(--shadow-card);
+}
+
+/* แสงเรืองมุมขวาบน ใช้แทนภาพประกอบ ไม่รับคลิก */
+.hero-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background: radial-gradient(520px 220px at 85% -10%, rgba(133, 182, 176, 0.22), transparent 70%);
+}
+
+.hero-left {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.hero-eyebrow {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+}
+
+.hero-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+}
+
+.hero-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-delta-sub {
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.hero-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.hero-spark {
+  position: relative;
+  z-index: 1;
+  width: 260px;
+  max-width: 42%;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .hero-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 22px 20px;
+    border-radius: 20px;
+  }
+  .hero-value {
+    font-size: 30px;
+  }
+  .hero-spark {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .header-divider {
@@ -2348,22 +2514,34 @@ const downloadStatsImage = async () => {
 /* ==========================================================
    7. Custom Mobile Responsiveness & Layout
 ========================================================== */
+/* ยอดรวมย้ายไปอยู่ hero แล้ว KPI จึงไม่ต้องตะโกนเท่าเดิม — 34px -> 22px ตามแบบ
+   และใช้ตัวเลขความกว้างเท่ากันเพื่อให้คอลัมน์ตัวเลขไม่ขยับเวลาค่าเปลี่ยน */
 .stat-val {
-  font-size: 2.125rem;
-  line-height: 2.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4rem;
+  line-height: 1.9rem;
+}
+.stat-label {
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .stat-sub-label {
-  font-size: 11px;
+  font-size: 11.5px;
   margin-top: 4px;
+}
+.kpi-top {
+  min-height: 32px;
 }
 
 @media (max-width: 599px) {
   .stat-val {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     line-height: 1.5rem;
   }
   .stat-label {
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0;
   }
   .icon-box {
