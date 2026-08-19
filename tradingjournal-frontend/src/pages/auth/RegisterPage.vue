@@ -5,6 +5,9 @@
 
       <q-card-section class="q-pa-xl">
         <div class="text-center q-mb-xl">
+          <div class="logo-box q-mb-md">
+            <img :src="wisenancialLogo" alt="Wisenancial" class="brand-logo-img" />
+          </div>
           <div class="text-h4 text-weight-bolder dash-text-main q-mb-sm">Create Account</div>
           <div class="text-subtitle1 dash-text-muted">Join us and start tracking your trades.</div>
         </div>
@@ -109,6 +112,7 @@ import { reactive } from 'vue';
 import { useAuthStore } from 'stores/AuthStore';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -177,6 +181,19 @@ body.body--dark .dashboard-page {
   width: 100%;
   max-width: 440px;
   border-radius: 20px;
+}
+
+/* Logo Box */
+.logo-box {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.brand-logo-img {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
 }
 
 .dash-card {

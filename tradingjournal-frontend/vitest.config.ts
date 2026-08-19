@@ -27,6 +27,7 @@ export default defineConfig({
       pages: resolve('./src/pages'),
       stores: resolve('./src/stores'),
       boot: resolve('./src/boot'),
+      assets: resolve('./src/assets'),
     },
   },
   test: {

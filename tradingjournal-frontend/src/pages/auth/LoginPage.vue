@@ -5,8 +5,8 @@
 
       <q-card-section class="q-pa-xl">
         <div class="text-center q-mb-xl">
-          <div class="logo-box q-mb-md shadow-3">
-            <q-icon name="fa-solid fa-shapes" size="28px" />
+          <div class="logo-box q-mb-md">
+            <img :src="wisenancialLogo" alt="Wisenancial" class="brand-logo-img" />
           </div>
           <div class="text-h4 text-weight-bolder dash-text-main q-mb-sm">Welcome</div>
           <div class="text-subtitle1 dash-text-muted">Log in to continue tracking your trades.</div>
@@ -85,6 +85,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from 'stores/AuthStore';
 import { useQuasar } from 'quasar';
+import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 
 const $q = useQuasar();
 const email = ref('');
@@ -176,19 +177,19 @@ body.body--dark .dash-card {
 
 /* Logo Box */
 .logo-box {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-900) 100%);
-  border-radius: 18px;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
   transition: transform 0.3s ease;
 }
 .logo-box:hover {
-  transform: scale(1.05) rotate(5deg);
+  transform: scale(1.05);
+}
+.brand-logo-img {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
 }
 
 /* Typography */

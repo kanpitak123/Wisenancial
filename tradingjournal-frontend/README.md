@@ -1,4 +1,4 @@
-# Quasar App (tradingjournal-frontend)
+# Wisenancial (tradingjournal-frontend)
 
 A Quasar Project
 

@@ -95,16 +95,23 @@
               @click="miniState && handleLogoClick()"
             >
               <q-icon
-                :name="miniState && logoHover ? 'menu_open' : 'candlestick_chart'"
+                v-if="miniState && logoHover"
+                name="menu_open"
                 color="primary"
                 size="20px"
+              />
+              <img
+                v-else
+                :src="wisenancialLogo"
+                alt="Wisenancial"
+                class="brand-logo-mark"
               />
               <q-tooltip v-if="miniState">Expand sidebar</q-tooltip>
             </div>
 
             <div v-show="!miniState" class="q-ml-sm">
               <div class="text-subtitle1 text-weight-bolder text-main tracking-tight lh-1">
-                Trading Journal
+                Wisenancial
               </div>
               <div class="text-caption text-weight-bold workspace-tag">
                 <q-icon :name="workspaceMeta.icon" size="12px" class="q-mr-xs" />
@@ -269,6 +276,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
+import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 import EssentialLink from 'components/EssentialLink.vue';
 import WorkspaceSwitcher from 'components/WorkspaceSwitcher.vue';
 import MockModeToggle from 'components/MockModeToggle.vue';
@@ -472,10 +480,14 @@ onMounted(() => {
   justify-content: center !important;
 }
 .icon-box {
-  background-color: rgba(59, 130, 246, 0.15);
   width: 34px;
   height: 34px;
   border-radius: 8px;
+}
+.brand-logo-mark {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .page-container {
