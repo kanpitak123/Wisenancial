@@ -161,6 +161,7 @@ model users {
   coach_sessions        coach_sessions[]
   dividends             dividends[]
   ai_usage_logs         ai_usage_logs[]
+  refresh_tokens        refresh_tokens[]
 }
 
 model plans {
@@ -187,6 +188,40 @@ model subscriptions {
 
   plans plans? @relation(fields: [plan_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   users users? @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model refresh_tokens {
+  id      Int @id @default(autoincrement())
+  user_id Int
+
+  // jti จาก payload ของ refresh JWT (เซ็นด้วย JWT_REFRESH_SECRET) ใช้เป็นคีย์ค้นหา row นี้
+  jti String @unique @db.Uuid
+
+  // SHA-256 (hex) ของ token ดิบ — ไม่เก็บตัว token จริงลง DB เลย
+  // ใช้ SHA-256 ไม่ใช่ bcrypt เพราะต้องค้นด้วยค่า hash ได้ และตัว token เป็นค่าสุ่ม
+  // entropy สูงอยู่แล้ว (ไม่ใช่รหัสผ่านที่คนตั้งเอง) จึงไม่ต้องการ slow hash
+  token_hash String @db.VarChar(64)
+
+  // token ทั้งสายที่ rotate ต่อกันมาใช้ family_id เดียวกัน
+  // ถ้ามีคนเอา token ที่ used_at ไม่ใช่ null (rotate ไปแล้ว) มาใช้ซ้ำ = มีสำเนาหลุด
+  // ให้ revoke ทั้ง family ทิ้งทันที แล้วบังคับล็อกอินใหม่
+  family_id String @db.Uuid
+
+  expires_at DateTime  @db.Timestamp(6)
+  revoked_at DateTime? @db.Timestamp(6) // null = ยังใช้ได้
+  used_at    DateTime? @db.Timestamp(6) // ถูก rotate ไปแล้วเมื่อไร ใช้จับ reuse
+
+  // ไว้แสดงรายการ "อุปกรณ์ที่ล็อกอินอยู่" ในอนาคต — VarChar(45) รองรับ IPv6
+  user_agent String? @db.VarChar(255)
+  ip_address String? @db.VarChar(45)
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id]) // revoke ทุก token ของผู้ใช้ (logout ทุกอุปกรณ์)
+  @@index([family_id]) // revoke ทั้งสาย rotation ตอนจับ reuse ได้
+  @@index([expires_at]) // cron ล้าง token ที่หมดอายุแล้ว
 }
 
 // ==========================================
