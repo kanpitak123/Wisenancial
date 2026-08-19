@@ -51,9 +51,16 @@ export const useChatStore = defineStore('chat', {
       if (isMockEnabled()) return;
 
       let token = localStorage.getItem('token') || localStorage.getItem('access_token');
-      if (token) {
-        token = token.replace(/^"(.*)"$/, '$1');
+
+      // ยังไม่ login (หรือ token ยังไม่ทันโหลด) — เดิมโค้ดยิง io() ต่อไปทั้งที่ไม่มี token
+      // ทำให้ backend (ChatGateway.handleConnection) reject ทิ้งทันทีพร้อม log
+      // "No Token Provided" ทุกครั้ง เสียการเชื่อมต่อเปล่าๆ ไม่มีประโยชน์อะไร
+      if (!token) {
+        console.warn('❌ ไม่พบ Token ในเครื่อง กรุณา Login ใหม่ก่อนเข้าแชท');
+        return;
       }
+
+      token = token.replace(/^"(.*)"$/, '$1');
 
       // เริ่มเชื่อมต่อเซิร์ฟเวอร์ พร้อมส่ง Token ไปให้ Gateway ตรวจสอบ (ผ่าน auth และ extraHeaders)
       this.socket = io(API, {
