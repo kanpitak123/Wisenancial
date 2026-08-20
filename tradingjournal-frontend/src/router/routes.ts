@@ -7,11 +7,21 @@ import type { RouteRecordRaw } from 'vue-router';
  * ไม่ใส่ = หน้า shared ใช้ได้ทั้งสองโหมด เนื้อหาเปลี่ยนตาม PortfolioStore.activeType
  */
 const routes: RouteRecordRaw[] = [
+  // ---------- หน้าแรกสาธารณะ ----------
+  // เดิม '/' เด้งเข้า /login ทันที ตอนนี้เป็นหน้าแนะนำผลิตภัณฑ์ (ไม่ต้องล็อกอิน)
+  // ต้องอยู่ก่อน route '/' ของ AuthLayout เพราะ path ชนกันพอดี — ตัวแรกที่ตรงชนะ
+  //
+  // meta.publicLanding บอก guard ว่าคนที่ล็อกอินอยู่แล้วไม่ต้องเห็นหน้าขายของ
+  // ให้ส่งไป Dashboard แทน (ดู router/index.ts)
+  {
+    path: '/',
+    component: () => import('pages/public/LandingPage.vue'),
+    meta: { publicLanding: true },
+  },
   {
     path: '/',
     component: () => import('layouts/AuthLayout.vue'),
     children: [
-      { path: '', redirect: '/login' },
       { path: 'Login', component: () => import('pages/auth/LoginPage.vue') },
       { path: 'Register', component: () => import('pages/auth/RegisterPage.vue') },
     ],

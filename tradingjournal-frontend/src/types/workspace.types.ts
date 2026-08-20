@@ -21,5 +21,7 @@ declare module 'vue-router' {
      */
     workspace?: WorkspaceType;
     requiresAuth?: boolean;
+    /** หน้าแรกสาธารณะ — เปิดได้โดยไม่ต้องล็อกอิน และคนที่ล็อกอินแล้วจะถูกส่งไป Dashboard */
+    publicLanding?: boolean;
   }
 }

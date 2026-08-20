@@ -374,12 +374,7 @@ const handleRemove = async (item: WatchlistItem) => {
         >
           <div class="watch-section__header watch-section__header--filterable">
             <div class="watch-section__title">
-              <q-icon
-                :name="section.meta.icon"
-                :class="section.meta.iconClass"
-                class="watch-section__icon"
-                size="20px"
-              />
+              <span class="watch-dot" :class="section.meta.iconClass"></span>
               <h2>{{ sectionTitle(section.meta) }}</h2>
               <span class="watch-section__count">{{ section.items.length }}</span>
             </div>
@@ -450,6 +445,7 @@ const handleRemove = async (item: WatchlistItem) => {
               v-for="rec in section.items"
               :key="rec.symbol"
               class="watch-card"
+              :class="section.meta.iconClass"
               data-test="radar-card"
               @click="goToAnalysis(rec.symbol)"
             >
@@ -501,12 +497,7 @@ const handleRemove = async (item: WatchlistItem) => {
         >
           <div class="watch-section__header">
             <div class="watch-section__title">
-              <q-icon
-                :name="group.meta.icon"
-                :class="group.meta.iconClass"
-                class="watch-section__icon"
-                size="20px"
-              />
+              <span class="watch-dot" :class="group.meta.iconClass"></span>
               <h2>{{ sectionTitle(group.meta) }}</h2>
               <span class="watch-section__count">{{ group.items.length }}</span>
             </div>
@@ -535,6 +526,7 @@ const handleRemove = async (item: WatchlistItem) => {
               v-for="rec in group.visibleItems"
               :key="rec.symbol"
               class="watch-card"
+              :class="group.meta.iconClass"
               data-test="radar-card"
               @click="goToAnalysis(rec.symbol)"
             >
@@ -583,7 +575,7 @@ const handleRemove = async (item: WatchlistItem) => {
     <section class="watch-section manual-section" data-test="manual-section">
       <div class="watch-section__header">
         <div class="watch-section__title">
-          <q-icon name="bookmark_added" class="watch-section__icon is-manual" size="20px" />
+          <span class="watch-dot is-manual"></span>
           <h2>{{ languageStore.isThai ? 'ติดตามเอง' : 'My watchlist' }}</h2>
           <span class="watch-section__count">{{ currentItems.length }}</span>
         </div>
@@ -742,6 +734,7 @@ const handleRemove = async (item: WatchlistItem) => {
   --primary-accent: #2563eb;
   --profit-color: #16a34a;
   --loss-color: #dc2626;
+  --warning-color: #f2c037;
   --shadow-hover: 0 4px 8px rgba(16, 24, 40, 0.06), 0 12px 30px rgba(16, 24, 40, 0.1);
 
   color: var(--text-primary);
@@ -755,6 +748,7 @@ const handleRemove = async (item: WatchlistItem) => {
   --border-color: #2a3544;
   --profit-color: #22c55e;
   --loss-color: #ef4444;
+  --warning-color: #fbbf24;
   --shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.35), 0 12px 30px rgba(0, 0, 0, 0.45);
 }
 
@@ -806,24 +800,33 @@ const handleRemove = async (item: WatchlistItem) => {
   padding: 1px 8px;
 }
 
-.watch-section__icon.is-upside {
-  color: #22c55e !important;
+/* colored dot ที่หัว section — แทน q-icon เดิม ให้ตรงกับดีไซน์ใหม่ (การ์ดใช้สีเดียวกันเป็น
+   top-accent border ด้านล่าง เพื่อให้ dot กับการ์ดในหมวดเดียวกันสื่อความหมายชุดเดียวกัน) */
+.watch-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: 0 0 auto;
 }
 
-.watch-section__icon.is-downside {
-  color: #ef4444 !important;
+.watch-dot.is-upside {
+  background: var(--profit-color);
 }
 
-.watch-section__icon.is-near-recommended {
-  color: #3b82f6 !important;
+.watch-dot.is-downside {
+  background: var(--loss-color);
 }
 
-.watch-section__icon.is-not-recommended {
-  color: #94a3b8 !important;
+.watch-dot.is-near-recommended {
+  background: var(--warning-color);
 }
 
-.watch-section__icon.is-manual {
-  color: #f59e0b !important;
+.watch-dot.is-not-recommended {
+  background: var(--text-secondary);
+}
+
+.watch-dot.is-manual {
+  background: #f59e0b;
 }
 
 .watch-section__view-all {
@@ -870,13 +873,14 @@ const handleRemove = async (item: WatchlistItem) => {
 .watch-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .watch-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-top: 3px solid var(--border-color);
+  border-radius: 14px;
   padding: 16px;
   min-height: 160px;
   cursor: pointer;
@@ -886,13 +890,37 @@ const handleRemove = async (item: WatchlistItem) => {
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
-    border-color 0.18s ease;
+    border-color 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .watch-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
   border-color: var(--primary-accent);
+}
+
+/* top-accent border ตามหมวด AI radar — สีเดียวกับ .watch-dot ของหัว section */
+.watch-card.is-upside {
+  border-top-color: var(--profit-color);
+}
+
+.watch-card.is-downside {
+  border-top-color: var(--loss-color);
+}
+
+.watch-card.is-near-recommended {
+  border-top-color: var(--warning-color);
+}
+
+/* Not-recommended: จางลงให้ดูเป็น "ผ่านตา" ไม่ใช่คำแนะนำที่ต้องสนใจเท่าหมวดอื่น */
+.watch-card.is-not-recommended {
+  border-top-color: var(--text-secondary);
+  opacity: 0.72;
+}
+
+.watch-card.is-not-recommended:hover {
+  opacity: 1;
 }
 
 .watch-card__head {

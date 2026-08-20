@@ -51,6 +51,14 @@ const quotaTone = computed(() => {
 
 const isQuotaFull = computed(() => store.hasReachedQuota);
 
+// จำนวนสิทธิ์ที่เหลือ ใช้บนการ์ด "สร้างพอร์ตใหม่" ท้ายกริดตามแบบ
+// null = แพ็กไม่จำกัดจำนวนพอร์ต จึงไม่ต้องบอกตัวเลข
+const quotaRemaining = computed(() => {
+  const max = store.quotaMax;
+
+  return max === null ? null : Math.max(0, max - store.quotaUsed);
+});
+
 // ── Create ─────────────────────────────────────────────────────────────────────
 const createDialog = ref(false);
 const portForm = ref({ name: '', initial_balance: null as number | null });
@@ -310,7 +318,7 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
             </div>
 
             <!-- Balance Info -->
-            <div class="balance-grid q-mb-md">
+            <div class="port-balances q-mb-md">
               <div class="balance-item">
                 <div class="balance-label">Initial</div>
                 <div class="balance-value text-main">
@@ -321,7 +329,8 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
                   }}
                 </div>
               </div>
-              <div class="balance-item">
+              <q-icon name="arrow_forward" size="16px" class="bal-arrow" />
+              <div class="balance-item balance-item--end">
                 <div class="balance-label">Current</div>
                 <div class="balance-value text-main text-weight-bolder">
                   ${{
@@ -333,16 +342,9 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
               </div>
             </div>
 
-            <q-separator class="port-separator q-mb-md" />
-
             <!-- PnL Row -->
             <div class="row items-center justify-between">
-              <span
-                class="text-caption text-muted text-weight-bold text-uppercase"
-                style="letter-spacing: 0.04em"
-              >
-                Net PnL
-              </span>
+              <span class="growth-label text-muted">Net PnL</span>
               <div class="row items-baseline q-gutter-xs">
                 <span
                   class="text-subtitle1 text-weight-bolder"
@@ -366,6 +368,22 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
             </div>
           </q-card-section>
         </q-card>
+      </div>
+
+      <div v-if="!isQuotaFull" class="col-12 col-sm-6 col-md-4">
+        <div
+          class="port-card port-card--create"
+          data-test="create-portfolio-card"
+          @click="openCreateDialog"
+        >
+          <div class="plus-circle">
+            <q-icon name="add" size="20px" />
+          </div>
+          <span class="create-label">
+            New Portfolio
+            <template v-if="quotaRemaining !== null"> ({{ quotaRemaining }} left)</template>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -547,6 +565,10 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
   font-weight: 600;
   color: #dc2626;
 }
+/* #dc2626 จมไปกับพื้นหลังเข้ม #151819 — ใช้โทนเดียวกับ --negative ของ dark mode */
+.body--dark .quota-full-note {
+  color: #f87171;
+}
 
 .quota-link {
   color: inherit;
@@ -566,20 +588,32 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
 /* ==========================================================
    CSS Variables
 ========================================================== */
+/* หน้านี้ประกาศ palette slate/น้ำเงินของตัวเอง (#f8fafc / #1e293b / #3b82f6) ทับ
+   token teal/sage ของ app.scss เหมือน Dashboard/Analytics — ค่าใน :root ของ mockup
+   ตรงกับ app.scss เป๊ะ จึงยกกลับมาใช้ชุดกลาง */
 .portfolio-page {
-  --bg-page: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-card-soft: #f1f5f9;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.03), 0 2px 6px -2px rgba(0, 0, 0, 0.02);
-  --shadow-hover: 0 12px 28px -6px rgba(0, 0, 0, 0.08);
+  --bg-page: #f6f9f9;
+  --bg-card: #fdfefe;
+  --bg-card-soft: #f0f5f4;
+  --text-main: #1b3636;
+  --text-muted: #789191;
+  --border-color: #dae7e5;
+  --shadow-card: 0 1px 2px rgba(27, 54, 54, 0.04), 0 12px 32px -12px rgba(27, 54, 54, 0.1);
+  --shadow-hover: 0 1px 2px rgba(27, 54, 54, 0.05), 0 18px 40px -14px rgba(27, 54, 54, 0.18);
 
-  --bg-dialog: #ffffff;
-  --border-dialog: #e2e8f0;
+  --accent-100: #e7f4f2;
+  --accent-300: #b0d4cf;
+  --accent-400: #9bc5c0;
+  --accent-500: #85b6b0;
+  --accent-600: #64a6a0;
+  --accent-700: #4c8a87;
+  --accent-800: #336160;
+  --accent-900: #1b3636;
 
-  --bg-icon-primary: #eff6ff;
+  --bg-dialog: #fdfefe;
+  --border-dialog: #dae7e5;
+
+  --bg-icon-primary: #e7f4f2;
   --bg-icon-positive: #f0fdf4;
   --bg-icon-warning: #fffbeb;
   --bg-icon-negative: #fef2f2;
@@ -591,22 +625,22 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
 }
 
 .body--dark .portfolio-page {
-  --bg-page: #0f172a;
-  --bg-card: #151e32;
-  --bg-card-soft: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #23314b;
-  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.3);
-  --shadow-hover: 0 12px 28px -6px rgba(0, 0, 0, 0.5);
+  --bg-page: #151819;
+  --bg-card: #1f2323;
+  --bg-card-soft: #282e2e;
+  --text-main: #f4f6f5;
+  --text-muted: #7d8c89;
+  --border-color: #394141;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 20px 44px -16px rgba(0, 0, 0, 0.55);
+  --shadow-hover: 0 1px 2px rgba(0, 0, 0, 0.25), 0 26px 52px -18px rgba(0, 0, 0, 0.65);
 
-  --bg-dialog: #1a2540;
-  --border-dialog: #2a3a58;
+  --bg-dialog: #1f2323;
+  --border-dialog: #394141;
 
-  --bg-icon-primary: rgba(59, 130, 246, 0.15);
-  --bg-icon-positive: rgba(34, 197, 94, 0.15);
-  --bg-icon-warning: rgba(245, 158, 11, 0.15);
-  --bg-icon-negative: rgba(239, 68, 68, 0.15);
+  --bg-icon-primary: rgba(133, 182, 176, 0.18);
+  --bg-icon-positive: rgba(74, 222, 128, 0.15);
+  --bg-icon-warning: rgba(251, 191, 36, 0.15);
+  --bg-icon-negative: rgba(248, 113, 113, 0.15);
 }
 
 /* ==========================================================
@@ -635,8 +669,10 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
    Portfolio Card
 ========================================================== */
 .port-card {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-card);
-  border-radius: 16px;
+  border-radius: 24px;
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-card);
   transition:
@@ -644,31 +680,95 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
     box-shadow 0.25s ease,
     border-color 0.25s ease;
 }
+
+/* แถบ accent 4px หัวการ์ดตามแบบ — สีจางเมื่อเป็นพอร์ตธรรมดา และเป็น gradient
+   เมื่อเป็นพอร์ตที่เลือกอยู่ ทำให้เห็นใบที่ active จากหางตาโดยไม่ต้องอ่าน badge */
+.port-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--border-color);
+}
+.port-card--active::before {
+  background: linear-gradient(90deg, var(--accent-500), var(--accent-900));
+}
+
 .port-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: var(--accent-300);
 }
 .port-card--active {
-  border-color: #3b82f6 !important;
+  border-color: var(--accent-600) !important;
   box-shadow:
-    0 0 0 1px #3b82f6,
+    0 0 0 3px rgba(133, 182, 176, 0.22),
     var(--shadow-card) !important;
 }
 
+/* badge "Active" ในแบบใช้โทนเขียว positive ไม่ใช่สี accent — จะได้ไม่ไปชนกับ
+   แถบ accent หัวการ์ดที่สื่อเรื่องเดียวกันอยู่แล้ว */
 .active-badge {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   padding: 3px 8px;
-  border-radius: 20px;
-  background: rgba(59, 130, 246, 0.12) !important;
-  color: #3b82f6 !important;
-  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 999px;
+  background: rgba(33, 186, 69, 0.14) !important;
+  color: #178230 !important;
+  border: 1px solid rgba(33, 186, 69, 0.25);
 }
 .body--dark .active-badge {
-  background: rgba(96, 165, 250, 0.15) !important;
-  color: #60a5fa !important;
-  border-color: rgba(96, 165, 250, 0.3);
+  background: rgba(74, 222, 128, 0.15) !important;
+  color: #4ade80 !important;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+/* การ์ดเส้นประ "สร้างพอร์ตใหม่" ท้ายกริดตามแบบ — ใช้ .port-card ร่วมกันเพื่อให้
+   ความสูง/มุมเท่าใบอื่นในแถวเดียวกัน แต่ทับ background/เงาให้เป็นทรงว่าง */
+.port-card--create {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 222px;
+  height: 100%;
+  padding: 20px;
+  background: transparent;
+  border: 2px dashed var(--border-color);
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: center;
+}
+.port-card--create::before {
+  display: none;
+}
+.port-card--create:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--accent-500);
+  color: var(--accent-700);
+}
+.body--dark .port-card--create:hover {
+  color: var(--accent-400);
+}
+.plus-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-card-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.create-label {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* Action buttons inside card */
@@ -685,32 +785,45 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
   color: var(--q-negative) !important;
 }
 
-/* Balance grid */
-.balance-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* ยอดเงิน: แบบวางเป็นแถวเดียว "เริ่มต้น → ปัจจุบัน" แทนกล่องสองใบ อ่านเป็นทิศทาง
+   เดียวกับตัวเลขการเติบโตด้านล่าง และเส้นคั่นย้ายมาอยู่ที่แถวนี้เลย (เดิมเป็น
+   q-separator ใบแยก) */
+.port-balances {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
 }
 .balance-item {
-  background: var(--bg-card-soft);
-  border-radius: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  min-width: 0;
+}
+.balance-item--end {
+  text-align: right;
+}
+.bal-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 .balance-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .balance-value {
-  font-size: 14px;
-  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 700;
 }
-.port-separator {
-  background-color: var(--border-color);
+
+.growth-label {
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
 /* ==========================================================
@@ -738,25 +851,25 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
   border-radius: 10px !important;
 }
 .rounded-input :deep(.q-field__control:hover) {
-  border-color: #3b82f6;
+  border-color: var(--accent-500);
 }
 
 /* ==========================================================
    Buttons — อิง Journal
 ========================================================== */
 .btn-primary-modern {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-900) 100%);
+  border-radius: 11px;
   padding: 0 20px;
   height: 40px;
   font-size: 13px;
   letter-spacing: 0.01em;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 2px 8px rgba(27, 54, 54, 0.2);
   transition: all 0.2s ease;
 }
 .btn-primary-modern:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.45) !important;
+  box-shadow: 0 6px 16px rgba(27, 54, 54, 0.28) !important;
 }
 
 .btn-danger-modern {

@@ -55,6 +55,13 @@ export default defineRouter(function () {
         return;
       }
 
+      // หน้าแรกสาธารณะเป็นหน้าขายของ — คนที่ล็อกอินแล้วเข้า '/' ให้ไปที่ทำงานจริงเลย
+      // (เดิม '/' redirect ไป /login แล้วเงื่อนไขข้างบนเด้งต่อไป Dashboard ผลลัพธ์จึงเท่าเดิม)
+      if (auth.isAuthenticated && to.meta.publicLanding) {
+        next(WORKSPACE_HOME_ROUTE);
+        return;
+      }
+
       // 🔀 Workspace Guard — กันเข้าหน้าที่ไม่ใช่ของโหมดปัจจุบัน
       const requiredWorkspace = to.meta.workspace;
 

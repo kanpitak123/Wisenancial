@@ -68,6 +68,10 @@ const shares = (value: number | string | null | undefined) =>
 const formatDate = (value: string | null | undefined) =>
   value ? new Date(value).toLocaleDateString('en-GB') : '—';
 
+// ตัวย่อบน badge หน้าสัญลักษณ์หุ้นตามแบบ (NVDA -> NV) — ตัดจากสัญลักษณ์ที่มีอยู่แล้ว
+const symbolInitials = (symbol: string | null | undefined) =>
+  (symbol ?? '—').slice(0, 2).toUpperCase();
+
 // ── โฟลเดอร์ + การจัดกลุ่ม ────────────────────────────────────────────────────
 const folderFilter = ref<string>('ALL');
 
@@ -435,8 +439,7 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
           no-caps
           icon="add"
           label="ซื้อหุ้น"
-          color="primary"
-          class="text-weight-bold"
+          class="btn-primary-gradient text-white text-weight-bold"
           data-test="open-buy"
           :disable="!activePortfolio"
           @click="openBuyDialog"
@@ -460,8 +463,14 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
         indicator-color="primary"
         class="record-tabs q-mb-md"
       >
-        <q-tab name="open" label="ถือครองอยู่" data-test="tab-open" />
-        <q-tab name="closed" label="ประวัติการขาย" data-test="tab-closed" />
+        <q-tab name="open" data-test="tab-open">
+          ถือครองอยู่
+          <span class="tab-count">{{ store.openPurchases.length }}</span>
+        </q-tab>
+        <q-tab name="closed" data-test="tab-closed">
+          ประวัติการขาย
+          <span class="tab-count">{{ store.sales.length }}</span>
+        </q-tab>
       </q-tabs>
 
       <!-- ── ถือครองอยู่ ─────────────────────────────────────────────────────── -->
@@ -522,16 +531,21 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
             <tbody>
               <tr v-for="row in group.items" :key="row.id" :data-test="`purchase-${row.id}`">
                 <td class="text-left">
-                  <div class="text-weight-bold">{{ row.stock_symbol }}</div>
-                  <div class="text-caption text-muted">{{ row.stock_name ?? '—' }}</div>
+                  <div class="hold-sym">
+                    <span class="hold-badge">{{ symbolInitials(row.stock_symbol) }}</span>
+                    <div>
+                      <div class="hold-sym-text">{{ row.stock_symbol }}</div>
+                      <div class="hold-name">{{ row.stock_name ?? '—' }}</div>
+                    </div>
+                  </div>
                 </td>
-                <td class="text-right">{{ shares(row.remaining_shares) }}</td>
-                <td class="text-right">{{ money(row.purchase_price) }}</td>
-                <td class="text-right text-weight-bold">{{ money(row.total_amount) }}</td>
-                <td class="text-right text-positive">
+                <td class="text-right num-cell">{{ shares(row.remaining_shares) }}</td>
+                <td class="text-right num-cell">{{ money(row.purchase_price) }}</td>
+                <td class="text-right text-weight-bold num-cell">{{ money(row.total_amount) }}</td>
+                <td class="text-right text-positive num-cell">
                   {{ row.target_price === null ? '—' : money(row.target_price) }}
                 </td>
-                <td class="text-right text-negative">
+                <td class="text-right text-negative num-cell">
                   {{ row.stop_loss === null ? '—' : money(row.stop_loss) }}
                 </td>
                 <td class="text-left text-muted">{{ formatDate(row.purchase_date) }}</td>
@@ -575,15 +589,25 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
             </thead>
             <tbody>
               <tr v-for="sale in store.sales" :key="sale.id" :data-test="`sale-${sale.id}`">
-                <td class="text-left text-weight-bold">{{ sale.stock_symbol }}</td>
-                <td class="text-right">{{ shares(sale.shares_count) }}</td>
-                <td class="text-right">{{ money(sale.sold_price) }}</td>
-                <td class="text-right text-muted">{{ money(sale.cost_basis) }}</td>
-                <td
-                  class="text-right text-weight-bolder"
-                  :class="Number(sale.realized_pnl ?? 0) >= 0 ? 'text-positive' : 'text-negative'"
-                >
-                  {{ Number(sale.realized_pnl ?? 0) >= 0 ? '+' : '' }}{{ money(sale.realized_pnl) }}
+                <td class="text-left">
+                  <div class="hold-sym">
+                    <span class="hold-badge">{{ symbolInitials(sale.stock_symbol) }}</span>
+                    <span class="hold-sym-text">{{ sale.stock_symbol }}</span>
+                  </div>
+                </td>
+                <td class="text-right num-cell">{{ shares(sale.shares_count) }}</td>
+                <td class="text-right num-cell">{{ money(sale.sold_price) }}</td>
+                <td class="text-right text-muted num-cell">{{ money(sale.cost_basis) }}</td>
+                <td class="text-right">
+                  <span
+                    class="pl-chip"
+                    :class="
+                      Number(sale.realized_pnl ?? 0) >= 0 ? 'pl-chip--up' : 'pl-chip--down'
+                    "
+                  >
+                    {{ Number(sale.realized_pnl ?? 0) >= 0 ? '+' : ''
+                    }}{{ money(sale.realized_pnl) }}
+                  </span>
                 </td>
                 <td class="text-left text-muted">{{ sale.cost_method ?? 'FIFO' }}</td>
                 <td class="text-left text-muted">{{ formatDate(sale.sold_date) }}</td>
@@ -921,18 +945,36 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
 </template>
 
 <style scoped>
+/* หน้านี้ประกาศ palette slate ทับ token teal/sage ของ app.scss เหมือนหน้าอื่น
+   ก่อน rebrand — ค่าใน :root ของ mockup ตรงกับ app.scss เป๊ะ จึงยกกลับมาใช้ชุดกลาง */
 .stock-record-page {
-  --bg-card: #ffffff;
-  --border-color: #e2e8f0;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
+  --bg-page: #f6f9f9;
+  --bg-card: #fdfefe;
+  --bg-card-soft: #f0f5f4;
+  --border-color: #dae7e5;
+  --text-main: #1b3636;
+  --text-muted: #789191;
+  --shadow-card: 0 1px 2px rgba(27, 54, 54, 0.04), 0 12px 32px -12px rgba(27, 54, 54, 0.1);
+
+  --accent-400: #9bc5c0;
+  --accent-500: #85b6b0;
+  --accent-600: #64a6a0;
+  --accent-800: #336160;
+  --accent-900: #1b3636;
+
+  background-color: var(--bg-page);
+  min-height: 100vh;
+  color: var(--text-main);
 }
 
 .body--dark .stock-record-page {
-  --bg-card: #151e32;
-  --border-color: #1e293b;
-  --text-main: #e8edf4;
-  --text-muted: #8b9cb3;
+  --bg-page: #151819;
+  --bg-card: #1f2323;
+  --bg-card-soft: #282e2e;
+  --border-color: #394141;
+  --text-main: #f4f6f5;
+  --text-muted: #7d8c89;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 20px 44px -16px rgba(0, 0, 0, 0.55);
 }
 
 .text-main {
@@ -949,14 +991,131 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
 
 .folder-card {
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--bg-card);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
 .folder-head {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
+}
+
+/* ตารางถือครอง/ประวัติขาย ใช้ทรง .hold-table ของแบบ — หัวตารางเล็กและห่าง
+   แถวสูงขึ้นให้ badge สัญลักษณ์ 30px นั่งพอดี และแถวสุดท้ายไม่มีเส้นคั่นชนขอบการ์ด */
+.folder-card :deep(thead th) {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+.folder-card :deep(tbody td) {
+  padding: 12px 10px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+.folder-card :deep(tbody tr:last-child td) {
+  border-bottom: none;
+}
+.folder-card :deep(tbody tr:hover) {
+  background: var(--bg-card-soft);
+}
+
+/* badge ตัวย่อสัญลักษณ์หน้าชื่อหุ้นตามแบบ — ช่วยกวาดตาหาแถวได้เร็วกว่าอ่านตัวอักษรล้วน */
+.hold-sym {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.hold-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent-800);
+  flex-shrink: 0;
+}
+.body--dark .hold-badge {
+  color: var(--accent-400);
+}
+.hold-sym-text {
+  font-weight: 700;
+  font-size: 13px;
+}
+.hold-name {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* ตัวเลขในตารางใช้ความกว้างเท่ากันทุกหลัก คอลัมน์ตัวเลขจะได้ไม่เต้น */
+.num-cell {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* กำไร/ขาดทุนที่รับรู้แล้วในแบบเป็นชิปมีพื้นหลัง ไม่ใช่ตัวหนังสือสีเปล่า */
+.pl-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+.pl-chip--up {
+  background: rgba(33, 186, 69, 0.14);
+  color: #178230;
+}
+.pl-chip--down {
+  background: rgba(193, 0, 21, 0.12);
+  color: #c10015;
+}
+.body--dark .pl-chip--up {
+  color: #4ade80;
+}
+.body--dark .pl-chip--down {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+/* จำนวนรายการข้างชื่อแท็บตามแบบ */
+.tab-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--bg-card-soft);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+.record-tabs :deep(.q-tab--active) .tab-count {
+  background: rgba(133, 182, 176, 0.18);
+  color: var(--accent-800);
+}
+.body--dark .record-tabs :deep(.q-tab--active) .tab-count {
+  color: var(--accent-400);
+}
+
+/* ปุ่มหลักในแบบเป็น gradient accent ชุดเดียวกับหน้า Portfolio */
+.btn-primary-gradient {
+  background: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-900) 100%);
+  border-radius: 10px;
+  padding: 0 16px;
+  box-shadow: 0 2px 8px rgba(27, 54, 54, 0.2);
 }
 
 .record-empty {

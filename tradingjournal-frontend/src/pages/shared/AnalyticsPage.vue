@@ -44,7 +44,7 @@ const AiInsightPanel = defineComponent({
               h('div', { class: 'ai-icon-box' }, [
                 h(
                   'span',
-                  { class: 'material-icons', style: 'font-size:16px;color:#a855f7' },
+                  { class: 'material-icons', style: 'font-size:16px;color:#fff' },
                   'auto_awesome',
                 ),
               ]),
@@ -472,7 +472,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     fontFamily: 'inherit',
     background: 'transparent',
   },
-  colors: ['#a855f7'],
+  colors: ['#4c8a87'],
   fill: {
     type: 'gradient',
     gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] },
@@ -481,18 +481,18 @@ const chartOptions = computed<ApexOptions>(() => ({
   stroke: { curve: 'smooth', width: 2 },
   xaxis: {
     categories: store.chartData.categories,
-    labels: { style: { colors: $q.dark.isActive ? '#94a3b8' : '#64748b' } },
+    labels: { style: { colors: $q.dark.isActive ? '#7d8c89' : '#789191' } },
     axisBorder: { show: false },
     axisTicks: { show: false },
   },
   yaxis: {
     labels: {
       formatter: (val: number) => `$${val.toLocaleString()}`,
-      style: { colors: $q.dark.isActive ? '#94a3b8' : '#64748b' },
+      style: { colors: $q.dark.isActive ? '#7d8c89' : '#789191' },
     },
   },
   grid: {
-    borderColor: $q.dark.isActive ? '#334155' : '#e2e8f0',
+    borderColor: $q.dark.isActive ? '#394141' : '#dae7e5',
     strokeDashArray: 4,
   },
   theme: { mode: $q.dark.isActive ? 'dark' : 'light' },
@@ -553,19 +553,34 @@ const cc = computed(() => ({
   greenBg: isDark.value ? 'rgba(52,211,153,0.15)' : 'rgba(16,185,129,0.12)',
   red: isDark.value ? 'rgba(248,113,113,1)' : 'rgba(239,68,68,1)',
   redBg: isDark.value ? 'rgba(248,113,113,0.15)' : 'rgba(239,68,68,0.1)',
-  blue: isDark.value ? 'rgba(96,165,250,1)' : 'rgba(59,130,246,1)',
-  blueBg: isDark.value ? 'rgba(96,165,250,0.15)' : 'rgba(59,130,246,0.1)',
-  text: isDark.value ? '#94a3b8' : '#64748b',
+  accent: isDark.value ? 'rgba(155,197,192,1)' : 'rgba(76,138,135,1)',
+  accentBg: isDark.value ? 'rgba(155,197,192,0.15)' : 'rgba(76,138,135,0.12)',
+  text: isDark.value ? '#7d8c89' : '#789191',
   grid: isDark.value ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-  cardBg: isDark.value ? '#151e32' : '#ffffff',
-  border: isDark.value ? '#1e293b' : '#e2e8f0',
+  cardBg: isDark.value ? '#1f2323' : '#fdfefe',
+  border: isDark.value ? '#394141' : '#dae7e5',
 }));
+
+/* โดนัท Allocation ไม่เคยกำหนดสีเอง เลยตกไปใช้ชุด default ของ ApexCharts ซึ่งเป็น
+   ฟ้า/เหลืองสด ตัดกับหน้าโทน teal — ชุดนี้คุมความสว่างให้ใกล้กันทุกสี จะได้อ่านออก
+   ทั้ง light (#f6f9f9) และ dark (#151819) โดยไม่ต้องแยกสองชุด */
+const DONUT_PALETTE = [
+  '#4c8a87',
+  '#c98a3e',
+  '#6b8fc4',
+  '#a86a8f',
+  '#5ca36b',
+  '#c9705f',
+  '#8a7fc0',
+  '#3f7f8f',
+];
 
 // ─── Allocation (โหมด Stock) ──────────────────────────────────────────────────
 const allocationSeries = computed(() => store.allocation.map((item) => Number(item.value)));
 
 const allocationOpts = computed<ApexOptions>(() => ({
   chart: { type: 'donut', fontFamily: 'inherit', background: 'transparent' },
+  colors: DONUT_PALETTE,
   labels: store.allocation.map((item) => item.symbol),
   legend: { position: 'bottom', labels: { colors: cc.value.text } },
   dataLabels: { enabled: true, formatter: (val: number) => `${Number(val).toFixed(1)}%` },
@@ -817,7 +832,7 @@ const pnlMonthOpts = computed(() =>
 <template>
   <q-page class="analytics-page q-pa-md q-pa-sm-md">
     <!-- ── Main Tab Bar ────────────────────────────────────────────────────── -->
-    <div class="q-mb-md">
+    <div class="tabs-sticky">
       <q-tabs
         v-model="activeTab"
         dense
@@ -856,12 +871,12 @@ const pnlMonthOpts = computed(() =>
         <div class="row q-col-gutter-md q-mb-md">
           <div class="col-6 col-sm-6 col-md-3" v-for="(stat, index) in summaryStats" :key="index">
             <q-card class="dashboard-card stat-card h-full q-pa-md flex column justify-between">
-              <div class="row items-center justify-between q-mb-md">
-                <div class="text-caption text-muted text-weight-bold text-uppercase tracking-wide">
-                  {{ stat.label }}
+              <div class="kpi-top row items-center no-wrap q-mb-sm">
+                <div class="icon-box q-mr-sm" :class="[stat.bgClass, stat.textClass]">
+                  <q-icon :name="stat.icon" size="16px" />
                 </div>
-                <div class="icon-box" :class="[stat.bgClass, stat.textClass]">
-                  <q-icon :name="stat.icon" size="20px" />
+                <div class="stat-label text-muted text-weight-bold ellipsis">
+                  {{ stat.label }}
                 </div>
               </div>
               <div>
@@ -1553,39 +1568,61 @@ const pnlMonthOpts = computed(() =>
 /* ==========================================================
    CSS Variables
 ========================================================== */
-.analytics-page {
-  --bg-page: #f8fafc;
-  --bg-card: #ffffff;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.03);
+/* หน้านี้เคยประกาศ palette ของตัวเองเป็นชุด slate/น้ำเงิน (#f8fafc / #1e293b /
+   #eff6ff) ค้างมาตั้งแต่ก่อน rebrand แล้ว override token teal/sage ของ app.scss
+   ทับทั้งหน้า — ค่าใน :root ของ mockup ตรงกับ app.scss เป๊ะ จึงยกกลับมาใช้ชุดกลาง
+   เหมือนที่ทำกับ DashboardPage
 
-  --bg-icon-primary: #eff6ff;
+   ผลพลอยได้: การ์ดลูกในแท็บ AI (AiPortfolioAdvisorCard / AiRiskAnalysisCard /
+   PerformersSection) อ่าน --bg-card-soft จากที่นี่ ตอน dark mode จึงเคยได้สี
+   slate #1e293b ปนเข้าไป ทั้งที่ตัวเองใช้ token กลางล้วน ตอนนี้ตรงกันแล้ว */
+.analytics-page {
+  --bg-page: #f6f9f9;
+  --bg-card: #fdfefe;
+  --bg-card-soft: #f0f5f4;
+  --text-main: #1b3636;
+  --text-muted: #789191;
+  --border-color: #dae7e5;
+  --shadow-card: 0 1px 2px rgba(27, 54, 54, 0.04), 0 12px 32px -12px rgba(27, 54, 54, 0.1);
+  --shadow-hover: 0 1px 2px rgba(27, 54, 54, 0.05), 0 18px 40px -14px rgba(27, 54, 54, 0.18);
+
+  --accent-200: #cde5e2;
+  --accent-300: #b0d4cf;
+  --accent-400: #9bc5c0;
+  --accent-500: #85b6b0;
+  --accent-600: #64a6a0;
+  --accent-700: #4c8a87;
+  --accent-800: #336160;
+  --accent-900: #1b3636;
+
+  --bg-icon-primary: #e7f4f2;
   --bg-icon-positive: #f0fdf4;
+  --bg-icon-warning: #fffbeb;
   --bg-icon-negative: #fef2f2;
   --bg-icon-purple: #faf5ff;
+
+  --table-hover: #f0f5f4;
 
   background-color: var(--bg-page);
   min-height: 100vh;
   color: var(--text-main);
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease;
 }
 
 .body--dark .analytics-page {
-  --bg-page: #0f172a;
-  --bg-card: #151e32;
-  --bg-card-soft: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #23314b;
-  --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.3);
-  --shadow-hover: 0 10px 20px -3px rgba(0, 0, 0, 0.4);
+  --bg-page: #151819;
+  --bg-card: #1f2323;
+  --bg-card-soft: #282e2e;
+  --text-main: #f4f6f5;
+  --text-muted: #7d8c89;
+  --border-color: #394141;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 20px 44px -16px rgba(0, 0, 0, 0.55);
+  --shadow-hover: 0 1px 2px rgba(0, 0, 0, 0.25), 0 26px 52px -18px rgba(0, 0, 0, 0.65);
 
-  --bg-icon-primary: rgba(59, 130, 246, 0.15);
-  --bg-icon-positive: rgba(34, 197, 94, 0.15);
-  --bg-icon-warning: rgba(245, 158, 11, 0.15);
-  --bg-icon-negative: rgba(239, 68, 68, 0.15);
+  --bg-icon-primary: rgba(133, 182, 176, 0.18);
+  --bg-icon-positive: rgba(74, 222, 128, 0.15);
+  --bg-icon-warning: rgba(251, 191, 36, 0.15);
+  --bg-icon-negative: rgba(248, 113, 113, 0.15);
   --bg-icon-purple: rgba(168, 85, 247, 0.15);
 
   --table-hover: rgba(255, 255, 255, 0.03);
@@ -1620,12 +1657,13 @@ const pnlMonthOpts = computed(() =>
 }
 
 .icon-box {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .bg-icon-primary {
@@ -1641,15 +1679,49 @@ const pnlMonthOpts = computed(() =>
   background-color: var(--bg-icon-purple);
 }
 
+/* ตัวเลข KPI: 34px -> 22px ตามแบบ + JetBrains Mono/tabular-nums กันคอลัมน์ตัวเลข
+   ขยับเวลาค่าเปลี่ยน (แบบเดียวกับ DashboardPage) */
 .stat-val {
-  font-size: 2.125rem;
-  line-height: 2.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4rem;
+  line-height: 1.9rem;
+}
+.stat-label {
+  font-size: 12.5px;
+  min-width: 0;
+}
+.kpi-top {
+  min-height: 32px;
 }
 .text-main {
   color: var(--text-main);
 }
 .text-muted {
   color: var(--text-muted);
+}
+.tracking-tight {
+  letter-spacing: -0.02em;
+}
+.tracking-wide {
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 599px) {
+  .stat-val {
+    font-size: 1.2rem;
+    line-height: 1.5rem;
+  }
+  .stat-label {
+    font-size: 11px;
+  }
+  .icon-box {
+    width: 28px;
+    height: 28px;
+  }
+  .icon-box .q-icon {
+    font-size: 14px !important;
+  }
 }
 
 /* Filter Toggle */
@@ -1742,12 +1814,24 @@ const pnlMonthOpts = computed(() =>
   gap: 2px;
 }
 
+/* แถบแท็บหลักลอยค้างหัวหน้าตามแบบ — ดึงขอบออกไปชนขอบเพจ (q-pa-md = 16px)
+   ไม่งั้นการ์ดที่เลื่อนผ่านด้านล่างจะโผล่ตรงช่องว่างซ้าย/ขวา */
+.tabs-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -16px 16px;
+  padding: 6px 16px 12px;
+  background: var(--bg-page);
+}
+
 /* Compact top tab bar — pill style, auto-width */
 .compact-tabs {
   display: inline-flex;
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: 999px;
   border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-card);
   padding: 4px;
   width: auto;
 }
@@ -1756,12 +1840,14 @@ const pnlMonthOpts = computed(() =>
   overflow: visible;
 }
 .compact-tabs :deep(.q-tab) {
-  border-radius: 8px;
+  border-radius: 999px;
   min-height: 34px;
-  padding: 0 14px;
+  padding: 0 18px;
+  font-weight: 700;
 }
+/* แท็บที่เลือกใช้ gradient accent-500 -> accent-900 ตามแบบ แทนสีทึบใบเดียว */
 .compact-tabs :deep(.q-tab--active) {
-  background: var(--q-primary);
+  background: linear-gradient(135deg, var(--accent-500), var(--accent-900));
   color: #fff !important;
 }
 .compact-tabs :deep(.q-tabs__indicator) {
@@ -1800,6 +1886,41 @@ const pnlMonthOpts = computed(() =>
 }
 .analysis-table :deep(tbody tr:hover td) {
   background: var(--bg-icon-primary);
+}
+
+/* ==========================================================
+   Tables — Allocation / Timeline
+========================================================== */
+.custom-table {
+  color: var(--text-main);
+}
+.custom-table :deep(th) {
+  font-weight: 800;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+.custom-table :deep(td) {
+  border-bottom: 1px solid var(--border-color);
+  padding: 11px 12px;
+  font-size: 12.5px;
+}
+.custom-table :deep(tbody tr:last-child td) {
+  border-bottom: none;
+}
+.custom-table :deep(tbody tr:hover) {
+  background-color: var(--table-hover) !important;
+}
+
+.custom-chip {
+  border-radius: 6px;
+  padding: 2px 10px;
+  background: var(--bg-card-soft);
+  color: var(--text-secondary, var(--text-muted));
 }
 
 /* ==========================================================
@@ -1868,10 +1989,11 @@ const pnlMonthOpts = computed(() =>
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: rgba(168, 85, 247, 0.12);
+  background: linear-gradient(135deg, var(--accent-400), var(--accent-800));
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .ai-title {
@@ -1887,14 +2009,17 @@ const pnlMonthOpts = computed(() =>
   padding: 4px 10px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: var(--bg-card-soft, #f1f5f9);
+  background: var(--bg-card-soft);
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .ai-refresh-btn:hover {
-  border-color: #a855f7;
-  color: #a855f7;
+  border-color: var(--accent-400);
+  color: var(--accent-800);
+}
+.body--dark .ai-refresh-btn:hover {
+  color: var(--accent-400);
 }
 .ai-refresh-btn:disabled {
   opacity: 0.5;
@@ -1905,7 +2030,7 @@ const pnlMonthOpts = computed(() =>
   width: 28px;
   height: 28px;
   border: 3px solid var(--border-color);
-  border-top-color: #a855f7;
+  border-top-color: var(--accent-700);
   border-radius: 50%;
   animation: ai-spin 0.8s linear infinite;
 }
@@ -1927,20 +2052,20 @@ const pnlMonthOpts = computed(() =>
   gap: 10px;
   align-items: flex-start;
   padding: 10px 12px;
-  background: var(--bg-card-soft, #f8fafc);
+  background: var(--bg-card-soft);
   border-radius: 10px;
   border: 1px solid var(--border-color);
   transition: border-color 0.2s;
 }
 .ai-line:hover {
-  border-color: rgba(168, 85, 247, 0.3);
+  border-color: var(--accent-300);
 }
 
 .ai-line-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #a855f7;
+  background: var(--accent-700);
   flex-shrink: 0;
   margin-top: 5px;
 }
@@ -1955,13 +2080,6 @@ const pnlMonthOpts = computed(() =>
   font-size: 36px !important;
   color: var(--text-muted);
   opacity: 0.3;
-}
-
-.body--dark .ai-refresh-btn {
-  background: #1e293b;
-}
-.body--dark .ai-line {
-  background: #1e293b;
 }
 
 .ellipsis {
