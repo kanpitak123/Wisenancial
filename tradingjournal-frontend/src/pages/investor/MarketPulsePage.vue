@@ -162,6 +162,24 @@ const crowdLean = computed(() => {
 });
 
 /** เรียงหุ้นที่เอียงไปฝั่งใดฝั่งหนึ่งแรงสุดขึ้นก่อน — ตัวที่ 50/50 ไม่มีอะไรให้เล่า */
+/**
+ * ป้าย % บนแถบ long/short ต้องรวมกันได้ 100 เสมอ
+ *
+ * ปัดแยกกันทีละฝั่งไม่ได้ — ข้อมูลจริงที่หลังบ้านส่งมาลงท้ายด้วย .5 บ่อยมาก
+ * (เช่น long 56.5 / short 43.5) แล้ว toFixed(0) ปัดขึ้นทั้งคู่เป็น 57 กับ 44
+ * ผู้ใช้เห็นสองตัวนี้ติดกันบนแถบเดียว บวกแล้วได้ 101% ซึ่งสะดุดตาทันที
+ *
+ * จึงปัดฝั่ง long อย่างเดียวแล้วให้ฝั่ง short เป็นส่วนที่เหลือ ส่วนความกว้างของแถบ
+ * ยังใช้ค่าดิบไม่ปัด — ความยาวที่วาดออกมาจึงยังตรงกับข้อมูลจริง
+ */
+const longShortLabels = (longPercent: number) => {
+  const long = Math.round(longPercent);
+
+  return { long, short: 100 - long };
+};
+
+const overallLabels = computed(() => longShortLabels(sentiment.value?.overall.longPercent ?? 0));
+
 const sortedRatios = computed(() =>
   [...(sentiment.value?.longShortRatios ?? [])].sort(
     (a, b) => Math.abs(b.longPercent - 50) - Math.abs(a.longPercent - 50),
@@ -273,13 +291,13 @@ const REASON_META = [
         >
           <span v-if="sentiment.overall.longPercent >= 18"
             >{{ languageStore.isThai ? 'ซื้อ' : 'Long' }}
-            {{ sentiment.overall.longPercent.toFixed(0) }}%</span
+            {{ overallLabels.long }}%</span
           >
         </div>
         <div class="pulse-ls-short" :style="{ width: `${sentiment.overall.shortPercent}%` }">
           <span v-if="sentiment.overall.shortPercent >= 18"
             >{{ languageStore.isThai ? 'ขาย' : 'Short' }}
-            {{ sentiment.overall.shortPercent.toFixed(0) }}%</span
+            {{ overallLabels.short }}%</span
           >
         </div>
       </div>
@@ -299,8 +317,9 @@ const REASON_META = [
             </span>
             <q-tooltip>
               {{ ratio.name }} · {{ languageStore.isThai ? 'ซื้อ' : 'Long' }}
-              {{ ratio.longPercent.toFixed(0) }}% / {{ languageStore.isThai ? 'ขาย' : 'Short' }}
-              {{ ratio.shortPercent.toFixed(0) }}%
+              {{ longShortLabels(ratio.longPercent).long }}% /
+              {{ languageStore.isThai ? 'ขาย' : 'Short' }}
+              {{ longShortLabels(ratio.longPercent).short }}%
             </q-tooltip>
           </div>
           <div class="pulse-ratio-bar">

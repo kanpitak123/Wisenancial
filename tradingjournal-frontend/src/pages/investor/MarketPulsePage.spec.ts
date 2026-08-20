@@ -198,6 +198,26 @@ describe('MarketPulsePage', () => {
       expect(getSentiment).toHaveBeenLastCalledWith({ market: 'TH' });
     });
 
+    it('ค่าลงท้าย .5 -> ป้าย % สองฝั่งต้องรวมกันได้ 100 ไม่ใช่ 101', async () => {
+      // ข้อมูลจริงจากหลังบ้านลงท้าย .5 บ่อยมาก ถ้าปัดแยกกันทีละฝั่งจะได้ 57 + 44 = 101%
+      // ซึ่งอยู่ติดกันบนแถบเดียว ผู้ใช้เห็นแล้วสะดุดตาทันที
+      getSentiment.mockResolvedValue(
+        sentimentResponse({ overall: { longPercent: 56.5, shortPercent: 43.5 } }),
+      );
+
+      const wrapper = await mountPage();
+      const strip = wrapper.find('[data-test="market-sentiment"]');
+
+      expect(strip.text()).toContain('57%');
+      expect(strip.text()).toContain('43%');
+      expect(strip.text()).not.toContain('44%');
+
+      // ความกว้างยังต้องเป็นค่าดิบที่ไม่ปัด — เส้นที่วาดต้องตรงกับข้อมูลจริง
+      expect(wrapper.find('[data-test="sentiment-overall-long"]').attributes('style')).toContain(
+        'width: 56.5%',
+      );
+    });
+
     it('sentiment ล่มตัวเดียว -> แถบหายไปแต่ heatmap ยังอยู่ ไม่ล้มทั้งหน้า', async () => {
       getSentiment.mockRejectedValue(httpError(500));
       getHeatmap.mockResolvedValue(
