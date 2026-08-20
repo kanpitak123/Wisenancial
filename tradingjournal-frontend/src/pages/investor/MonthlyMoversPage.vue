@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { WsBadge, WsCard, WsUpgradeNotice } from 'src/components/ui';
 import { volatilityService } from 'src/services/volatility.service';
+import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
 import { isPaidTierError } from 'src/utils/paid-tier';
 import type {
   MonthlyMoversResponse,
@@ -185,6 +186,11 @@ onMounted(load);
             @click="goToAnalysis(mover.symbol)"
           >
             <span class="movers-rank">{{ idx + 1 }}</span>
+            <span
+              class="movers-avatar"
+              :style="{ background: symbolAvatarColor(mover.symbol) }"
+              >{{ symbolAvatarInitials(mover.symbol) }}</span
+            >
             <div class="movers-symbol">
               <span class="movers-symbol-ticker">{{ mover.symbol }}</span>
               <span class="movers-symbol-name">{{ mover.name }}</span>
@@ -294,6 +300,20 @@ onMounted(load);
   font-weight: 700;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+/* ป้ายตัวย่อแทนโลโก้ — logo.clearbit.com โดน ad blocker บล็อกบ่อยจนเหลือช่องว่าง */
+.movers-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
 }
 
 .movers-symbol {

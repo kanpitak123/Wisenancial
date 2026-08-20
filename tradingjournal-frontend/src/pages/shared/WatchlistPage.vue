@@ -27,6 +27,7 @@ import {
 } from 'stores/AiRecommendationsStore';
 import { SECTOR_OPTIONS } from 'src/services/stocks.service';
 import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
+import StockSymbolPicker from 'components/stocks/StockSymbolPicker.vue';
 import type { StockSector } from 'src/types/stocks.types';
 import type { WatchlistItem } from 'src/types/watchlist.types';
 
@@ -602,12 +603,41 @@ const handleRemove = async (item: WatchlistItem) => {
         <div v-show="manualOpen || !isInvestor">
           <div class="row q-col-gutter-sm q-mb-md items-center">
             <div class="col-12 col-sm-5">
+              <!-- โหมด Stock: ตัวค้นหามี dropdown แนะนำ จะได้ไม่ต้องจำ ticker เอง
+                   โหมด Forex: ยังเป็นช่องพิมพ์ เพราะแคตตาล็อกที่ StockSymbolPicker ใช้
+                   มีแต่หุ้น ไม่มีคู่เงินอย่าง XAU/USD ถ้าสลับไปใช้จะพิมพ์เพิ่มไม่ได้เลย -->
+              <div v-if="isInvestor" class="row items-center no-wrap">
+                <StockSymbolPicker
+                  v-model="newSymbol"
+                  class="col"
+                  data-test="watchlist-add-symbol"
+                  placeholder="เพิ่มสัญลักษณ์ เช่น AAPL, PTT.BK"
+                  :dark="$q.dark.isActive"
+                  :disable="isSubmitting || portStore.activePortfolioId === null"
+                  @keyup.enter="handleAdd"
+                />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="add"
+                  color="primary"
+                  class="q-ml-xs"
+                  data-test="watchlist-add-btn"
+                  :loading="isSubmitting"
+                  :disable="portStore.activePortfolioId === null"
+                  @click="handleAdd"
+                />
+              </div>
+
               <q-input
+                v-else
                 v-model="newSymbol"
                 dense
                 outlined
                 :dark="$q.dark.isActive"
-                placeholder="เพิ่มสัญลักษณ์ เช่น AAPL, PTT.BK, XAU/USD"
+                data-test="watchlist-add-symbol"
+                placeholder="เพิ่มสัญลักษณ์ เช่น XAU/USD, EUR/USD"
                 :disable="isSubmitting || portStore.activePortfolioId === null"
                 @keyup.enter="handleAdd"
               >
@@ -618,6 +648,7 @@ const handleRemove = async (item: WatchlistItem) => {
                     round
                     icon="add"
                     color="primary"
+                    data-test="watchlist-add-btn"
                     :loading="isSubmitting"
                     @click="handleAdd"
                   />

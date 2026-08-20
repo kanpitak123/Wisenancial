@@ -9,6 +9,7 @@ import type {
   InvestorSale,
   SellStockInput,
   StockPurchase,
+  UpdateStockPurchaseInput,
 } from 'src/types/investor-portfolio.types';
 
 interface ApiError {
@@ -130,6 +131,51 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
         return response.data;
       } catch (error: unknown) {
         this.error = getErrorMessage(error, 'บันทึกการขายหุ้นไม่สำเร็จ');
+        throw error;
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    /** แก้ไขข้อมูลประกอบของ lot — โหลดพอร์ตใหม่เพื่อให้ตารางสะท้อนค่าที่แก้ทันที */
+    async updatePurchase(id: number, payload: UpdateStockPurchaseInput) {
+      this.submitting = true;
+      this.error = null;
+
+      try {
+        const updated = await stockPurchasesService.update(id, payload);
+
+        if (this.portfolioId !== null) {
+          await this.load(this.portfolioId);
+        }
+
+        return updated;
+      } catch (error: unknown) {
+        this.error = getErrorMessage(error, 'แก้ไขรายการซื้อหุ้นไม่สำเร็จ');
+        throw error;
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    /**
+     * ลบ lot — backend ตอบ 409 ถ้าขายไปแล้วบางส่วน ข้อความจาก server อธิบายเหตุผล
+     * ไว้แล้ว (บอกจำนวนหุ้นที่ขายไป) จึงส่งต่อตรงๆ ไม่ทับด้วยข้อความกลาง
+     */
+    async removePurchase(id: number) {
+      this.submitting = true;
+      this.error = null;
+
+      try {
+        const result = await stockPurchasesService.remove(id);
+
+        if (this.portfolioId !== null) {
+          await this.load(this.portfolioId);
+        }
+
+        return result;
+      } catch (error: unknown) {
+        this.error = getErrorMessage(error, 'ลบรายการซื้อหุ้นไม่สำเร็จ');
         throw error;
       } finally {
         this.submitting = false;

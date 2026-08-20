@@ -50,6 +50,25 @@ export interface StockPurchase {
   updated_at: string;
 }
 
+/**
+ * แก้ไข lot ที่บันทึกไปแล้ว — เฉพาะข้อมูลประกอบ
+ *
+ * ไม่มี shares_count / purchase_price โดยตั้งใจ สองค่านั้นเป็นฐานคิดต้นทุนที่รายการ
+ * ขายที่เกิดไปแล้วอ้างอิงอยู่ (backend บล็อกไว้ที่ UpdateStockPurchaseDto อีกชั้น)
+ *
+ * null = ตั้งใจล้างค่า (ใช้ตอนปิดสวิตช์แจ้งเตือนราคาแล้ว TP/SL ต้องถูกล้าง)
+ */
+export interface UpdateStockPurchaseInput {
+  folder_name?: string | null;
+  target_price?: number | null;
+  stop_loss?: number | null;
+  strategy?: string | null;
+  emotion?: string | null;
+  notes?: string | null;
+  purchase_reason?: string | null;
+  expectation?: string | null;
+}
+
 export interface SellStockInput {
   stock_symbol: string;
   shares_count: number;

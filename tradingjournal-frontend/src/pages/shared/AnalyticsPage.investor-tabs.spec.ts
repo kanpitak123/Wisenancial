@@ -208,6 +208,12 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
     expect(wrapper.find('[data-test="performers-grid"]').exists()).toBe(false);
     // การ์ด AI สองตัวไม่ได้ติด PaidTierGuard จึงต้องยังอยู่
     expect(wrapper.find('[data-test="ai-portfolio-advisor"]').exists()).toBe(true);
+
+    // ตรงนี้การ์ดไปแทนเนื้อหาหลักทั้งก้อน จึงต้องเป็น variant ที่เน้น ไม่ใช่แถบจางๆ
+    // ถ้า prop prominent หลุดหายไปเมื่อไหร่ ผู้ใช้แพ็กฟรีจะเห็นแค่กล่องเล็กๆ กลางหน้าว่าง
+    expect(wrapper.find('[data-test="performers-upgrade"]').classes()).toContain(
+      'ws-upgrade--prominent',
+    );
   });
 
   it('ยิง performers ครั้งเดียวแม้สลับแท็บไปกลับ', async () => {

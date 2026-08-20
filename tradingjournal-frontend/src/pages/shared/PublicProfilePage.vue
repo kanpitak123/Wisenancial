@@ -17,6 +17,7 @@ import { useLanguageStore } from 'stores/LanguageStore';
 import { useUserStore } from 'stores/UserStore';
 import { userService, getUserErrorMessage } from 'src/services/user.service';
 import { WsBadge, WsCard } from 'src/components/ui';
+import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
 import type { PublicProfile } from 'src/types/user.types';
 
 const route = useRoute();
@@ -346,6 +347,11 @@ onMounted(load);
             :data-test="`profile-holding-${symbol}`"
             @click="goToAnalysis(symbol)"
           >
+            <span
+              class="profile-holding-avatar"
+              :style="{ background: symbolAvatarColor(symbol) }"
+              >{{ symbolAvatarInitials(symbol) }}</span
+            >
             {{ symbol }}
           </button>
         </div>
@@ -625,10 +631,13 @@ onMounted(load);
 }
 
 .profile-holding {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12.5px;
   font-weight: 700;
-  padding: 6px 12px;
+  padding: 5px 12px 5px 6px;
   border-radius: 999px;
   border: 1px solid var(--border-color);
   background: var(--bg-card-soft);
@@ -646,6 +655,20 @@ onMounted(load);
 
 .body--dark .profile-holding:hover {
   color: var(--accent-500);
+}
+
+/* ป้ายตัวย่อแทนโลโก้ — logo.clearbit.com โดน ad blocker บล็อกบ่อยจนเหลือช่องว่าง */
+.profile-holding-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 800;
 }
 
 .profile-holdings-empty {

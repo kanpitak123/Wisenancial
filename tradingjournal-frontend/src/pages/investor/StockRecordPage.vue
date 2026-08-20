@@ -18,6 +18,7 @@ import { useInvestorPortfolioStore } from 'stores/InvestorPortfolioStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
 import { buildHoldingsCsv, buildRealizedPnlCsv, downloadCsv } from 'src/utils/csv-export';
 import StockSymbolPicker from 'components/stocks/StockSymbolPicker.vue';
+import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
 import type { StockCatalogItem } from 'src/composables/useStockCatalog';
 import type { InvestorSale, StockPurchase } from 'src/types/investor-portfolio.types';
 
@@ -68,9 +69,18 @@ const shares = (value: number | string | null | undefined) =>
 const formatDate = (value: string | null | undefined) =>
   value ? new Date(value).toLocaleDateString('en-GB') : '—';
 
-// ตัวย่อบน badge หน้าสัญลักษณ์หุ้นตามแบบ (NVDA -> NV) — ตัดจากสัญลักษณ์ที่มีอยู่แล้ว
+/**
+ * ตัวย่อ + สีบน badge หน้าสัญลักษณ์หุ้น
+ *
+ * เฟสก่อนเขียนตัวย่อไว้เองในไฟล์นี้ (slice 2 ตัวแรกดิบๆ) ซึ่งไม่ตัด suffix ตลาด
+ * ทำให้หุ้นไทยกับหุ้นนอกได้ตัวย่อคนละกติกากับหน้าอื่น — ย้ายมาใช้ helper กลาง
+ * ตัวเดียวกับ Watchlist/MarketOverview เพื่อให้หุ้นตัวเดียวกันหน้าตาเหมือนกันทุกหน้า
+ */
 const symbolInitials = (symbol: string | null | undefined) =>
-  (symbol ?? '—').slice(0, 2).toUpperCase();
+  symbolAvatarInitials(symbol ?? '—');
+
+const symbolColor = (symbol: string | null | undefined) =>
+  symbolAvatarColor(symbol ?? '—');
 
 // ── โฟลเดอร์ + การจัดกลุ่ม ────────────────────────────────────────────────────
 const folderFilter = ref<string>('ALL');
@@ -145,6 +155,28 @@ const buyDialog = ref(false);
 const buyForm = ref(createBuyForm());
 const buyErrors = ref<Record<string, string>>({});
 
+/**
+ * สวิตช์ "ตั้งแจ้งเตือนราคา TP/SL"
+ *
+ * โปรเจกต์เก่ามี form.enable_alerts แต่ **ไม่เคยเป็นคอลัมน์ใน DB** — ตอนโหลดคำนวณ
+ * ย้อนกลับจาก `hasTP || hasSL` ที่นี่ทำแบบเดียวกัน เป็น state ที่ derive จาก
+ * target_price/stop_loss ล้วนๆ ไม่มีคอลัมน์ใหม่ ไม่มี migration
+ *
+ * ถ้าเก็บเป็นคอลัมน์จริงจะมีโอกาสหลุดจากกันได้ (เช่นล้าง target_price ผ่านทางอื่น
+ * แต่ธงยังเป็น true) — ค่าที่คำนวณสดจึงตรงเสมอโดยไม่ต้องดูแล
+ */
+const buyEnableAlerts = ref(false);
+
+// ปิดสวิตช์ = ล้าง TP/SL ทิ้ง ไม่งั้นค่าที่ซ่อนอยู่จะถูกส่งไปบันทึกโดยผู้ใช้ไม่รู้ตัว
+watch(buyEnableAlerts, (enabled) => {
+  if (!enabled) {
+    buyForm.value.target_price = null;
+    buyForm.value.stop_loss = null;
+    delete buyErrors.value.target_price;
+    delete buyErrors.value.stop_loss;
+  }
+});
+
 /** เลือกหุ้นจาก dropdown แล้วเติมชื่อบริษัทให้เลย ถ้าผู้ใช้ยังไม่ได้พิมพ์เอง */
 const onBuySymbolSelected = (item: StockCatalogItem) => {
   if (!buyForm.value.stock_name.trim()) {
@@ -155,6 +187,7 @@ const onBuySymbolSelected = (item: StockCatalogItem) => {
 const openBuyDialog = () => {
   buyForm.value = createBuyForm();
   buyErrors.value = {};
+  buyEnableAlerts.value = false;
   buyDialog.value = true;
 };
 
@@ -245,6 +278,137 @@ const submitBuy = async () => {
     $q.notify({
       type: 'negative',
       message: store.error ?? 'บันทึกการซื้อไม่สำเร็จ',
+      position: 'top',
+      timeout: 5000,
+    });
+  }
+};
+
+// ── ฟอร์มแก้ไข lot ────────────────────────────────────────────────────────────
+// แก้ได้เฉพาะข้อมูลประกอบ ราคา/จำนวนหุ้นแก้ไม่ได้เพราะรายการขายที่เกิดไปแล้วอ้างอิงอยู่
+// (backend บล็อกซ้ำอีกชั้นที่ UpdateStockPurchaseDto)
+const editDialog = ref(false);
+const editTarget = ref<StockPurchase | null>(null);
+const editErrors = ref<Record<string, string>>({});
+const editEnableAlerts = ref(false);
+
+const editForm = ref({
+  folder_name: '',
+  target_price: null as number | null,
+  stop_loss: null as number | null,
+  strategy: '',
+  emotion: '',
+  purchase_reason: '',
+  expectation: '',
+  notes: '',
+});
+
+const numOrNull = (value: number | string | null): number | null =>
+  value === null || value === '' ? null : Number(value);
+
+const openEditDialog = (purchase: StockPurchase) => {
+  editTarget.value = purchase;
+  editErrors.value = {};
+  editForm.value = {
+    folder_name: purchase.folder_name ?? '',
+    target_price: numOrNull(purchase.target_price),
+    stop_loss: numOrNull(purchase.stop_loss),
+    strategy: purchase.strategy ?? '',
+    emotion: purchase.emotion ?? '',
+    purchase_reason: purchase.purchase_reason ?? '',
+    expectation: purchase.expectation ?? '',
+    notes: purchase.notes ?? '',
+  };
+  // คำนวณสวิตช์ย้อนกลับจากข้อมูลจริง แบบเดียวกับ enable_alerts ของโปรเจกต์เก่า
+  editEnableAlerts.value =
+    editForm.value.target_price !== null || editForm.value.stop_loss !== null;
+  editDialog.value = true;
+};
+
+watch(editEnableAlerts, (enabled) => {
+  if (!enabled) {
+    editForm.value.target_price = null;
+    editForm.value.stop_loss = null;
+    delete editErrors.value.target_price;
+    delete editErrors.value.stop_loss;
+  }
+});
+
+const validateEdit = () => {
+  const errors: Record<string, string> = {};
+  const form = editForm.value;
+  const buyPrice = Number(editTarget.value?.purchase_price ?? 0);
+
+  if (form.target_price !== null && buyPrice && form.target_price <= buyPrice) {
+    errors.target_price = 'ราคาเป้าหมายควรสูงกว่าราคาซื้อ';
+  }
+
+  if (form.stop_loss !== null && buyPrice && form.stop_loss >= buyPrice) {
+    errors.stop_loss = 'จุดตัดขาดทุนควรต่ำกว่าราคาซื้อ';
+  }
+
+  editErrors.value = errors;
+
+  return Object.keys(errors).length === 0;
+};
+
+const submitEdit = async () => {
+  if (!editTarget.value || !validateEdit()) return;
+
+  const form = editForm.value;
+
+  try {
+    // ส่งทุกฟิลด์เสมอ (null = ล้างค่า) เพื่อให้การลบข้อความออกมีผลจริง
+    await store.updatePurchase(editTarget.value.id, {
+      folder_name: form.folder_name.trim() || null,
+      target_price: form.target_price,
+      stop_loss: form.stop_loss,
+      strategy: form.strategy || null,
+      emotion: form.emotion || null,
+      purchase_reason: form.purchase_reason.trim() || null,
+      expectation: form.expectation.trim() || null,
+      notes: form.notes.trim() || null,
+    });
+
+    editDialog.value = false;
+    $q.notify({ type: 'positive', message: 'แก้ไขรายการแล้ว', position: 'top' });
+  } catch {
+    $q.notify({
+      type: 'negative',
+      message: store.error ?? 'แก้ไขรายการไม่สำเร็จ',
+      position: 'top',
+      timeout: 5000,
+    });
+  }
+};
+
+// ── ยืนยันลบ lot ──────────────────────────────────────────────────────────────
+const deleteDialog = ref(false);
+const deleteTarget = ref<StockPurchase | null>(null);
+
+/** ขายไปแล้วบางส่วน = ลบไม่ได้ (backend ตอบ 409) ปิดปุ่มไว้ตั้งแต่แรกจะได้ไม่ต้องยิงไปเสียเที่ยว */
+const soldShares = (purchase: StockPurchase) =>
+  Number(purchase.shares_count) - Number(purchase.remaining_shares);
+
+const canDelete = (purchase: StockPurchase) => soldShares(purchase) <= 0;
+
+const confirmDelete = (purchase: StockPurchase) => {
+  deleteTarget.value = purchase;
+  deleteDialog.value = true;
+};
+
+const submitDelete = async () => {
+  if (!deleteTarget.value) return;
+
+  try {
+    await store.removePurchase(deleteTarget.value.id);
+
+    deleteDialog.value = false;
+    $q.notify({ type: 'positive', message: 'ลบรายการแล้ว', position: 'top' });
+  } catch {
+    $q.notify({
+      type: 'negative',
+      message: store.error ?? 'ลบรายการไม่สำเร็จ',
       position: 'top',
       timeout: 5000,
     });
@@ -532,7 +696,11 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
               <tr v-for="row in group.items" :key="row.id" :data-test="`purchase-${row.id}`">
                 <td class="text-left">
                   <div class="hold-sym">
-                    <span class="hold-badge">{{ symbolInitials(row.stock_symbol) }}</span>
+                    <span
+                      class="hold-badge"
+                      :style="{ background: symbolColor(row.stock_symbol), color: '#fff' }"
+                      >{{ symbolInitials(row.stock_symbol) }}</span
+                    >
                     <div>
                       <div class="hold-sym-text">{{ row.stock_symbol }}</div>
                       <div class="hold-name">{{ row.stock_name ?? '—' }}</div>
@@ -550,16 +718,49 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
                 </td>
                 <td class="text-left text-muted">{{ formatDate(row.purchase_date) }}</td>
                 <td class="text-right">
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    size="sm"
-                    color="negative"
-                    label="ขาย"
-                    :data-test="`sell-${row.id}`"
-                    @click="openSellDialog(row)"
-                  />
+                  <div class="row items-center justify-end no-wrap">
+                    <q-btn
+                      flat
+                      dense
+                      no-caps
+                      size="sm"
+                      color="negative"
+                      label="ขาย"
+                      :data-test="`sell-${row.id}`"
+                      @click="openSellDialog(row)"
+                    />
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      icon="edit"
+                      class="text-muted"
+                      :data-test="`edit-${row.id}`"
+                      @click="openEditDialog(row)"
+                    >
+                      <q-tooltip>แก้ไขข้อมูลประกอบ</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      icon="delete_outline"
+                      class="text-muted"
+                      :disable="!canDelete(row)"
+                      :data-test="`delete-${row.id}`"
+                      @click="confirmDelete(row)"
+                    >
+                      <q-tooltip>
+                        {{
+                          canDelete(row)
+                            ? 'ลบรายการนี้'
+                            : `ลบไม่ได้ — ขายไปแล้ว ${soldShares(row)} หุ้น`
+                        }}
+                      </q-tooltip>
+                    </q-btn>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -591,7 +792,11 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
               <tr v-for="sale in store.sales" :key="sale.id" :data-test="`sale-${sale.id}`">
                 <td class="text-left">
                   <div class="hold-sym">
-                    <span class="hold-badge">{{ symbolInitials(sale.stock_symbol) }}</span>
+                    <span
+                      class="hold-badge"
+                      :style="{ background: symbolColor(sale.stock_symbol), color: '#fff' }"
+                      >{{ symbolInitials(sale.stock_symbol) }}</span
+                    >
                     <span class="hold-sym-text">{{ sale.stock_symbol }}</span>
                   </div>
                 </td>
@@ -708,28 +913,13 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
             </div>
           </div>
 
-          <div class="row q-col-gutter-sm">
-            <q-input
-              v-model.number="buyForm.target_price"
-              outlined
-              dense
-              type="number"
-              label="ราคาเป้าหมาย"
-              class="col-12 col-sm-4"
-              data-test="buy-target"
-              :error="!!buyErrors.target_price"
-              :error-message="buyErrors.target_price"
-            />
-            <q-input
-              v-model.number="buyForm.stop_loss"
-              outlined
-              dense
-              type="number"
-              label="จุดตัดขาดทุน"
-              class="col-12 col-sm-4"
-              data-test="buy-stop"
-              :error="!!buyErrors.stop_loss"
-              :error-message="buyErrors.stop_loss"
+          <div class="row q-col-gutter-sm items-center">
+            <q-toggle
+              v-model="buyEnableAlerts"
+              color="primary"
+              label="ตั้งแจ้งเตือนราคา TP/SL"
+              class="col-12 col-sm-8"
+              data-test="buy-enable-alerts"
             />
             <q-select
               v-model="buyForm.folder_name"
@@ -741,6 +931,31 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
               label="โฟลเดอร์"
               class="col-12 col-sm-4"
               data-test="buy-folder"
+            />
+          </div>
+
+          <div v-if="buyEnableAlerts" class="row q-col-gutter-sm">
+            <q-input
+              v-model.number="buyForm.target_price"
+              outlined
+              dense
+              type="number"
+              label="ราคาเป้าหมาย"
+              class="col-12 col-sm-6"
+              data-test="buy-target"
+              :error="!!buyErrors.target_price"
+              :error-message="buyErrors.target_price"
+            />
+            <q-input
+              v-model.number="buyForm.stop_loss"
+              outlined
+              dense
+              type="number"
+              label="จุดตัดขาดทุน"
+              class="col-12 col-sm-6"
+              data-test="buy-stop"
+              :error="!!buyErrors.stop_loss"
+              :error-message="buyErrors.stop_loss"
             />
           </div>
 
@@ -794,6 +1009,159 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
             data-test="submit-buy"
             :loading="store.submitting"
             @click="submitBuy"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ── Dialog แก้ไข ──────────────────────────────────────────────────────── -->
+    <q-dialog v-model="editDialog" persistent>
+      <q-card class="record-dialog" style="width: 560px; max-width: 95vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div>
+            <div class="text-subtitle1 text-weight-bolder">แก้ไขรายการซื้อหุ้น</div>
+            <div class="text-caption text-muted">
+              {{ editTarget?.stock_symbol }} · ราคาซื้อและจำนวนหุ้นแก้ไม่ได้
+            </div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-gutter-sm">
+          <!-- ราคา/จำนวนหุ้นโชว์เป็นข้อมูลอ่านอย่างเดียว ให้เห็นว่าแก้ไม่ได้ ไม่ใช่ลืมใส่ช่อง -->
+          <q-banner dense class="record-banner text-caption" data-test="edit-locked-note">
+            <template v-slot:avatar><q-icon name="lock" size="18px" /></template>
+            จำนวนหุ้น {{ shares(editTarget?.remaining_shares ?? 0) }} ·
+            ราคาซื้อ {{ money(editTarget?.purchase_price ?? 0) }} — สองค่านี้เป็นฐานคิดต้นทุน
+            ที่รายการขายอ้างอิงอยู่ ถ้าต้องแก้จริงๆ ให้ลบแล้วบันทึกใหม่
+          </q-banner>
+
+          <div class="row q-col-gutter-sm items-center">
+            <q-toggle
+              v-model="editEnableAlerts"
+              color="primary"
+              label="ตั้งแจ้งเตือนราคา TP/SL"
+              class="col-12 col-sm-8"
+              data-test="edit-enable-alerts"
+            />
+            <q-select
+              v-model="editForm.folder_name"
+              :options="store.folders"
+              outlined
+              dense
+              use-input
+              new-value-mode="add-unique"
+              label="โฟลเดอร์"
+              class="col-12 col-sm-4"
+              data-test="edit-folder"
+            />
+          </div>
+
+          <div v-if="editEnableAlerts" class="row q-col-gutter-sm">
+            <q-input
+              v-model.number="editForm.target_price"
+              outlined
+              dense
+              type="number"
+              label="ราคาเป้าหมาย"
+              class="col-12 col-sm-6"
+              data-test="edit-target"
+              :error="!!editErrors.target_price"
+              :error-message="editErrors.target_price"
+            />
+            <q-input
+              v-model.number="editForm.stop_loss"
+              outlined
+              dense
+              type="number"
+              label="จุดตัดขาดทุน"
+              class="col-12 col-sm-6"
+              data-test="edit-stop"
+              :error="!!editErrors.stop_loss"
+              :error-message="editErrors.stop_loss"
+            />
+          </div>
+
+          <div class="row q-col-gutter-sm">
+            <q-select
+              v-model="editForm.strategy"
+              :options="strategyOptions"
+              outlined
+              dense
+              clearable
+              label="กลยุทธ์"
+              class="col-12 col-sm-6"
+            />
+            <q-select
+              v-model="editForm.emotion"
+              :options="emotionOptions"
+              outlined
+              dense
+              clearable
+              label="อารมณ์ตอนซื้อ"
+              class="col-12 col-sm-6"
+            />
+          </div>
+
+          <q-input
+            v-model="editForm.purchase_reason"
+            outlined
+            dense
+            autogrow
+            label="เหตุผลที่ซื้อ"
+          />
+          <q-input v-model="editForm.expectation" outlined dense autogrow label="สิ่งที่คาดหวัง" />
+          <q-input v-model="editForm.notes" outlined dense autogrow label="โน้ต" />
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md q-pt-none">
+          <q-btn flat no-caps label="ยกเลิก" v-close-popup />
+          <q-btn
+            unelevated
+            no-caps
+            color="primary"
+            label="บันทึกการแก้ไข"
+            class="text-weight-bold"
+            data-test="edit-submit"
+            :loading="store.submitting"
+            @click="submitEdit"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ── Dialog ยืนยันลบ ───────────────────────────────────────────────────── -->
+    <q-dialog v-model="deleteDialog" persistent>
+      <q-card class="record-dialog" style="width: 440px; max-width: 95vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle1 text-weight-bolder text-negative">ลบรายการซื้อหุ้น</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-body2">
+            ลบล็อต <span class="text-weight-bolder">{{ deleteTarget?.stock_symbol }}</span>
+            จำนวน {{ shares(deleteTarget?.shares_count ?? 0) }} หุ้น
+            ที่ราคา {{ money(deleteTarget?.purchase_price ?? 0) }} ใช่หรือไม่
+          </div>
+          <div class="text-caption text-muted q-mt-sm">
+            ลบแล้วกู้คืนไม่ได้ — ล็อตนี้ยังไม่เคยขายออกไป จึงไม่กระทบประวัติการขาย
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md q-pt-none">
+          <q-btn flat no-caps label="ยกเลิก" v-close-popup />
+          <q-btn
+            unelevated
+            no-caps
+            color="negative"
+            label="ลบรายการ"
+            class="text-weight-bold"
+            data-test="delete-submit"
+            :loading="store.submitting"
+            @click="submitDelete"
           />
         </q-card-actions>
       </q-card>

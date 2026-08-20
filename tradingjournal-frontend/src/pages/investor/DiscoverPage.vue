@@ -13,6 +13,7 @@ import { computed, onMounted } from 'vue';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
 import { WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
+import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
 
 const languageStore = useLanguageStore();
 const aiStore = useAiStore();
@@ -197,8 +198,17 @@ const REASON_META = [
         <template #header>
           <div class="discover-card-head">
             <div class="discover-card-id">
-              <div class="discover-symbol">{{ rec.symbol }}</div>
-              <div class="discover-name">{{ rec.name }}</div>
+              <!-- ป้ายตัวย่อแทนโลโก้ — logo.clearbit.com โดน ad blocker บล็อกบ่อย
+                   ถ้าไม่มีตัวสำรองจะเหลือช่องว่างเปล่า -->
+              <span
+                class="discover-avatar"
+                :style="{ background: symbolAvatarColor(rec.symbol) }"
+                >{{ symbolAvatarInitials(rec.symbol) }}</span
+              >
+              <div class="discover-card-text">
+                <div class="discover-symbol">{{ rec.symbol }}</div>
+                <div class="discover-name">{{ rec.name }}</div>
+              </div>
             </div>
             <q-badge class="discover-sector" :label="rec.sector" />
           </div>
@@ -344,7 +354,27 @@ const REASON_META = [
 }
 
 .discover-card-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+}
+
+.discover-card-text {
+  min-width: 0;
+}
+
+.discover-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .discover-symbol {

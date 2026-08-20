@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PortfolioType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MarketService } from '../market/market.service';
+import { UpdateStockPurchaseDto } from './dto/update-stock-purchase.dto';
 
 @Injectable()
 export class StockPurchasesService {
@@ -197,6 +202,60 @@ export class StockPurchasesService {
       },
       orderBy: [{ sold_date: 'desc' }, { id: 'desc' }],
     });
+  }
+
+  /**
+   * แก้ไขรายการซื้อหุ้น — เฉพาะข้อมูลประกอบ (ดูเหตุผลใน UpdateStockPurchaseDto)
+   *
+   * ส่ง null มาได้เพื่อล้างค่า TP/SL (ฟอร์มฝั่งหน้าบ้านใช้ตอนปิดสวิตช์แจ้งเตือนราคา)
+   * จึงเช็คด้วย `in` ไม่ใช่ `!== undefined` เพราะ null ต้องนับเป็น "ตั้งใจล้าง"
+   */
+  async update(id: number, userId: number, dto: UpdateStockPurchaseDto) {
+    await this.findOne(id, userId);
+
+    const data: Prisma.stock_purchasesUpdateInput = {};
+
+    if ('folder_name' in dto) data.folder_name = dto.folder_name ?? null;
+    if ('target_price' in dto) data.target_price = dto.target_price ?? null;
+    if ('stop_loss' in dto) data.stop_loss = dto.stop_loss ?? null;
+    if ('strategy' in dto) data.strategy = dto.strategy ?? null;
+    if ('emotion' in dto) data.emotion = dto.emotion ?? null;
+    if ('notes' in dto) data.notes = dto.notes ?? null;
+    if ('purchase_reason' in dto) data.purchase_reason = dto.purchase_reason ?? null;
+    if ('expectation' in dto) data.expectation = dto.expectation ?? null;
+
+    return this.prisma.stock_purchases.update({
+      where: { id },
+      data,
+    });
+  }
+
+  /**
+   * ลบรายการซื้อหุ้น — ได้เฉพาะ lot ที่ยังไม่เคยขายออกไปเลย
+   *
+   * ถ้าขายไปแล้วบางส่วน จะมีแถวใน stock_sale_allocations ผูกอยู่ และยอด
+   * portfolios.current_balance ก็ถูกขยับไปตามเงินที่ได้จากการขายแล้ว ลบทิ้งเมื่อไหร่
+   * ประวัติการขายจะชี้ไปยัง lot ที่ไม่มีอยู่ และยอดเงินพอร์ตจะเพี้ยนแบบกู้คืนไม่ได้
+   * จึงตอบ 409 พร้อมบอกเหตุผล แทนที่จะลบแล้วค่อยไปพบปัญหาทีหลัง
+   */
+  async remove(id: number, userId: number) {
+    const purchase = await this.findOne(id, userId);
+
+    const soldShares = Number(purchase.shares_count) - Number(purchase.remaining_shares);
+
+    if (soldShares > 0) {
+      throw new ConflictException(
+        `ลบไม่ได้เพราะขายหุ้นล็อตนี้ไปแล้ว ${soldShares} หุ้น — ` +
+          'การลบจะทำให้ประวัติการขายและยอดเงินพอร์ตไม่ตรงกัน',
+      );
+    }
+
+    await this.prisma.stock_purchases.delete({ where: { id } });
+
+    return {
+      message: 'ลบรายการซื้อหุ้นสำเร็จ',
+      id,
+    };
   }
 
   private async getCurrentPrices(symbols: string[]) {

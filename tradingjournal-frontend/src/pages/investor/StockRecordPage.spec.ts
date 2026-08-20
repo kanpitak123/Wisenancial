@@ -17,6 +17,8 @@ const getTimeline = vi.fn();
 const getPerformance = vi.fn();
 const getPurchases = vi.fn();
 const downloadCsv = vi.fn();
+const updatePurchase = vi.fn();
+const removePurchase = vi.fn();
 
 // ช่องสัญลักษณ์ใช้ StockSymbolPicker ซึ่งดึงรายชื่อหุ้นผ่าน api.get('/stocks')
 // ถ้าไม่ mock เทสจะยิงเน็ตจริง (ผ่านบ้างไม่ผ่านบ้างแล้วแต่ backend เปิดอยู่ไหม)
@@ -39,6 +41,8 @@ vi.mock('src/services/stock-purchases.service', () => ({
   stockPurchasesService: {
     getAll: (...args: unknown[]) => getPurchases(...args),
     getOne: vi.fn(),
+    update: (...args: unknown[]) => updatePurchase(...args),
+    remove: (...args: unknown[]) => removePurchase(...args),
   },
 }));
 
@@ -602,5 +606,143 @@ describe('StockRecordPage', () => {
     expect(store.purchases).toHaveLength(1);
     expect(store.openPurchases).toHaveLength(1);
     expect(store.folders).toEqual(['หุ้นปันผล']);
+  });
+
+  // ── แก้ไข / ลบ lot ──────────────────────────────────────────────────────────
+  describe('แก้ไขและลบรายการซื้อ', () => {
+    /** เปิดฟอร์มแก้ไขแล้วอ่าน state ภายในของหน้า */
+    const recordVm = (wrapper: VueWrapper) =>
+      wrapper.findComponent(StockRecordPage).vm as unknown as {
+        openEditDialog: (row: StockPurchase) => void;
+        submitEdit: () => Promise<void>;
+        submitDelete: () => Promise<void>;
+        confirmDelete: (row: StockPurchase) => void;
+        editForm: {
+          target_price: number | null;
+          stop_loss: number | null;
+          notes: string;
+          folder_name: string;
+        };
+        editEnableAlerts: boolean;
+        canDelete: (row: StockPurchase) => boolean;
+        soldShares: (row: StockPurchase) => number;
+      };
+
+    it('lot ที่ยังไม่เคยขาย -> ปุ่มลบกดได้', async () => {
+      const row = purchase({ id: 5, shares_count: 100, remaining_shares: 100 });
+      const { wrapper } = await mountPage({ purchases: [row] });
+
+      expect(recordVm(wrapper).canDelete(row)).toBe(true);
+      expect(wrapper.find('[data-test="delete-5"]').attributes('disabled')).toBeUndefined();
+    });
+
+    it('lot ที่ขายไปแล้วบางส่วน -> ปุ่มลบถูกปิดตั้งแต่แรก ไม่ต้องยิงไปโดน 409', async () => {
+      const row = purchase({ id: 6, shares_count: 100, remaining_shares: 40 });
+      const { wrapper } = await mountPage({ purchases: [row] });
+
+      expect(recordVm(wrapper).soldShares(row)).toBe(60);
+      expect(recordVm(wrapper).canDelete(row)).toBe(false);
+      expect(wrapper.find('[data-test="delete-6"]').attributes('disabled')).toBeDefined();
+    });
+
+    it('เปิดฟอร์มแก้ไขแล้วสวิตช์แจ้งเตือนถูกคำนวณย้อนจาก TP/SL ที่มีอยู่', async () => {
+      // enable_alerts ไม่ใช่คอลัมน์ใน DB — ต้อง derive จากข้อมูลจริงทุกครั้งที่เปิดฟอร์ม
+      const withTp = purchase({ id: 7, target_price: 80, stop_loss: null });
+      const { wrapper } = await mountPage({ purchases: [withTp] });
+      const vm = recordVm(wrapper);
+
+      vm.openEditDialog(withTp);
+      await wrapper.vm.$nextTick();
+
+      expect(vm.editEnableAlerts).toBe(true);
+    });
+
+    it('lot ที่ไม่มี TP/SL เลย -> สวิตช์ปิดอยู่', async () => {
+      const plain = purchase({ id: 8, target_price: null, stop_loss: null });
+      const { wrapper } = await mountPage({ purchases: [plain] });
+      const vm = recordVm(wrapper);
+
+      vm.openEditDialog(plain);
+      await wrapper.vm.$nextTick();
+
+      expect(vm.editEnableAlerts).toBe(false);
+    });
+
+    it('ปิดสวิตช์แจ้งเตือน -> TP/SL ถูกล้าง ไม่ใช่ซ่อนไว้เฉยๆ', async () => {
+      // ถ้าแค่ซ่อน ค่าที่ผู้ใช้คิดว่าเอาออกแล้วจะถูกส่งไปบันทึกต่อโดยไม่รู้ตัว
+      const withTp = purchase({ id: 9, target_price: 80, stop_loss: 30 });
+      const { wrapper } = await mountPage({ purchases: [withTp] });
+      const vm = recordVm(wrapper);
+
+      vm.openEditDialog(withTp);
+      await wrapper.vm.$nextTick();
+
+      vm.editEnableAlerts = false;
+      await wrapper.vm.$nextTick();
+
+      expect(vm.editForm.target_price).toBeNull();
+      expect(vm.editForm.stop_loss).toBeNull();
+    });
+
+    it('บันทึกการแก้ไข -> ส่งเฉพาะข้อมูลประกอบ ไม่มีราคา/จำนวนหุ้นติดไปด้วย', async () => {
+      const row = purchase({ id: 10, target_price: 80, stop_loss: 30 });
+      const { wrapper } = await mountPage({ purchases: [row] });
+      const vm = recordVm(wrapper);
+
+      updatePurchase.mockResolvedValue(row);
+      getPurchases.mockResolvedValue([row]);
+
+      vm.openEditDialog(row);
+      await wrapper.vm.$nextTick();
+
+      vm.editForm.notes = 'ถือยาว';
+      await vm.submitEdit();
+
+      expect(updatePurchase).toHaveBeenCalledTimes(1);
+
+      const [id, payload] = updatePurchase.mock.calls[0] as [number, Record<string, unknown>];
+
+      expect(id).toBe(10);
+      expect(payload.notes).toBe('ถือยาว');
+      // สองค่านี้เป็นฐานคิดต้นทุนที่รายการขายอ้างอิงอยู่ ห้ามหลุดไปกับ payload
+      expect(payload).not.toHaveProperty('purchase_price');
+      expect(payload).not.toHaveProperty('shares_count');
+    });
+
+    it('ปิดสวิตช์แล้วบันทึก -> ส่ง null ไปล้าง TP/SL จริงๆ', async () => {
+      const row = purchase({ id: 12, target_price: 80, stop_loss: 30 });
+      const { wrapper } = await mountPage({ purchases: [row] });
+      const vm = recordVm(wrapper);
+
+      updatePurchase.mockResolvedValue(row);
+      getPurchases.mockResolvedValue([row]);
+
+      vm.openEditDialog(row);
+      await wrapper.vm.$nextTick();
+
+      vm.editEnableAlerts = false;
+      await wrapper.vm.$nextTick();
+      await vm.submitEdit();
+
+      const [, payload] = updatePurchase.mock.calls[0] as [number, Record<string, unknown>];
+
+      expect(payload.target_price).toBeNull();
+      expect(payload.stop_loss).toBeNull();
+    });
+
+    it('ยืนยันลบ -> ยิง remove ด้วย id ของ lot นั้น', async () => {
+      const row = purchase({ id: 13, shares_count: 100, remaining_shares: 100 });
+      const { wrapper } = await mountPage({ purchases: [row] });
+      const vm = recordVm(wrapper);
+
+      removePurchase.mockResolvedValue({ message: 'ok', id: 13 });
+      getPurchases.mockResolvedValue([]);
+
+      vm.confirmDelete(row);
+      await wrapper.vm.$nextTick();
+      await vm.submitDelete();
+
+      expect(removePurchase).toHaveBeenCalledWith(13);
+    });
   });
 });
