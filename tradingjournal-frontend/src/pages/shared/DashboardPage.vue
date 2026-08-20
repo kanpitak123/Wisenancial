@@ -322,6 +322,18 @@ const formatMoney = (value: number, signed = false) => {
     maximumFractionDigits: 2,
   })}`;
 };
+
+/**
+ * เงินแบบย่อสำหรับตัวเลขใหญ่บนการ์ดแชร์ — ไม่โชว์ทศนิยมเพื่อไม่ให้ล้นการ์ด แต่ยังต้อง
+ * ใช้สัญลักษณ์สกุลเงินของพอร์ตชุดเดียวกับ formatMoney() (พอร์ตหุ้นไทยไม่ใช่ดอลลาร์)
+ */
+const formatShareMoney = (value: number, signed = false) => {
+  const sign = signed && value >= 0 ? '+' : value < 0 ? '-' : '';
+
+  return `${sign}${currencySymbol.value}${Math.abs(value).toLocaleString(undefined, {
+    maximumFractionDigits: 0,
+  })}`;
+};
 // ==========================================
 // 3. ฟิลเตอร์ Trades (สำหรับ Top Cards)
 // ==========================================
@@ -730,6 +742,38 @@ const shareDialogOpen = ref(false);
 
 const isSavingImage = ref(false);
 
+/**
+ * Investor (Stock) equivalents of the Trader-only stats above — คนละชุดข้อมูลเพราะ
+ * win rate / best pair ไม่มีความหมายสำหรับพอร์ตหุ้นระยะยาว การ์ดแชร์ฝั่งนี้เลยใช้
+ * best holding by unrealized return% และสัดส่วนพอร์ต (allocationRows ที่มีอยู่แล้ว)
+ * แทน — ไม่ยิง API เพิ่ม ใช้ store เดิมที่โหลดไว้แล้วสำหรับการ์ด Asset Allocation
+ */
+const shareBestHolding = computed(() => {
+  const ranked = investorHoldings.value
+    .map((h) => {
+      const cost = Number(h.cost_basis ?? 0);
+      const pnl = Number(h.unrealized_pnl ?? 0);
+
+      return { symbol: h.symbol, returnPercent: cost > 0 ? (pnl / cost) * 100 : 0 };
+    })
+    .sort((a, b) => b.returnPercent - a.returnPercent);
+
+  return ranked[0] ?? { symbol: '-', returnPercent: 0 };
+});
+
+/** สัดส่วนพอร์ตสำหรับแถบ allocation ในการ์ดแชร์ — top 3 โดยน้ำหนัก + รวม "Others" ที่เหลือ */
+const shareAllocationTop = computed(() => {
+  const rows = allocationRows.value;
+  const top = rows.slice(0, 3).map((r) => ({ label: r.symbol, weight: r.weight, color: r.color }));
+  const restWeight = rows.slice(3).reduce((sum, r) => sum + r.weight, 0);
+
+  if (restWeight > 0.5) {
+    top.push({ label: 'Others', weight: restWeight, color: 'var(--text-muted)' });
+  }
+
+  return top;
+});
+
 const downloadStatsImage = async () => {
   const element = document.getElementById('share-image-area');
   if (!element) return;
@@ -737,7 +781,7 @@ const downloadStatsImage = async () => {
   isSavingImage.value = true;
   try {
     const canvas = await html2canvas(element, {
-      backgroundColor: '#ffffff',
+      backgroundColor: $q.dark.isActive ? '#1f2323' : '#fdfefe',
       scale: 2,
       useCORS: true,
       logging: false,
@@ -745,7 +789,7 @@ const downloadStatsImage = async () => {
 
     const link = document.createElement('a');
     const portfolioSlug = (activePort.value?.name || 'stats').toLowerCase().replace(/\s+/g, '-');
-    link.download = `trading-journal-${portfolioSlug}.png`;
+    link.download = `wisenancial-${portfolioSlug}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
 
@@ -793,10 +837,11 @@ const downloadStatsImage = async () => {
           <q-tooltip>Trading P&amp;L Tax Summary</q-tooltip>
         </q-btn>
 
-        <!-- การ์ดแชร์โชว์ win rate / trades / best pair ซึ่งอ่านจาก journalStore.trades
-             โหมด Stock ไม่มีข้อมูลชุดนี้ (เป็น 0 ทั้งแถว) เลยซ่อนทั้งปุ่มและ dialog -->
+        <!-- การ์ดแชร์ — เนื้อหาแตกต่างกันตามโหมด (ดู q-dialog ด้านล่าง) Trader โชว์ win
+             rate/trades/best pair จาก journalStore.trades, Investor โชว์ total
+             return/holdings/best performer จาก investorStore ที่โหลดไว้แล้ว -->
         <q-btn
-          v-if="activePort && isTrader"
+          v-if="activePort"
           unelevated
           dense
           icon="ios_share"
@@ -1738,23 +1783,26 @@ const downloadStatsImage = async () => {
         </div>
       </div>
     </template>
-    <q-dialog v-if="isTrader" v-model="shareDialogOpen" backdrop-filter="blur(10px) saturate(1.3)">
+    <q-dialog v-model="shareDialogOpen" backdrop-filter="blur(10px) saturate(1.3)">
       <q-card class="bg-transparent no-shadow column items-center share-dialog-wrapper">
-        <!-- ── Share Card ── -->
+        <!-- ── Share Card — re-themed to the app's real teal/sage tokens (was an
+             unrelated indigo/amber palette left over from before rebrand); content
+             branches Trader vs Investor since win rate/best pair don't apply to a
+             long-term stock portfolio ── -->
         <div
           id="share-image-area"
           class="share-card-v3 overflow-hidden relative-position column w-full"
         >
-          <!-- Noise / warmth layer -->
+          <!-- Sheen layer — teal, not the old amber/indigo warm overlay -->
           <div class="share-warm-overlay absolute-full" />
 
           <!-- Corner accent dots -->
           <div class="share-dot share-dot-tl" />
           <div class="share-dot share-dot-br" />
 
-          <!-- Header row: watermark left, date right -->
+          <!-- Header row: wordmark left, date right -->
           <div class="share-header-row z-top">
-            <div class="share-wm-top">TRADING JOURNAL</div>
+            <div class="share-wm-top">WISENANCIAL</div>
             <div class="share-header-date">
               {{
                 new Date().toLocaleDateString('en-GB', {
@@ -1775,97 +1823,198 @@ const downloadStatsImage = async () => {
             <div class="share-period-pill">{{ calendarMonthYear }}</div>
           </div>
 
-          <!-- Hero balance -->
-          <div class="z-top share-hero-section">
-            <div class="share-hero-label">portfolio balance</div>
-            <div class="share-hero-num">
-              ${{ currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}
-            </div>
-            <div class="share-growth-tag" :class="growthPercentage >= 0 ? 'tag-up' : 'tag-down'">
-              {{ growthPercentage >= 0 ? '↑' : '↓' }}{{ Math.abs(growthPercentage).toFixed(2) }}%
-              overall
-            </div>
-          </div>
-
-          <!-- Thin divider -->
-          <div class="share-thin-line z-top" />
-
-          <!-- Stats row — 3 big numbers -->
-          <div class="z-top share-big-stats">
-            <div class="share-big-stat">
-              <div class="share-big-num" :class="totalPnL >= 0 ? 'num-green' : 'num-red'">
-                {{ totalPnL >= 0 ? '+' : '' }}${{
-                  Math.abs(totalPnL).toLocaleString(undefined, { minimumFractionDigits: 0 })
-                }}
+          <template v-if="isTrader">
+            <!-- Hero balance -->
+            <div class="z-top share-hero-section">
+              <div class="share-hero-label">portfolio balance</div>
+              <div class="share-hero-num">
+                {{ formatMoney(Number(currentBalance)) }}
               </div>
-              <div class="share-big-label">month p&amp;l</div>
-            </div>
-            <div class="share-big-stat-sep" />
-            <div class="share-big-stat">
-              <div class="share-big-num num-amber">
-                {{ winRate.toFixed(1) }}<span class="share-big-unit">%</span>
+              <div class="share-growth-tag" :class="growthPercentage >= 0 ? 'tag-up' : 'tag-down'">
+                {{ growthPercentage >= 0 ? '↑' : '↓' }}{{ Math.abs(growthPercentage).toFixed(2) }}%
+                overall
               </div>
-              <div class="share-big-label">win rate</div>
             </div>
-            <div class="share-big-stat-sep" />
-            <div class="share-big-stat">
-              <div class="share-big-num">{{ totalTrades }}</div>
-              <div class="share-big-label">trades</div>
-            </div>
-          </div>
 
-          <!-- Mini stats chips row -->
-          <div class="z-top share-chips-row">
-            <div class="share-chip">
-              <span class="chip-dot dot-green" />
-              <span class="chip-label">{{ winningTrades }} wins</span>
-            </div>
-            <div class="share-chip">
-              <span class="chip-dot dot-red" />
-              <span class="chip-label">{{ losingTrades }} losses</span>
-            </div>
-            <div class="share-chip" v-if="pairStats.best.name !== '-'">
-              <span class="chip-dot dot-blue" />
-              <span class="chip-label">{{ pairStats.best.name }}</span>
-            </div>
-            <div class="share-chip" v-if="growthPercentage !== 0">
-              <span class="chip-dot dot-amber" />
-              <span class="chip-label">{{ Math.abs(growthPercentage).toFixed(1) }}% growth</span>
-            </div>
-          </div>
+            <div class="share-thin-line z-top" />
 
-          <!-- Goal bar (only if set) -->
-          <div v-if="monthlyGoal.targetProfit > 0" class="z-top share-goal-area">
-            <div class="share-goal-header">
-              <span class="share-goal-label">monthly goal</span>
-              <span
-                class="share-goal-pct-v3"
-                :class="monthlyGoal.progressPercent >= 100 ? 'pct-done' : ''"
-              >
-                {{ monthlyGoal.progressPercent.toFixed(0) }}%
-              </span>
+            <!-- Stats row — 3 big numbers -->
+            <div class="z-top share-big-stats">
+              <div class="share-big-stat">
+                <div class="share-big-num" :class="totalPnL >= 0 ? 'num-green' : 'num-red'">
+                  {{ formatShareMoney(totalPnL, true) }}
+                </div>
+                <div class="share-big-label">month p&amp;l</div>
+              </div>
+              <div class="share-big-stat-sep" />
+              <div class="share-big-stat">
+                <div class="share-big-num num-amber">
+                  {{ winRate.toFixed(1) }}<span class="share-big-unit">%</span>
+                </div>
+                <div class="share-big-label">win rate</div>
+              </div>
+              <div class="share-big-stat-sep" />
+              <div class="share-big-stat">
+                <div class="share-big-num">{{ totalTrades }}</div>
+                <div class="share-big-label">trades</div>
+              </div>
             </div>
-            <div class="share-goal-bar">
+
+            <!-- Mini stats chips row -->
+            <div class="z-top share-chips-row">
+              <div class="share-chip">
+                <span class="chip-dot dot-green" />
+                <span class="chip-label">{{ winningTrades }} wins</span>
+              </div>
+              <div class="share-chip">
+                <span class="chip-dot dot-red" />
+                <span class="chip-label">{{ losingTrades }} losses</span>
+              </div>
+              <div class="share-chip" v-if="pairStats.best.name !== '-'">
+                <span class="chip-dot dot-blue" />
+                <span class="chip-label">{{ pairStats.best.name }}</span>
+              </div>
+              <div class="share-chip" v-if="growthPercentage !== 0">
+                <span class="chip-dot dot-amber" />
+                <span class="chip-label">{{ Math.abs(growthPercentage).toFixed(1) }}% growth</span>
+              </div>
+            </div>
+
+            <!-- Goal bar (only if set) -->
+            <div v-if="monthlyGoal.targetProfit > 0" class="z-top share-goal-area">
+              <div class="share-goal-header">
+                <span class="share-goal-label">monthly goal</span>
+                <span
+                  class="share-goal-pct-v3"
+                  :class="monthlyGoal.progressPercent >= 100 ? 'pct-done' : ''"
+                >
+                  {{ monthlyGoal.progressPercent.toFixed(0) }}%
+                </span>
+              </div>
+              <div class="share-goal-bar">
+                <div
+                  class="share-goal-bar-fill"
+                  :style="{ width: Math.min(monthlyGoal.progressPercent, 100) + '%' }"
+                  :class="monthlyGoal.progressPercent >= 100 ? 'fill-done' : ''"
+                />
+              </div>
+              <div class="share-goal-sub">
+                {{ formatShareMoney(monthlyGoal.totalAchieved) }}
+                <span class="share-goal-of">of</span>
+                {{ formatShareMoney(monthlyGoal.targetProfit) }}
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <!-- Hero value — "portfolio value" not "balance": for Investor this is
+                 holdings' market value + cash, not a single account balance -->
+            <div class="z-top share-hero-section">
+              <div class="share-hero-label">portfolio value</div>
+              <div class="share-hero-num">
+                {{ formatMoney(investorSummary?.portfolio_value ?? 0) }}
+              </div>
               <div
-                class="share-goal-bar-fill"
-                :style="{ width: Math.min(monthlyGoal.progressPercent, 100) + '%' }"
-                :class="monthlyGoal.progressPercent >= 100 ? 'fill-done' : ''"
-              />
+                class="share-growth-tag"
+                :class="(investorSummary?.total_return_percent ?? 0) >= 0 ? 'tag-up' : 'tag-down'"
+              >
+                {{ (investorSummary?.total_return_percent ?? 0) >= 0 ? '↑' : '↓' }}{{
+                  Math.abs(investorSummary?.total_return_percent ?? 0).toFixed(2)
+                }}% overall
+              </div>
             </div>
-            <div class="share-goal-sub">
-              ${{
-                monthlyGoal.totalAchieved.toLocaleString(undefined, { minimumFractionDigits: 0 })
-              }}
-              <span class="share-goal-of">of</span>
-              ${{
-                monthlyGoal.targetProfit.toLocaleString(undefined, { minimumFractionDigits: 0 })
-              }}
+
+            <div class="share-thin-line z-top" />
+
+            <!-- Stats row — total P&L instead of "month" p&l: holdings don't reset
+                 monthly the way discrete forex trades do, so an all-time figure is
+                 the honest number to show here -->
+            <div class="z-top share-big-stats">
+              <div class="share-big-stat">
+                <div
+                  class="share-big-num"
+                  :class="(investorSummary?.total_pnl ?? 0) >= 0 ? 'num-green' : 'num-red'"
+                >
+                  {{ formatShareMoney(investorSummary?.total_pnl ?? 0, true) }}
+                </div>
+                <div class="share-big-label">total p&amp;l</div>
+              </div>
+              <div class="share-big-stat-sep" />
+              <div class="share-big-stat">
+                <div
+                  class="share-big-num"
+                  :class="(investorSummary?.total_return_percent ?? 0) >= 0 ? 'num-green' : 'num-red'"
+                >
+                  {{ (investorSummary?.total_return_percent ?? 0) >= 0 ? '+' : '' }}{{
+                    (investorSummary?.total_return_percent ?? 0).toFixed(1)
+                  }}<span class="share-big-unit">%</span>
+                </div>
+                <div class="share-big-label">total return</div>
+              </div>
+              <div class="share-big-stat-sep" />
+              <div class="share-big-stat">
+                <div class="share-big-num">{{ investorHoldings.length }}</div>
+                <div class="share-big-label">holdings</div>
+              </div>
             </div>
-          </div>
+
+            <!-- Mini stats chips row -->
+            <div class="z-top share-chips-row">
+              <div
+                class="share-chip"
+                v-if="shareBestHolding.symbol !== '-'"
+                data-test="share-best-holding"
+              >
+                <span
+                  class="chip-dot"
+                  :class="shareBestHolding.returnPercent >= 0 ? 'dot-green' : 'dot-red'"
+                />
+                <span class="chip-label">
+                  {{ shareBestHolding.symbol }} {{ shareBestHolding.returnPercent >= 0 ? '+' : '' }}{{
+                    shareBestHolding.returnPercent.toFixed(1)
+                  }}%
+                </span>
+              </div>
+              <div class="share-chip" v-if="allocationByClass[0]">
+                <span class="chip-dot dot-blue" />
+                <span class="chip-label">
+                  {{ allocationByClass[0].label }} {{ allocationByClass[0].weight.toFixed(0) }}%
+                </span>
+              </div>
+            </div>
+
+            <!-- Allocation bar — reuses the same top-3-by-weight data as the Asset
+                 Allocation card, not invented sector data -->
+            <div v-if="shareAllocationTop.length > 0" class="z-top share-goal-area">
+              <div class="share-goal-header">
+                <span class="share-goal-label">portfolio allocation</span>
+              </div>
+              <div class="share-alloc-bar">
+                <div
+                  v-for="seg in shareAllocationTop"
+                  :key="seg.label"
+                  class="share-alloc-segment"
+                  data-test="share-alloc-segment"
+                  :style="{ width: seg.weight + '%', background: seg.color }"
+                />
+              </div>
+              <div class="share-alloc-legend">
+                <span
+                  v-for="seg in shareAllocationTop"
+                  :key="seg.label"
+                  class="share-alloc-legend-item"
+                  data-test="share-alloc-legend-item"
+                >
+                  <span class="share-alloc-dot" :style="{ background: seg.color }" />
+                  {{ seg.label }} {{ seg.weight.toFixed(0) }}%
+                </span>
+              </div>
+            </div>
+          </template>
 
           <!-- Footer -->
           <div class="share-footer-v3 z-top">
-            <div class="share-footer-brand">✦ tradingjrnl.com</div>
+            <div class="share-footer-brand">✦ wisenancial.app</div>
           </div>
         </div>
 
@@ -2651,7 +2800,15 @@ const downloadStatsImage = async () => {
   border: 1px solid rgba(99, 102, 241, 0.15) !important;
 }
 /* ==========================================================
-   Share Stats Card v3 — Warm Minimal, Mobile-Ready
+   Share Stats Card v3 — Wisenancial theme (teal/sage), mobile-ready
+   ปรับจาก v3 เดิม (indigo/amber แบบ parchment) ให้ใช้ token จริงของเว็บ:
+   var(--bg-card) / var(--text-primary) / var(--accent-*) / positive
+   ("--21ba45") & negative ("#c10015") ตามที่ template ทั้งไฟล์นี้ใช้จริง
+   (text-positive/text-negative) เพื่อให้การ์ดแชร์ตรงกับธีมจริง ไม่ใช่เรฟภาพ
+   สีนีออนเข้ม โทเคนที่ใช้ล้วนประกาศไว้ที่ :root / .body--dark ใน app.scss
+   (ระดับ global) ไม่ใช่ตัวที่ scope เฉพาะ .dashboard-page เพราะ q-dialog
+   ถูก teleport ออกไปนอก .dashboard-page ตัวแปรที่ scope แคบกว่านั้นจะไม่
+   inherit เข้ามา
 ========================================================== */
 
 /* Share button in header */
@@ -2660,11 +2817,11 @@ const downloadStatsImage = async () => {
   font-size: 13px;
   letter-spacing: 0.01em;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.25);
+  box-shadow: 0 2px 8px rgba(51, 97, 96, 0.25);
 }
 .share-btn-main:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.35);
+  box-shadow: 0 4px 12px rgba(51, 97, 96, 0.35);
 }
 
 /* Dialog wrapper — responsive width */
@@ -2674,20 +2831,25 @@ const downloadStatsImage = async () => {
 
 /* ── Card shell ── */
 .share-card-v3 {
-  background: #fafaf8;
+  background: var(--bg-card);
   border-radius: 20px;
   box-shadow:
-    0 20px 40px -8px rgba(15, 23, 42, 0.14),
-    0 0 0 1px rgba(15, 23, 42, 0.07);
+    0 20px 40px -8px rgba(27, 54, 54, 0.14),
+    0 0 0 1px var(--border-color);
   width: 100%;
   position: relative;
 }
+.body--dark .share-card-v3 {
+  box-shadow:
+    0 20px 44px -16px rgba(0, 0, 0, 0.55),
+    0 0 0 1px var(--border-color);
+}
 
-/* Warm parchment overlay — gives it texture without dark/light dependency */
+/* Soft teal overlay — texture without a dark/light-specific gradient */
 .share-warm-overlay {
   background:
-    radial-gradient(ellipse at 10% 0%, rgba(251, 191, 36, 0.05) 0%, transparent 55%),
-    radial-gradient(ellipse at 90% 100%, rgba(99, 102, 241, 0.05) 0%, transparent 55%);
+    radial-gradient(ellipse at 10% 0%, rgba(133, 182, 176, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(76, 138, 135, 0.1) 0%, transparent 55%);
   border-radius: 20px;
   pointer-events: none;
   z-index: 0;
@@ -2699,7 +2861,7 @@ const downloadStatsImage = async () => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #d1d5db;
+  background: var(--border-color);
   z-index: 2;
 }
 .share-dot-tl {
@@ -2725,16 +2887,16 @@ const downloadStatsImage = async () => {
   font-weight: 800;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: #c9cfd8;
+  color: var(--text-muted);
 }
 .share-header-date {
   font-size: 10px;
   font-weight: 600;
-  color: #c9cfd8;
+  color: var(--text-muted);
   letter-spacing: 0.03em;
 }
 
-/* Account chip */
+/* Account chip — same accent-100/800 pill pattern as DiscoverPage's .discover-credits */
 .share-account-chip-wrap {
   display: flex;
   align-items: center;
@@ -2747,28 +2909,28 @@ const downloadStatsImage = async () => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  background: #f0f4ff;
-  border: 1px solid #dde5ff;
+  background: var(--accent-100);
+  border: 1px solid var(--accent-200);
   border-radius: 99px;
   padding: 4px 11px 4px 8px;
 }
 .share-account-at {
   font-size: 12px;
   font-weight: 800;
-  color: #6366f1;
+  color: var(--accent-800);
 }
 .share-account-text {
   font-size: 12px;
   font-weight: 700;
-  color: #4f46e5;
+  color: var(--accent-800);
   letter-spacing: -0.01em;
 }
 .share-period-pill {
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  color: var(--text-muted);
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
   border-radius: 99px;
   padding: 4px 10px;
   letter-spacing: 0.02em;
@@ -2785,13 +2947,13 @@ const downloadStatsImage = async () => {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: lowercase;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 .share-hero-num {
   font-size: 36px;
   font-weight: 900;
-  color: #111827;
+  color: var(--text-primary);
   letter-spacing: -0.04em;
   line-height: 1;
 }
@@ -2804,20 +2966,21 @@ const downloadStatsImage = async () => {
   margin-top: 8px;
   letter-spacing: 0.01em;
 }
+/* เขียว/แดง เดียวกับ text-positive/text-negative ของ Quasar ที่ใช้จริงทั้งไฟล์นี้ */
 .tag-up {
-  color: #059669;
-  background: rgba(5, 150, 105, 0.09);
+  color: #21ba45;
+  background: rgba(33, 186, 69, 0.1);
 }
 .tag-down {
-  color: #dc2626;
-  background: rgba(220, 38, 38, 0.09);
+  color: #c10015;
+  background: rgba(193, 0, 21, 0.1);
 }
 
 /* Thin divider */
 .share-thin-line {
   height: 1px;
   margin: 0 22px;
-  background: #e9eaec;
+  background: var(--border-color);
   position: relative;
   z-index: 1;
 }
@@ -2837,13 +3000,13 @@ const downloadStatsImage = async () => {
 .share-big-stat-sep {
   width: 1px;
   height: 36px;
-  background: #e9eaec;
+  background: var(--border-color);
   flex-shrink: 0;
 }
 .share-big-num {
   font-size: 24px;
   font-weight: 900;
-  color: #111827;
+  color: var(--text-primary);
   letter-spacing: -0.04em;
   line-height: 1;
 }
@@ -2854,19 +3017,23 @@ const downloadStatsImage = async () => {
 .share-big-label {
   font-size: 9.5px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: lowercase;
   letter-spacing: 0.04em;
   margin-top: 4px;
 }
 .num-green {
-  color: #059669;
+  color: #21ba45;
 }
 .num-red {
-  color: #dc2626;
+  color: #c10015;
 }
+/* amber เดียวกับ .badge-behind ของหน้านี้เอง (light #d97706 / dark #fbbf24) */
 .num-amber {
   color: #d97706;
+}
+.body--dark .num-amber {
+  color: #fbbf24;
 }
 
 /* Chips row */
@@ -2882,8 +3049,8 @@ const downloadStatsImage = async () => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
   border-radius: 99px;
   padding: 4px 10px;
 }
@@ -2894,29 +3061,32 @@ const downloadStatsImage = async () => {
   flex-shrink: 0;
 }
 .dot-green {
-  background: #10b981;
+  background: #21ba45;
 }
 .dot-red {
-  background: #ef4444;
+  background: #c10015;
 }
 .dot-blue {
-  background: #6366f1;
+  background: var(--accent-700);
 }
 .dot-amber {
-  background: #f59e0b;
+  background: #d97706;
+}
+.body--dark .dot-amber {
+  background: #fbbf24;
 }
 .chip-label {
   font-size: 11px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
   letter-spacing: 0.01em;
 }
 
-/* Goal area */
+/* Goal area (โควตารายเดือน — Trader) และ allocation area (สัดส่วนพอร์ต — Investor) ใช้ผิวเดียวกัน */
 .share-goal-area {
   margin: 0 22px 14px;
-  background: #f9fafb;
-  border: 1px solid #e9eaec;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 12px 14px;
   position: relative;
@@ -2933,42 +3103,77 @@ const downloadStatsImage = async () => {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: lowercase;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 .share-goal-pct-v3 {
   font-size: 13px;
   font-weight: 800;
-  color: #6366f1;
+  color: var(--accent-800);
   letter-spacing: -0.02em;
 }
 .pct-done {
-  color: #059669;
+  color: #21ba45;
 }
 .share-goal-bar {
   height: 5px;
-  background: #e5e7eb;
+  background: var(--border-color);
   border-radius: 99px;
   overflow: hidden;
 }
 .share-goal-bar-fill {
   height: 100%;
-  background: #6366f1;
+  background: var(--accent-700);
   border-radius: 99px;
   transition: width 0.5s ease;
 }
 .fill-done {
-  background: #10b981;
+  background: #21ba45;
 }
 .share-goal-sub {
   margin-top: 6px;
   font-size: 10px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 .share-goal-of {
   margin: 0 3px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: 400;
+}
+
+/* Allocation bar (Investor share card) — ใช้ palette เดียวกับ Asset Allocation card จริง
+   ผ่าน seg.color แบบ inline-style ส่วน legend เลียนแบบ .heatmap-legend ของ HeatmapPage.vue */
+.share-alloc-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--border-color);
+}
+.share-alloc-segment {
+  height: 100%;
+  flex: 0 0 auto;
+  transition: width 0.5s ease;
+}
+.share-alloc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.share-alloc-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.share-alloc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 /* Footer */
@@ -2985,7 +3190,7 @@ const downloadStatsImage = async () => {
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #d1d5db;
+  color: var(--text-muted);
 }
 
 /* Action buttons */
@@ -2997,17 +3202,18 @@ const downloadStatsImage = async () => {
 }
 
 .share-action-close {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
 }
+/* gradient เดียวกับ .discover-generate ของ DiscoverPage.vue */
 .share-action-save {
-  background: #111827;
+  background: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-900) 100%);
   color: #ffffff;
   font-size: 13px;
-  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
+  box-shadow: 0 4px 12px rgba(27, 54, 54, 0.2);
 }
 .share-action-save:hover {
-  background: #1f2937;
+  box-shadow: 0 6px 16px rgba(27, 54, 54, 0.3);
 }
 
 /* Mobile tweaks */

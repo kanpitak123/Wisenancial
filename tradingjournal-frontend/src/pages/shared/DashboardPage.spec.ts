@@ -1,8 +1,9 @@
 /**
  * DashboardPage — สิ่งที่ต้องต่างกันระหว่างโหมด Forex (TRADER) กับ Stock (INVESTOR)
  *
- * รอบ A: โหมด Stock ต้องไม่มีการ์ด Goal และไม่มีปุ่ม Share (ทั้งสองอ่านจาก
- *        JournalStore/GoalStore ของฝั่ง Forex ซึ่งเป็น 0 ทั้งแถวในโหมดหุ้น)
+ * รอบ A: โหมด Stock ต้องไม่มีการ์ด Goal (อ่านจาก JournalStore/GoalStore ของฝั่ง
+ *        Forex ซึ่งเป็น 0 ทั้งแถวในโหมดหุ้น) — ส่วนปุ่ม Share ตอนนี้มีทั้งสองโหมด
+ *        แล้ว (ดู describe "การ์ดแชร์โหมด Stock" ด้านล่าง) เพียงแต่เนื้อหาต่างกัน
  * รอบ B: โหมด Stock ต้องมี Asset Allocation / Top Movers / ประวัติกิจกรรม + export CSV
  *
  * เทสฝั่ง Forex อยู่ด้วยเพื่อกัน regress — การซ่อนของในโหมดหุ้นต้องไม่ไปโดนโหมดเทรด
@@ -246,13 +247,6 @@ describe('DashboardPage', () => {
       expect(wrapper.text()).not.toContain('monthly goal');
     });
 
-    it('ไม่ render ปุ่ม Share และไม่มี share dialog', async () => {
-      const wrapper = await mountDashboard();
-
-      expect(wrapper.findAll('.share-btn-main')).toHaveLength(0);
-      expect(document.getElementById('share-image-area')).toBeNull();
-    });
-
     it('ไม่ยิงโหลดเป้าหมายรายเดือนทิ้งเปล่า', async () => {
       await mountDashboard();
 
@@ -298,6 +292,74 @@ describe('DashboardPage', () => {
       await mountDashboard();
 
       expect(getMonthlyTarget).toHaveBeenCalled();
+    });
+  });
+
+  // ── การ์ดแชร์ฝั่ง Stock — เทียบเท่าฝั่ง Forex แต่เนื้อหาเป็นของพอร์ตหุ้นจริง
+  //    (ไม่มี "month p&l"/"win rate" เพราะ holding ไม่ได้รีเซ็ตรายเดือนแบบ trade) ──
+  describe('การ์ดแชร์โหมด Stock', () => {
+    beforeEach(() => setWorkspace('INVESTOR'));
+
+    it('ยัง render ปุ่ม Share และกดแล้วเห็นเนื้อหาพอร์ตหุ้น ไม่ใช่ของฝั่ง Forex', async () => {
+      useInvestorPortfolioStore().dashboard = investorDashboard([
+        holding({ symbol: 'PTT.BK', market_value: 4000, unrealized_pnl: 500 }),
+      ]);
+
+      const wrapper = await mountDashboard();
+      const button = wrapper.find('.share-btn-main');
+
+      expect(button.exists()).toBe(true);
+
+      await button.trigger('click');
+      await nextTick();
+      await nextTick();
+
+      // q-dialog teleport ออกไปนอก wrapper — ต้องมองที่ document
+      expect(document.getElementById('share-image-area')).not.toBeNull();
+
+      const dialogText = document.body.textContent ?? '';
+
+      expect(dialogText).toContain('portfolio value');
+      expect(dialogText).toContain('total return');
+      expect(dialogText).toContain('holdings');
+      // ต้องไม่ใช่การ์ดของฝั่ง Forex
+      expect(dialogText).not.toContain('month p&l');
+      expect(dialogText).not.toContain('win rate');
+    });
+
+    it('แถบสัดส่วนพอร์ตกับชิป best holding ผูกค่าจาก holding จริง', async () => {
+      useInvestorPortfolioStore().dashboard = investorDashboard([
+        // PTT.BK: น้ำหนัก 75% และกำไร 600/3000 = +20% -> ต้องเป็น best holding
+        holding({ symbol: 'PTT.BK', market_value: 6000, cost_basis: 3000, unrealized_pnl: 600 }),
+        holding({ symbol: 'AAPL', market_value: 2000, cost_basis: 2000, unrealized_pnl: -100 }),
+      ]);
+
+      const wrapper = await mountDashboard();
+
+      await wrapper.find('.share-btn-main').trigger('click');
+      await nextTick();
+      await nextTick();
+
+      const segments = [...document.querySelectorAll('[data-test="share-alloc-segment"]')];
+      const legend = [...document.querySelectorAll('[data-test="share-alloc-legend-item"]')];
+
+      // 2 holding -> 2 segment ไม่มี "Others" และความกว้างต้องเป็น weight จริง
+      expect(segments).toHaveLength(2);
+      expect((segments[0] as HTMLElement).style.width).toBe('75%');
+      expect((segments[1] as HTMLElement).style.width).toBe('25%');
+
+      expect(legend).toHaveLength(2);
+      expect(legend[0]?.textContent).toContain('PTT.BK');
+      expect(legend[0]?.textContent).toContain('75%');
+      expect(legend[1]?.textContent).toContain('AAPL');
+      expect(legend[1]?.textContent).toContain('25%');
+
+      // best holding เรียงตาม return% ไม่ใช่มูลค่า และตัวติดลบต้องไม่ถูกเลือก
+      const bestChip = document.querySelector('[data-test="share-best-holding"]');
+
+      expect(bestChip?.textContent).toContain('PTT.BK');
+      expect(bestChip?.textContent).toContain('+20.0%');
+      expect(bestChip?.querySelector('.chip-dot')?.classList.contains('dot-green')).toBe(true);
     });
   });
 
