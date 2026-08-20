@@ -41,6 +41,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'Community', component: () => import('pages/shared/CommunityPage.vue') },
       { path: 'Chat', component: () => import('pages/shared/ChatPage.vue') },
       { path: 'Coach', component: () => import('pages/shared/CoachRoomPage.vue') },
+      // gamification เป็นของทั้งระบบ ไม่แยกโหมด — ภารกิจถูกกรองตาม portfolio_type
+      // ให้แล้วใน GamificationStore.resolveQuery() ส่วนกระดานอันดับรวมทุกคน
+      { path: 'Leaderboard', component: () => import('pages/shared/LeaderboardPage.vue') },
 
       // ---------- บัญชี/การชำระเงิน (ใช้ได้ทั้งสองโหมด) ----------
       // path ต้องตรงกับ redirect ของ Stripe:
@@ -108,6 +111,18 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'MonthlyMovers',
         component: () => import('pages/investor/MonthlyMoversPage.vue'),
+        meta: { workspace: 'INVESTOR' },
+      },
+      // Heatmap/Discover ยิง endpoint ที่เป็นข้อมูลหุ้นล้วน (market-insights / ai
+      // growth recommendations) จึงล็อกไว้ที่ INVESTOR เหมือน MonthlyMovers
+      {
+        path: 'Heatmap',
+        component: () => import('pages/investor/HeatmapPage.vue'),
+        meta: { workspace: 'INVESTOR' },
+      },
+      {
+        path: 'Discover',
+        component: () => import('pages/investor/DiscoverPage.vue'),
         meta: { workspace: 'INVESTOR' },
       },
     ],
