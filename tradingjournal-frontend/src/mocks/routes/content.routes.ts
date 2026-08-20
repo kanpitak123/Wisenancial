@@ -667,26 +667,113 @@ export const contentRoutes = defineMockRoutes([
     handler: (ctx) =>
       buildMovers((ctx.query.market as 'TH' | 'GLOBAL') ?? 'GLOBAL', Number(ctx.query.limit ?? 8)),
   },
+  // ทั้งสองอันนี้ต้องคงรูปร่างให้ตรงกับ MarketInsightsService ของหลังบ้านจริง
+  // (HeatmapResponse / SentimentResponse) ไม่ใช่รูปร่างที่เดาเอาเอง — MarketPulsePage
+  // อ่านตรงจาก field พวกนี้ ถ้าเพี้ยนหน้าจะว่างเฉพาะตอนเปิด mock mode
   {
     method: 'GET',
     path: '/market-insights/heatmap',
-    handler: () =>
-      STOCK_UNIVERSE.map((stock) => ({
-        symbol: stock.symbol,
-        sector: stock.sector,
-        changePercent: stock.changePercent,
-        marketCap: stock.marketCap,
-      })),
+    handler: (ctx) => {
+      const market = ctx.query.market === 'TH' ? 'TH' : 'GLOBAL';
+      const universe = STOCK_UNIVERSE.filter((stock) =>
+        market === 'TH' ? stock.exchange === 'SET' : stock.exchange !== 'SET',
+      );
+      const bySector = new Map<string, typeof universe>();
+
+      for (const stock of universe) {
+        bySector.set(stock.sector, [...(bySector.get(stock.sector) ?? []), stock]);
+      }
+
+      const totalCap = universe.reduce((sum, stock) => sum + stock.marketCap, 0) || 1;
+
+      return {
+        market,
+        asOf: isoDaysAgo(0),
+        sectors: [...bySector.entries()].map(([sector, stocks]) => {
+          const tiles = stocks.map((stock) => ({
+            symbol: stock.symbol,
+            name: stock.name,
+            sector: stock.sector,
+            changePercent: stock.changePercent,
+            weight: Number(((stock.marketCap / totalCap) * 100).toFixed(2)),
+            tradedValue: stock.volume * stock.price,
+          }));
+          const totalWeight = tiles.reduce((sum, tile) => sum + tile.weight, 0);
+
+          return {
+            sector,
+            // ถ่วงน้ำหนักด้วย weight เหมือนที่หลังบ้านทำ ไม่ใช่เฉลี่ยแบบง่าย
+            avgChangePercent: Number(
+              (
+                tiles.reduce((sum, tile) => sum + tile.changePercent * tile.weight, 0) /
+                (totalWeight || 1)
+              ).toFixed(2),
+            ),
+            totalWeight: Number(totalWeight.toFixed(2)),
+            tiles,
+          };
+        }),
+      };
+    },
   },
   {
     method: 'GET',
     path: '/market-insights/sentiment',
-    handler: () => ({
-      score: 62,
-      label: 'Greed',
-      updatedAt: isoDaysAgo(0),
-      breakdown: { momentum: 68, volatility: 41, breadth: 59, safeHaven: 55 },
-    }),
+    handler: (ctx) => {
+      const market = ctx.query.market === 'TH' ? 'TH' : 'GLOBAL';
+      const universe = STOCK_UNIVERSE.filter((stock) =>
+        market === 'TH' ? stock.exchange === 'SET' : stock.exchange !== 'SET',
+      ).slice(0, 6);
+
+      // ยึด long% กับ changePercent ของหุ้นแต่ละตัวไว้ด้วยกัน ให้ข้อมูล mock อ่านแล้ว
+      // สมเหตุสมผล (ตัวที่บวกแรงคนถือฝั่งซื้อเยอะ) และคงที่ทุกครั้งที่เรียก
+      const longOf = (changePercent: number) =>
+        Math.min(88, Math.max(12, Math.round(50 + changePercent * 6)));
+
+      const ratios = universe.map((stock) => ({
+        symbol: stock.symbol,
+        name: stock.name,
+        longPercent: longOf(stock.changePercent),
+        shortPercent: 100 - longOf(stock.changePercent),
+      }));
+
+      const overallLong = ratios.length
+        ? Math.round(ratios.reduce((sum, r) => sum + r.longPercent, 0) / ratios.length)
+        : 50;
+
+      return {
+        market,
+        asOf: isoDaysAgo(0),
+        overall: { longPercent: overallLong, shortPercent: 100 - overallLong },
+        longShortRatios: ratios,
+        mostBought: universe
+          .filter((stock) => stock.changePercent >= 0)
+          .map((stock) => ({
+            symbol: stock.symbol,
+            name: stock.name,
+            netTraders: Math.round(stock.volume / 1000),
+            changePercent: stock.changePercent,
+          })),
+        mostSold: universe
+          .filter((stock) => stock.changePercent < 0)
+          .map((stock) => ({
+            symbol: stock.symbol,
+            name: stock.name,
+            netTraders: -Math.round(stock.volume / 1000),
+            changePercent: stock.changePercent,
+          })),
+        frequentSetups: [
+          { name: 'Breakout retest', occurrences: 42, winRate: 61 },
+          { name: 'Pullback to EMA20', occurrences: 35, winRate: 57 },
+          { name: 'Range reversal', occurrences: 21, winRate: 48 },
+        ],
+        regions: [
+          { region: 'US', bullishPercent: 63, changePercent: 1.2 },
+          { region: 'Asia', bullishPercent: 54, changePercent: -0.4 },
+          { region: 'Europe', bullishPercent: 49, changePercent: 0.3 },
+        ],
+      };
+    },
   },
 
   // ---------- AI ----------

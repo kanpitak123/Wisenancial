@@ -21,15 +21,15 @@ const navLinks = (workspace: 'TRADER' | 'INVESTOR') =>
   WORKSPACE_NAV_LINKS[workspace].map((link) => link.link);
 
 describe('Phase 4 routes', () => {
-  it.each([
-    ['Heatmap', 'INVESTOR'],
-    ['Discover', 'INVESTOR'],
-  ])('/%s ถูกลงทะเบียนและล็อกไว้ที่โหมด %s', (path, workspace) => {
-    const route = findRoute(path);
+  it.each([['Market', 'INVESTOR']])(
+    '/%s ถูกลงทะเบียนและล็อกไว้ที่โหมด %s',
+    (path, workspace) => {
+      const route = findRoute(path);
 
-    expect(route, `route /${path} หายไป`).toBeDefined();
-    expect(route?.meta?.workspace).toBe(workspace);
-  });
+      expect(route, `route /${path} หายไป`).toBeDefined();
+      expect(route?.meta?.workspace).toBe(workspace);
+    },
+  );
 
   it('/Leaderboard เป็นหน้า shared จึงต้องไม่มี meta.workspace ล็อกไว้', () => {
     const route = findRoute('Leaderboard');
@@ -38,11 +38,22 @@ describe('Phase 4 routes', () => {
     expect(route?.meta?.workspace).toBeUndefined();
   });
 
-  it('เมนู Stock มี Heatmap/Discover และทั้งคู่ชี้ไป route ที่มีจริง', () => {
+  it('เมนู Stock มี Market Pulse และชี้ไป route ที่มีจริง', () => {
     const links = navLinks('INVESTOR');
 
-    expect(links).toContain('/Heatmap');
-    expect(links).toContain('/Discover');
+    expect(links).toContain('/Market');
+    // Heatmap/Discover ถูกยุบรวมเข้า /Market แล้ว ต้องไม่เหลือเป็นเมนูซ้ำ
+    expect(links).not.toContain('/Heatmap');
+    expect(links).not.toContain('/Discover');
+  });
+
+  it('ลิงก์เก่า /Heatmap กับ /Discover ยัง redirect เข้า /Market ไม่ตก 404', () => {
+    for (const path of ['Heatmap', 'Discover']) {
+      const route = findRoute(path);
+
+      expect(route, `route /${path} หายไป`).toBeDefined();
+      expect(route?.redirect).toBe('/Market');
+    }
   });
 
   it('Leaderboard อยู่ในเมนูทั้งสองโหมด เพราะภารกิจ/แต้มใช้ร่วมกัน', () => {
@@ -50,11 +61,10 @@ describe('Phase 4 routes', () => {
     expect(navLinks('INVESTOR')).toContain('/Leaderboard');
   });
 
-  it('Heatmap/Discover ต้องไม่โผล่ในเมนูโหมด Forex — endpoint เป็นข้อมูลหุ้นล้วน', () => {
+  it('Market Pulse ต้องไม่โผล่ในเมนูโหมด Forex — endpoint เป็นข้อมูลหุ้นล้วน', () => {
     const links = navLinks('TRADER');
 
-    expect(links).not.toContain('/Heatmap');
-    expect(links).not.toContain('/Discover');
+    expect(links).not.toContain('/Market');
   });
 
   it('ทุกลิงก์ในเมนูทั้งสองโหมดต้องมี route รองรับจริง ไม่มีเมนูตาย', () => {

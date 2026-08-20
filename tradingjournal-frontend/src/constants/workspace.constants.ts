@@ -65,8 +65,9 @@ export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLin
     // เมนูจึงเหลือรายการเดียว ส่วน /StockExplorer กับ /StockAnalysis เดิม redirect มาที่นี่
     { title: 'Stock Terminal', icon: 'candlestick_chart', link: '/Stocks' },
     { title: 'Monthly Movers', icon: 'moving', link: '/MonthlyMovers' },
-    { title: 'Heatmap', icon: 'grid_view', link: '/Heatmap' },
-    { title: 'Discover', icon: 'auto_awesome', link: '/Discover' },
+    // Heatmap + Discover ถูกยุบรวมเป็นหน้าเดียว (แถบอารมณ์ตลาด + แท็บ Heatmap/AI Picks)
+    // เมนูจึงเหลือรายการเดียว ส่วน /Heatmap กับ /Discover เดิม redirect มาที่นี่
+    { title: 'Market Pulse', icon: 'insights', link: '/Market' },
     { title: 'Watchlist', icon: 'star', link: '/Watchlist' },
     { title: 'Analytics', icon: 'analytics', link: '/Analytics' },
     // ⛔ ไม่มี Goals ที่นี่โดยตั้งใจ — GoalsPage ปัจจุบันคิดจาก trades ของฝั่ง Forex

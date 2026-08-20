@@ -119,18 +119,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/investor/MonthlyMoversPage.vue'),
         meta: { workspace: 'INVESTOR' },
       },
-      // Heatmap/Discover ยิง endpoint ที่เป็นข้อมูลหุ้นล้วน (market-insights / ai
+      // Market Pulse ยิง endpoint ที่เป็นข้อมูลหุ้นล้วน (market-insights / ai
       // growth recommendations) จึงล็อกไว้ที่ INVESTOR เหมือน MonthlyMovers
+      //
+      // เดิมแยกเป็น /Heatmap กับ /Discover แต่ละหน้ามีของชิ้นเดียวจนดูโล่ง เลยยุบรวม
+      // เป็นหน้าเดียว (แถบอารมณ์ตลาด + แท็บ Heatmap/AI Picks) แล้วให้ลิงก์เก่าที่อาจ
+      // ถูก bookmark ไว้ redirect มา เหมือนที่ /StockExplorer, /StockAnalysis ทำ
       {
-        path: 'Heatmap',
-        component: () => import('pages/investor/HeatmapPage.vue'),
+        path: 'Market',
+        component: () => import('pages/investor/MarketPulsePage.vue'),
         meta: { workspace: 'INVESTOR' },
       },
-      {
-        path: 'Discover',
-        component: () => import('pages/investor/DiscoverPage.vue'),
-        meta: { workspace: 'INVESTOR' },
-      },
+      { path: 'Heatmap', redirect: '/Market' },
+      { path: 'Discover', redirect: '/Market' },
     ],
   },
 
