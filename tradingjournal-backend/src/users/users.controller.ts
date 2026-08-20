@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Param,
   Patch,
   UseGuards,
 } from '@nestjs/common';
@@ -44,6 +45,26 @@ export class UsersController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.usersService.removeAvatar(
+      user.userId,
+    );
+  }
+
+  /**
+   * โปรไฟล์สาธารณะของผู้ใช้คนอื่น
+   *
+   * ยังอยู่หลัง JwtAuthGuard ระดับคลาสเหมือน route อื่นในคอนโทรลเลอร์นี้ —
+   * "สาธารณะ" ในที่นี้คือ "คนอื่นในระบบดูได้" ไม่ใช่เปิดให้คนนอกที่ยังไม่ล็อกอิน
+   * (ของเดิมก็วางไว้ในคอนโทรลเลอร์เดียวกันและหน้าจออยู่ใน /app เหมือนกัน)
+   *
+   * ประกาศทีหลัง 'me' ได้ไม่ชนกัน เพราะเป็นคนละ path segment
+   */
+  @Get('profile/:username')
+  getPublicProfile(
+    @CurrentUser() user: AuthUser,
+    @Param('username') username: string,
+  ) {
+    return this.usersService.getPublicProfile(
+      username,
       user.userId,
     );
   }

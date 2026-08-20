@@ -44,6 +44,12 @@ const routes: RouteRecordRaw[] = [
       // gamification เป็นของทั้งระบบ ไม่แยกโหมด — ภารกิจถูกกรองตาม portfolio_type
       // ให้แล้วใน GamificationStore.resolveQuery() ส่วนกระดานอันดับรวมทุกคน
       { path: 'Leaderboard', component: () => import('pages/shared/LeaderboardPage.vue') },
+      // โปรไฟล์สาธารณะของสมาชิกคนอื่น — ไม่มีในเมนู เข้าถึงผ่านการกดชื่อจากกระดานอันดับ
+      // (เจ้าของเปิดของตัวเองได้แม้ยังตั้งเป็นส่วนตัว ไม่งั้นจะไปกดสวิตช์เปิดไม่ได้)
+      {
+        path: 'profile/:username',
+        component: () => import('pages/shared/PublicProfilePage.vue'),
+      },
 
       // ---------- บัญชี/การชำระเงิน (ใช้ได้ทั้งสองโหมด) ----------
       // path ต้องตรงกับ redirect ของ Stripe:

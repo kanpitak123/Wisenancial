@@ -15,6 +15,7 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useQuasar } from 'quasar';
+import { useRouter } from 'vue-router';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useGamificationStore } from 'stores/GamificationStore';
 import { useUserStore } from 'stores/UserStore';
@@ -22,6 +23,7 @@ import { WsBadge, WsCard } from 'src/components/ui';
 import type { Mission, MissionZone } from 'src/types/gamification.types';
 
 const $q = useQuasar();
+const router = useRouter();
 const languageStore = useLanguageStore();
 const store = useGamificationStore();
 const userStore = useUserStore();
@@ -92,6 +94,10 @@ const zones = computed(() =>
 );
 
 const currentUserId = computed(() => userStore.profile?.id ?? null);
+
+const goToProfile = (username: string) => {
+  void router.push(`/profile/${encodeURIComponent(username)}`);
+};
 
 const podium = computed(() => store.leaderboard.slice(0, 3));
 const rest = computed(() => store.leaderboard.slice(3));
@@ -298,6 +304,7 @@ onMounted(load);
               class="lb-podium-card"
               :class="[rankTone(entry.rank), { 'is-me': entry.id === currentUserId }]"
               :data-test="`lb-podium-${entry.rank}`"
+              @click="goToProfile(entry.username)"
             >
               <q-icon name="emoji_events" size="22px" class="lb-podium-icon" />
               <div class="lb-podium-rank">#{{ entry.rank }}</div>
@@ -338,6 +345,7 @@ onMounted(load);
               class="lb-row"
               :class="{ 'is-me': entry.id === currentUserId }"
               :data-test="`lb-row-${entry.rank}`"
+              @click="goToProfile(entry.username)"
             >
               <span class="lb-row-rank">{{ entry.rank }}</span>
               <div class="lb-row-id">
@@ -619,6 +627,7 @@ onMounted(load);
 }
 
 .lb-podium-card {
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -712,6 +721,11 @@ onMounted(load);
   gap: 12px;
   padding: 11px 4px;
   border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.lb-row:hover {
+  background: var(--bg-card-soft);
 }
 
 .lb-row:last-child {

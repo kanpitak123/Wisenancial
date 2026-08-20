@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsOptional,
   IsString,
   IsUrl,
@@ -40,4 +41,12 @@ export class UpdateUserDto {
   )
   @MaxLength(500)
   avatar_url?: string;
+
+  /**
+   * เปิด/ปิดโปรไฟล์สาธารณะ — คอลัมน์ users.is_public_profile มีใน schema อยู่แล้ว
+   * (default false) แต่ยังไม่เคยมีทางแก้ผ่าน API เลย
+   */
+  @IsOptional()
+  @IsBoolean()
+  is_public_profile?: boolean;
 }
