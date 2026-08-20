@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -23,11 +25,32 @@ import { GamificationModule } from './gamification/gamification.module';
 import { CoachModule } from './coach/coach.module';
 import { StocksModule } from './stocks/stocks.module';
 import { MarketInsightsModule } from './market-insights/market-insights.module';
+import { HealthModule } from './health/health.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+
+    /**
+     * Rate limiting — ตั้งค่าผ่าน env ทั้งหมด
+     *   THROTTLE_TTL_SECONDS : ความยาวหน้าต่างเวลา (วินาที)  ดีฟอลต์ 60
+     *   THROTTLE_LIMIT       : จำนวนคำขอสูงสุดต่อหน้าต่าง     ดีฟอลต์ 120
+     *
+     * ดีฟอลต์ตั้งไว้หลวมพอที่จะไม่รบกวนการใช้งานปกติ (หน้า Dashboard ยิงหลาย
+     * endpoint พร้อมกันตอนโหลด) แต่ยังกันการยิงถล่มแบบอัตโนมัติได้
+     * จะรัดให้แน่นขึ้นตอนขึ้นจริงก็แก้ที่ env ไม่ต้องแก้โค้ด
+     */
+    ThrottlerModule.forRoot([
+      {
+        ttl: Number(process.env.THROTTLE_TTL_SECONDS ?? 60) * 1000,
+        limit: Number(process.env.THROTTLE_LIMIT ?? 120),
+      },
+    ]),
+
+    MonitoringModule,
+    HealthModule,
     PrismaModule,
     AuthModule,
     TradesModule,
@@ -50,6 +73,11 @@ import { MarketInsightsModule } from './market-insights/market-insights.module';
     MarketInsightsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // ผูก ThrottlerGuard เป็น global guard — ทุก endpoint ถูกจำกัดโดยอัตโนมัติ
+    // ไม่ต้องไปติด @UseGuards ทีละที่ (และไม่มีทางลืมติดที่ endpoint ใหม่)
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

@@ -11,6 +11,9 @@ coverage/
 .env
 .env.*
 !.env.example
+# ไฟล์ตัวอย่างต้อง commit ได้ (ค่าว่างล้วน มีแต่คำอธิบาย) ไม่งั้นคนที่ deploy
+# จะไม่รู้ว่าต้องตั้ง env อะไรบ้าง
+!.env.*.example
 
 # Logs
 *.log
