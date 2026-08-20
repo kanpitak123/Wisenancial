@@ -7,6 +7,16 @@ import {
   MinLength,
 } from 'class-validator';
 
+/**
+ * ⚠️ DTO นี้ไม่ได้ถูกใช้งานที่ไหนเลย (audit 2026-08-20)
+ *
+ * เป็นของที่ `nest g resource` สร้างทิ้งไว้ การสมัครสมาชิกจริงใช้ RegisterDto ใน
+ * auth/dto/register.dto.ts ซึ่งมี email + password ครบ
+ *
+ * อันตรายถ้าเอาไปต่อ endpoint จริงโดยไม่แก้: **ไม่มีทั้ง email และ password**
+ * จะสร้างผู้ใช้ที่ล็อกอินไม่ได้และชนกับ unique constraint ของ email ทันที
+ * ถ้าจะทำ endpoint "แอดมินสร้างผู้ใช้" ให้ยืมโครงจาก RegisterDto แทน
+ */
 export class CreateUserDto {
   @IsString()
   @MinLength(3)
