@@ -1,9 +1,13 @@
 /**
- * เทสวินิจฉัย: sidebar เปลี่ยนตามโหมดจริงหรือไม่
+ * เทสวินิจฉัย: เมนูเปลี่ยนตามโหมดจริงหรือไม่
  *
  * ผู้ใช้รายงานว่าสลับไปโหมด Stock แล้วเมนูยังเป็นของ Forex — ไฟล์นี้มีไว้พิสูจน์ว่า
  * ตัว binding (navLinks -> WORKSPACE_NAV_LINKS[activeType]) ทำงานถูกหรือเปล่า
  * ถ้าเทสนี้ผ่าน แปลว่าปัญหาอยู่ที่ runtime (activeType ไม่ถูกเปลี่ยน) ไม่ใช่ที่ binding
+ *
+ * DOM เปลี่ยนไปจากเดิม: q-drawer ซ้ายถูกแทนด้วย BottomNavBar (dock ลอยด้านล่าง)
+ * ตัวตรรกะที่ยืนยันยังเป็นชุดเดิมทุกข้อ — เปลี่ยนแค่ที่ที่ไปเก็บชื่อเมนูมาตรวจ
+ * เมนูตอนนี้กระจายอยู่สองที่ (dock กับชีต More) menuTitles() จึงรวมมาให้ทั้งคู่
  */
 import { config, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -14,6 +18,7 @@ import { useWorkspace } from 'src/composables/useWorkspace';
 import { useInvestorStore } from 'stores/InvestorStore';
 import { useJournalStore } from 'stores/JournalStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
+import { WORKSPACE_NAV_LINKS } from 'src/constants/workspace.constants';
 import MainLayout from './MainLayout.vue';
 
 const portfolioGetAll = vi.fn();
@@ -97,15 +102,35 @@ vi.mock('vue-router', () => ({
   RouterView: { render: () => h('div') },
 }));
 
-/** ดึงชื่อเมนูที่ render อยู่จริงบน sidebar */
+/**
+ * ชื่อเมนูที่กดถึงได้จริงทั้งหมด = ตัวที่โผล่บน dock + ตัวที่อยู่ในชีต More
+ *
+ * ชีต More เป็น q-menu ที่ teleport ไป body และ render เฉพาะตอนเปิด — เทสจึงเปิดมันไว้
+ * ตลอด (openMore) แล้วค่อยกวาดจาก document เพื่อให้เห็นเมนูครบเหมือนที่ผู้ใช้กดเจอ
+ */
 function menuTitles(wrapper: ReturnType<typeof mount>): string[] {
-  return wrapper
-    .findAll('.sidebar-list .q-item__label')
-    .map((node) => node.text().trim())
-    .filter((text) => text.length > 0);
+  const dock = wrapper
+    .findAll('[data-test="bottom-nav-item"] .bottom-nav-label')
+    .map((node) => node.text().trim());
+
+  const sheet = Array.from(
+    document.querySelectorAll('[data-test="bottom-nav-sheet-item"] .bottom-nav-grid-label'),
+  ).map((node) => (node.textContent ?? '').trim());
+
+  return [...dock, ...sheet].filter((text) => text.length > 0);
 }
 
-describe('MainLayout — sidebar ตามโหมด', () => {
+/** เปิดชีต More ค้างไว้ เพื่อให้ menuTitles() เห็นเมนูส่วนที่เหลือด้วย */
+async function openMore(wrapper: ReturnType<typeof mount>) {
+  const more = wrapper.find('[data-test="bottom-nav-more"]');
+  if (more.exists()) {
+    await more.trigger('click');
+    await nextTick();
+    await nextTick();
+  }
+}
+
+describe('MainLayout — เมนู (bottom nav) ตามโหมด', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     localStorage.clear();
@@ -134,6 +159,7 @@ describe('MainLayout — sidebar ตามโหมด', () => {
 
     await nextTick();
     await nextTick();
+    await openMore(wrapper);
 
     return wrapper;
   };
@@ -325,7 +351,7 @@ describe('MainLayout — sidebar ตามโหมด', () => {
     });
   });
 
-  it('ป้ายโหมดบนหัว drawer เปลี่ยนตามด้วย', async () => {
+  it('ป้ายโหมดบนหัวเว็บเปลี่ยนตามด้วย', async () => {
     const wrapper = await mountLayout();
     const store = usePortfolioStore();
 
@@ -336,4 +362,80 @@ describe('MainLayout — sidebar ตามโหมด', () => {
 
     expect(wrapper.find('.workspace-tag').text()).toContain('Stock');
   });
+
+  // ── โครงใหม่: dock ล่างแทน drawer ซ้าย ─────────────────────────────────────
+  describe('โครง layout หลังเปลี่ยนมาใช้ dock ล่าง', () => {
+    it('ไม่มี q-drawer เหลืออยู่ และมี dock ลอยแทน', async () => {
+      const wrapper = await mountLayout();
+
+      expect(wrapper.find('.q-drawer').exists(), 'drawer ต้องถูกถอดออกหมด').toBe(false);
+      expect(wrapper.find('[data-test="bottom-nav"]').exists()).toBe(true);
+    });
+
+    it('ทุกเมนูของโหมดยังกดถึงได้ครบ ไม่มีตกหล่นตอนย้ายมา dock', async () => {
+      const wrapper = await mountLayout();
+      const store = usePortfolioStore();
+
+      for (const type of ['TRADER', 'INVESTOR'] as const) {
+        store.setActiveType(type);
+        await nextTick();
+
+        const titles = menuTitles(wrapper);
+        const expected = WORKSPACE_NAV_LINKS[type].map((link) => link.title);
+
+        expect(titles.sort(), `เมนูโหมด ${type} ต้องครบ`).toEqual([...expected].sort());
+      }
+    });
+
+    it('ตัวที่ไม่ใช่ primary ต้องอยู่ในชีต More ไม่ใช่บน dock', async () => {
+      const wrapper = await mountLayout();
+
+      const dockTitles = wrapper
+        .findAll('[data-test="bottom-nav-item"] .bottom-nav-label')
+        .map((node) => node.text().trim());
+
+      // Lot Calculator ไม่ได้ตั้ง primary ไว้ -> ต้องไม่โผล่บน dock แต่ยังต้องกดถึงได้
+      expect(dockTitles).not.toContain('Lot Calculator');
+      expect(menuTitles(wrapper)).toContain('Lot Calculator');
+      expect(dockTitles).toContain('Dashboard');
+    });
+
+    it('Leaderboard/Missions dialog ยังเปิดได้จากชีต More', async () => {
+      await mountLayout();
+
+      const leaderboard = document.querySelector('[data-test="bottom-nav-leaderboard"]');
+      const missions = document.querySelector('[data-test="bottom-nav-missions"]');
+
+      expect(leaderboard, 'ปุ่ม Leaderboard ต้องย้ายมาอยู่ในชีต').not.toBeNull();
+      expect(missions, 'ปุ่ม Missions ต้องย้ายมาอยู่ในชีต').not.toBeNull();
+    });
+
+    it('AI quota badge ย้ายมาอยู่บนหัวเว็บแล้ว', async () => {
+      const wrapper = await mountLayout();
+
+      expect(wrapper.find('[data-test="ai-quota-badge"]').exists()).toBe(true);
+    });
+
+    it('ปุ่ม Sign out ยังอยู่ในดรอปดาวน์ avatar เหมือนเดิม', async () => {
+      const wrapper = await mountLayout();
+
+      const accountBtn = wrapper.find('.account-btn');
+      expect(accountBtn.exists()).toBe(true);
+
+      // เนื้อในดรอปดาวน์เป็น q-menu — render ตอนเปิด และ teleport ไป body
+      await accountBtn.trigger('click');
+      await nextTick();
+      await nextTick();
+
+      const signOut = document.querySelector('.account-list-item');
+      expect(signOut?.textContent).toContain('Sign out');
+    });
+
+    it('CommandPalette ยังถูก mount อยู่ (Cmd+K ไม่ได้หายไปกับ drawer)', async () => {
+      const wrapper = await mountLayout();
+
+      expect(wrapper.findComponent({ name: 'CommandPalette' }).exists()).toBe(true);
+    });
+  });
+
 });

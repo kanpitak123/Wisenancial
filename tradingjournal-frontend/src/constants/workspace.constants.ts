@@ -29,6 +29,21 @@ export interface WorkspaceNavLink {
   title: string;
   icon: string;
   link: string;
+  /**
+   * โผล่บนแถบ dock ล่างโดยตรง — ที่เหลือไปรวมอยู่ใต้ปุ่ม "More"
+   *
+   * เมนูมี 13-15 รายการต่อโหมด ยัดลง dock เดียวไม่ไหว เลยเลือกไว้โหมดละ 6 ตัว
+   * ที่คนเข้าบ่อยสุด (หน้าที่เปิดทุกวัน) ที่เหลือยังกดถึงได้ครบใน More ไม่มีอะไรหาย
+   */
+  primary?: boolean;
+  /**
+   * ต้องเป็นสมาชิกแบบเสียเงินถึงจะเข้าได้ — dock จะหรี่ปุ่มลง ติดไอคอนแม่กุญแจ
+   * แล้วเด้งไปหน้าอัปเกรดแทนการ navigate
+   *
+   * ⚠️ ตอนนี้ยังไม่มีลิงก์ไหนตั้งค่านี้ — กลไกมีไว้พร้อมใช้เฉยๆ ตัวการตัดสินว่า
+   * หน้าไหนควรล็อกเป็นเรื่องนโยบายแพ็กเกจ ไม่ใช่เรื่องของ layout
+   */
+  paid?: boolean;
 }
 
 /**
@@ -40,15 +55,15 @@ export interface WorkspaceNavLink {
  */
 export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLink[]> = {
   TRADER: [
-    { title: 'Dashboard', icon: 'space_dashboard', link: '/Dashboard' },
-    { title: 'Journal', icon: 'edit_note', link: '/Journal' },
-    { title: 'Active Positions', icon: 'trending_up', link: '/ActivePositions' },
+    { title: 'Dashboard', icon: 'space_dashboard', link: '/Dashboard', primary: true },
+    { title: 'Journal', icon: 'edit_note', link: '/Journal', primary: true },
+    { title: 'Active Positions', icon: 'trending_up', link: '/ActivePositions', primary: true },
     { title: 'Asset Explorer', icon: 'candlestick_chart', link: '/AssetExplorer' },
     { title: 'Lot Calculator', icon: 'calculate', link: '/LotCalculator' },
-    { title: 'Watchlist', icon: 'star', link: '/Watchlist' },
-    { title: 'Analytics', icon: 'analytics', link: '/Analytics' },
+    { title: 'Watchlist', icon: 'star', link: '/Watchlist', primary: true },
+    { title: 'Analytics', icon: 'analytics', link: '/Analytics', primary: true },
     { title: 'Goals', icon: 'track_changes', link: '/Goals' },
-    { title: 'Portfolios', icon: 'account_balance_wallet', link: '/Portfolio' },
+    { title: 'Portfolios', icon: 'account_balance_wallet', link: '/Portfolio', primary: true },
     { title: 'News', icon: 'newspaper', link: '/News' },
     { title: 'Classroom', icon: 'school', link: '/Classroom' },
     { title: 'Coach Room', icon: 'record_voice_over', link: '/Coach' },
@@ -58,17 +73,17 @@ export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLin
   ],
 
   INVESTOR: [
-    { title: 'Dashboard', icon: 'space_dashboard', link: '/Dashboard' },
+    { title: 'Dashboard', icon: 'space_dashboard', link: '/Dashboard', primary: true },
     // คู่กับ Journal ของโหมด Forex — เป็นหน้าบันทึกรายการของโหมด Stock
-    { title: 'Stock Record', icon: 'edit_note', link: '/StockRecord' },
+    { title: 'Stock Record', icon: 'edit_note', link: '/StockRecord', primary: true },
     // สำรวจหุ้น + วิเคราะห์หุ้น ถูกยุบรวมเป็นหน้าเดียว (แถบสำรวจซ้าย + เทอร์มินัลขวา)
     // เมนูจึงเหลือรายการเดียว ส่วน /StockExplorer กับ /StockAnalysis เดิม redirect มาที่นี่
-    { title: 'Stock Terminal', icon: 'candlestick_chart', link: '/Stocks' },
+    { title: 'Stock Terminal', icon: 'candlestick_chart', link: '/Stocks', primary: true },
     // Heatmap + Discover ถูกยุบรวมเป็นหน้าเดียว (แถบอารมณ์ตลาด + แท็บ Heatmap/AI Picks)
     // เมนูจึงเหลือรายการเดียว ส่วน /Heatmap กับ /Discover เดิม redirect มาที่นี่
-    { title: 'Market Pulse', icon: 'insights', link: '/Market' },
-    { title: 'Watchlist', icon: 'star', link: '/Watchlist' },
-    { title: 'Analytics', icon: 'analytics', link: '/Analytics' },
+    { title: 'Market Pulse', icon: 'insights', link: '/Market', primary: true },
+    { title: 'Watchlist', icon: 'star', link: '/Watchlist', primary: true },
+    { title: 'Analytics', icon: 'analytics', link: '/Analytics', primary: true },
     // ⛔ ไม่มี Goals ที่นี่โดยตั้งใจ — GoalsPage ปัจจุบันคิดจาก trades ของฝั่ง Forex
     //    (target profit / win rate ต่อเดือน) ซึ่งเป็น 0 ทั้งแถวในโหมด Stock
     //    Goals เวอร์ชัน stock ตามสเปก 5.6 ยังเป็นงานค้าง ดูหมายเหตุที่ route /Goals ใน routes.ts

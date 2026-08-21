@@ -2,15 +2,22 @@
   <q-layout view="lHh Lpr lFf">
     <q-header class="custom-header" bordered>
       <q-toolbar style="height: 100%">
-        <q-btn
-          v-show="$q.screen.lt.md"
-          flat
-          dense
-          round
-          :icon="leftDrawerOpen ? 'close' : 'menu'"
-          class="menu-btn mobile-menu-btn"
-          @click="leftDrawerOpen = !leftDrawerOpen"
-        />
+        <!-- โลโก้ + ป้ายโหมด ย้ายขึ้นมาจากหัว drawer เดิมที่ถูกถอดออกไปแล้ว
+             เป็นจุดเดียวที่เหลือที่มองเห็นได้ทุกหน้าโดยไม่ต้องกดอะไรก่อน -->
+        <router-link to="/Dashboard" class="brand-block" data-test="brand-home">
+          <div class="icon-box flex flex-center">
+            <img :src="wisenancialLogo" alt="Wisenancial" class="brand-logo-mark" />
+          </div>
+          <div class="brand-copy">
+            <div class="text-subtitle1 text-weight-bolder text-main tracking-tight lh-1">
+              Wisenancial
+            </div>
+            <div class="text-caption text-weight-bold workspace-tag">
+              <q-icon :name="workspaceMeta.icon" size="12px" class="q-mr-xs" />
+              {{ workspaceMeta.label }}
+            </div>
+          </div>
+        </router-link>
 
         <q-toolbar-title class="text-weight-bolder tracking-tight" />
 
@@ -19,6 +26,8 @@
         <WorkspaceSwitcher class="q-mr-sm" />
 
         <GlobalDateFilter class="q-mr-sm" />
+
+        <AiQuotaBadge class="q-mr-sm" />
 
         <q-btn
           flat
@@ -75,115 +84,17 @@
       </q-toolbar>
     </q-header>
 
-    <q-drawer
-      v-model="leftDrawerOpen"
-      show-if-above
-      bordered
-      class="custom-drawer"
-      :width="210"
-      :mini="!$q.screen.lt.md && miniState"
-      :mini-width="70"
-    >
-      <div class="column full-height">
-        <div class="drawer-header row items-center justify-between q-px-md">
-          <div class="row items-center">
-            <div
-              class="icon-box flex flex-center"
-              :class="miniState ? 'cursor-pointer' : ''"
-              @mouseenter="miniState && (logoHover = true)"
-              @mouseleave="logoHover = false"
-              @click="miniState && handleLogoClick()"
-            >
-              <q-icon
-                v-if="miniState && logoHover"
-                name="menu_open"
-                color="primary"
-                size="20px"
-              />
-              <img
-                v-else
-                :src="wisenancialLogo"
-                alt="Wisenancial"
-                class="brand-logo-mark"
-              />
-              <q-tooltip v-if="miniState">Expand sidebar</q-tooltip>
-            </div>
-
-            <div v-show="!miniState" class="q-ml-sm">
-              <div class="text-subtitle1 text-weight-bolder text-main tracking-tight lh-1">
-                Wisenancial
-              </div>
-              <div class="text-caption text-weight-bold workspace-tag">
-                <q-icon :name="workspaceMeta.icon" size="12px" class="q-mr-xs" />
-                {{ workspaceMeta.label }}
-              </div>
-            </div>
-          </div>
-
-          <q-btn
-            v-show="!miniState"
-            flat
-            dense
-            round
-            icon="chevron_left"
-            class="menu-btn"
-            @click="$q.screen.lt.md ? (leftDrawerOpen = false) : toggleMini()"
-          >
-            <q-tooltip>{{ $q.screen.lt.md ? 'Close' : 'Collapse sidebar' }}</q-tooltip>
-          </q-btn>
-        </div>
-
-        <div class="col-grow q-py-md">
-          <q-list class="q-px-sm sidebar-list">
-            <EssentialLink v-for="link in linksList" :key="link.title" v-bind="link">
-              <q-tooltip
-                v-if="miniState"
-                anchor="center right"
-                self="center left"
-                class="bg-black text-white"
-              >
-                {{ link.title }}
-              </q-tooltip>
-            </EssentialLink>
-          </q-list>
-        </div>
-
-        <div class="sidebar-bottom q-px-sm q-pb-md">
-          <div class="row justify-center q-gutter-xs">
-            <q-btn
-              flat
-              round
-              size="sm"
-              class="bottom-icon-btn"
-              @click="leaderboardDialogOpen = true"
-            >
-              <q-icon name="leaderboard" size="20px" />
-              <q-tooltip anchor="top middle" self="bottom middle" class="bg-grey-9 text-white">
-                Global Leaderboard
-              </q-tooltip>
-            </q-btn>
-
-            <q-btn flat round size="sm" class="bottom-icon-btn" @click="missionsDialogOpen = true">
-              <q-icon name="military_tech" size="22px" />
-              <q-tooltip anchor="top middle" self="bottom middle" class="bg-grey-9 text-white">
-                Missions & Challenges
-              </q-tooltip>
-            </q-btn>
-
-            <q-btn flat round size="sm" class="bottom-icon-btn" to="/chat">
-              <q-icon name="chat" size="20px" />
-              <q-tooltip anchor="top middle" self="bottom middle" class="bg-grey-9 text-white">
-                Live Chat
-              </q-tooltip>
-            </q-btn>
-          </div>
-        </div>
-      </div>
-    </q-drawer>
-
+    <!-- q-page-container กินเต็มความกว้างจอแล้ว (ไม่มี drawer มาเบียดซ้ายอีก)
+         padding-bottom กันไม่ให้ dock ลอยไปทับปุ่มท้ายฟอร์มยาวๆ อย่างหน้า Record
+         ค่าคำนวณจากความสูง dock (~58px) + ระยะลอย (18px) + หายใจอีกหน่อย -->
     <q-page-container class="page-container">
       <router-view />
     </q-page-container>
+
+    <BottomNavBar
+      @open-leaderboard="leaderboardDialogOpen = true"
+      @open-missions="missionsDialogOpen = true"
+    />
 
     <q-dialog v-model="leaderboardDialogOpen" backdrop-filter="blur(8px) saturate(1.3)">
       <q-card class="broker-dialog" style="width: 500px; max-width: 95vw">
@@ -277,7 +188,8 @@
 import { ref, onMounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
-import EssentialLink from 'components/EssentialLink.vue';
+import BottomNavBar from 'components/BottomNavBar.vue';
+import AiQuotaBadge from 'components/AiQuotaBadge.vue';
 import WorkspaceSwitcher from 'components/WorkspaceSwitcher.vue';
 import MockModeToggle from 'components/MockModeToggle.vue';
 import { useWorkspace } from 'src/composables/useWorkspace';
@@ -298,28 +210,14 @@ const userStore = useUserStore();
 const missionsStore = useGamificationStore();
 const missionsDialogOpen = ref(false);
 
-// เมนูมาจาก WORKSPACE_NAV_LINKS ตามโหมดที่ active (Forex = TRADER, Stock = INVESTOR)
-// แก้รายการเมนูที่ src/constants/workspace.constants.ts ที่เดียว
-const {
-  navLinks: linksList,
-  meta: workspaceMeta,
-  initializeActive,
-  activeType: workspaceType,
-} = useWorkspace();
+// เมนูย้ายไปอยู่บน BottomNavBar แล้ว (มันเรียก useWorkspace เองเพื่ออ่าน navLinks)
+// ที่นี่เหลือใช้แค่ meta สำหรับป้ายโหมดบนหัวเว็บ กับ initializeActive ตอน boot
+const { meta: workspaceMeta, initializeActive, activeType: workspaceType } = useWorkspace();
 
 // ภารกิจถูกกรองตามโหมด (audience) เลยต้องดึงใหม่ทุกครั้งที่สลับ ไม่งั้นค้างของโหมดเดิม
 watch(workspaceType, () => {
   void missionsStore.fetchMissions();
 });
-
-function handleLogoClick() {
-  if (miniState.value) {
-    miniState.value = false;
-  }
-}
-const leftDrawerOpen = ref(true);
-const miniState = ref(false);
-const logoHover = ref(false);
 
 const leaderboardDialogOpen = ref(false);
 
@@ -363,10 +261,6 @@ watch(leaderboardDialogOpen, (isOpen) => {
   }
 });
 
-function toggleMini() {
-  miniState.value = !miniState.value;
-}
-
 function toggleDarkMode() {
   $q.dark.toggle();
   localStorage.setItem('darkMode', $q.dark.isActive ? 'true' : 'false');
@@ -408,7 +302,9 @@ onMounted(() => {
 ========================================================== */
 .q-layout {
   --bg-header: #ffffff;
-  --bg-drawer: #ffffff; /* พื้นหลัง Sidebar สีเดียวกับการ์ด */
+  /* พื้น dock ล่าง — โปร่งเล็กน้อยเพราะตัว dock เปิด backdrop-filter blur ไว้
+     ถ้าทึบ 100% จะไม่เห็นเนื้อหาเบลอๆ ไหลผ่านใต้แถบ แล้วดูเหมือนแถบตันธรรมดา */
+  --bg-dock: rgba(255, 255, 255, 0.92);
   --bg-page: #f8fafc; /* พื้นหลังของหน้าจอ */
   --text-main: #1e293b;
   --text-muted: #64748b;
@@ -421,7 +317,7 @@ onMounted(() => {
 
 .body--dark .q-layout {
   --bg-header: #1e293b;
-  --bg-drawer: #1e293b;
+  --bg-dock: rgba(30, 41, 59, 0.92);
   --bg-page: #0f172a;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
@@ -444,41 +340,40 @@ onMounted(() => {
 .custom-header .q-toolbar {
   padding: 0 16px;
 }
-.menu-btn,
 .theme-toggle-btn {
   color: var(--text-muted);
   transition: color 0.2s ease;
 }
 
-.menu-btn:hover,
 .theme-toggle-btn:hover {
   color: var(--text-main);
   background-color: var(--item-hover);
 }
 
 /* ==========================================================
-   Drawer (Sidebar) Styles
+   Brand block (หัวเว็บ) — ย้ายมาจากหัว drawer เดิม
 ========================================================== */
-.custom-drawer {
-  background-color: var(--bg-drawer) !important;
-  border-right: 1px solid var(--border-color) !important;
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  margin-right: 4px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
 }
-.q-drawer--mini .menu-btn {
-  position: absolute;
-  right: 6px;
-}
-/* ส่วนหัว Sidebar ที่สูงเท่ากับ Header เป๊ะๆ */
-.drawer-header {
-  height: 52px; /* ลดลงจาก 64px ให้เท่ากับ Header */
-  border-bottom: 1px solid var(--border-color);
-  background-color: transparent;
-  padding-left: 12px; /* ลดระยะขอบซ้าย */
-  padding-right: 4px;
+.brand-block:hover {
+  background-color: var(--item-hover);
 }
 
-.q-drawer--mini .drawer-header {
-  justify-content: center !important;
+/* จอแคบเหลือแค่โลโก้ — ชื่อกับป้ายโหมดตัดออกก่อน เพราะโลโก้คือทางกลับหน้าแรก */
+@media (max-width: 599px) {
+  .brand-copy {
+    display: none;
+  }
 }
+
 .icon-box {
   width: 34px;
   height: 34px;
@@ -492,6 +387,23 @@ onMounted(() => {
 
 .page-container {
   background-color: var(--bg-page);
+  /* ไม่มี drawer มาเบียดซ้ายแล้ว — ล้าง padding-left ที่ Quasar ใส่ไว้ตอนมี drawer
+     เผื่อกันค่าค้างหลัง layout คำนวณใหม่ไม่ทัน */
+  padding-left: 0 !important;
+  width: 100%;
+}
+
+/* เนื้อหาหน้าต้องมีที่ว่างก้นหน้าเสมอ ไม่งั้น dock ที่ลอยอยู่จะทับปุ่มท้ายฟอร์ม
+   (เช่นปุ่มบันทึกของหน้า Record) — 58px คือความสูง dock, 18px คือระยะลอยจากขอบจอ */
+.page-container > .q-page,
+.page-container > * > .q-page {
+  padding-bottom: 92px;
+}
+@media (max-width: 599px) {
+  .page-container > .q-page,
+  .page-container > * > .q-page {
+    padding-bottom: 84px;
+  }
 }
 
 .custom-separator {
@@ -529,32 +441,6 @@ onMounted(() => {
 }
 .workspace-tag .q-icon {
   -webkit-text-fill-color: var(--accent-700);
-}
-
-/* ==========================================================
-   Menu Items Customization
-========================================================== */
-.sidebar-list .q-item {
-  border-radius: 10px !important;
-  margin-bottom: 4px;
-  min-height: 40px !important;
-  padding: 8px 12px; /* ลด Padding ซ้าย-ขวาลง */
-  font-size: 13px; /* ลดขนาด Font ลงเล็กน้อยจากมาตรฐาน */
-  color: var(--text-muted);
-  transition: all 0.2s ease;
-}
-
-.sidebar-list .q-item:hover {
-  background-color: var(--item-hover);
-  color: var(--text-main);
-}
-
-.sidebar-list .q-item.q-router-link--exact-active {
-  /* accent-500 @ 16% แทนฟ้าอ่อนเดิม — ใช้ rgba (ไม่ใช่ solid accent-100) เพราะต้องเบลนด์
-     เข้ากับพื้นหลังทั้งสองธีมได้ ให้เอฟเฟกต์ใกล้เคียงของเดิมที่สุด */
-  background-color: rgba(133, 182, 176, 0.16);
-  color: var(--q-primary);
-  font-weight: 700;
 }
 
 /* ==========================================================
@@ -614,53 +500,6 @@ onMounted(() => {
 }
 .account-list-item:hover {
   background-color: rgba(239, 68, 68, 0.08) !important;
-}
-
-/* ==========================================================
-   Sidebar Bottom Actions
-========================================================== */
-.sidebar-bottom {
-  flex-shrink: 0;
-}
-
-.sidebar-bottom-item {
-  border-radius: 10px !important;
-  min-height: 40px !important;
-  padding: 8px 12px;
-  color: var(--text-muted);
-  transition: all 0.2s ease;
-}
-
-.sidebar-bottom-item:hover {
-  background-color: var(--item-hover);
-  color: var(--text-main);
-}
-
-.sidebar-bottom-icon {
-  min-width: 28px !important;
-  padding-right: 0 !important;
-}
-
-.sidebar-bottom-label {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.bottom-icon-btn {
-  color: var(--text-muted);
-  transition:
-    color 0.2s ease,
-    background-color 0.2s ease;
-}
-.bottom-icon-btn:hover {
-  color: var(--text-main);
-  background-color: var(--item-hover);
-}
-
-/* mini-mode: centre the icon */
-.q-drawer--mini .sidebar-bottom-item {
-  justify-content: center;
-  padding: 8px 0;
 }
 
 /* ==========================================================
