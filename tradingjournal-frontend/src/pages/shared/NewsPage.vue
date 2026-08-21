@@ -2,11 +2,14 @@
 /**
  * News — ฟีดข่าวตลาดผสม AI enrichment (เศรษฐกิจ + หุ้น) พร้อมอัปเดตเรียลไทม์ผ่าน WebSocket
  *
- * โครง 3 คอลัมน์ (อ้างอิงแนวทางจากหน้า NewsPage ของโปรเจกต์เก่า แต่ปรับใหม่ทั้งเลย์เอาต์และ
- * ต่อกับระบบจริงของโปรเจกต์นี้ ไม่ได้ก็อปโค้ดเดิมมา):
- *   - ซ้าย  = ตัวกรองขอบเขต (ทั้งหมด/ฟอเร็กซ์-เศรษฐกิจ/หุ้น) + ปักหมุด + สถานะ live socket
- *   - กลาง  = แถบตัวกรอง (ค้นหา/ระดับความสำคัญ/อารมณ์ตลาด) + ฟีดข่าว
- *   - ขวา   = หุ้นที่ถูกพูดถึงมากสุด (คำนวณจากข่าวที่โหลดมา) + ข่าวปักหมุด + ปฏิทินผลประกอบการ
+ * โครง 2 คอลัมน์ (เดิมเป็น 3 — คอลัมน์ขวาถูกยุบมารวมกับซ้าย):
+ *   - ซ้าย = ตัวกรองขอบเขต + ปักหมุด + สถานะ live socket
+ *            แล้วต่อด้วย หุ้นที่ถูกพูดถึงมากสุด -> ข่าวปักหมุด -> ปฏิทินผลประกอบการ
+ *   - ขวา  = แถบตัวกรอง (ค้นหา/ระดับความสำคัญ/อารมณ์ตลาด) + ฟีดข่าว กินความกว้างที่เหลือทั้งหมด
+ *
+ * เหตุผลที่ยุบ: ของฝั่งขวาเป็น "ข้อมูลประกอบ" เหมือนตัวกรองฝั่งซ้าย ไม่ใช่เนื้อหาหลัก
+ * พอแยกเป็นสามเสา ฟีดข่าวซึ่งเป็นพระเอกโดนบีบอยู่ตรงกลางจนพาดหัวกับสรุป AI ตัดบรรทัดถี่
+ * รวมของประกอบไว้เสาเดียวแล้วปล่อยฟีดกินที่เหลือ อ่านง่ายกว่าชัดเจน
  *
  * ทุกจุดต่อ store/service ที่มีอยู่แล้วจริงในโปรเจกต์นี้ ไม่มี mock data เลย:
  *   - useNews() ห่อ NewsStore ที่มี fetch/filter/pin/pagination/socket ครบอยู่แล้ว
@@ -263,56 +266,125 @@ onMounted(() => {
 <template>
   <q-page class="news-page" data-test="news-page">
     <div class="news-grid">
-      <!-- ============ LEFT RAIL ============ -->
+      <!-- ============ LEFT COLUMN — filters + context widgets ============ -->
       <aside class="news-rail">
-        <div class="rail-section">
-          <div class="rail-label">{{ languageStore.isThai ? 'ขอบเขตข่าว' : 'Scope' }}</div>
-          <button
-            v-for="opt in scopeOptions"
-            :key="opt.value"
-            type="button"
-            class="scope-item"
-            :class="{ 'scope-item--active': scope === opt.value }"
-            @click="onScopeChange(opt.value)"
-          >
-            <q-icon :name="opt.icon" size="18px" />
-            <span>{{ opt.label }}</span>
-          </button>
+        <div class="rail-card">
+          <div class="rail-section">
+            <div class="rail-label">{{ languageStore.isThai ? 'ขอบเขตข่าว' : 'Scope' }}</div>
+            <button
+              v-for="opt in scopeOptions"
+              :key="opt.value"
+              type="button"
+              class="scope-item"
+              :class="{ 'scope-item--active': scope === opt.value }"
+              @click="onScopeChange(opt.value)"
+            >
+              <q-icon :name="opt.icon" size="18px" />
+              <span>{{ opt.label }}</span>
+            </button>
+          </div>
+
+          <div class="rail-section">
+            <button
+              type="button"
+              class="scope-item"
+              :class="{ 'scope-item--active': pinnedOnly }"
+              @click="pinnedOnly = !pinnedOnly"
+            >
+              <q-icon name="push_pin" size="17px" />
+              <span>{{ languageStore.isThai ? 'ข่าวปักหมุด' : 'Pinned' }}</span>
+              <q-badge
+                v-if="pinnedCount"
+                rounded
+                color="warning"
+                text-color="dark"
+                :label="pinnedCount"
+                class="q-ml-auto"
+              />
+            </button>
+          </div>
+
+          <div class="rail-live">
+            <span class="live-dot" />
+            <span>{{ languageStore.isThai ? 'อัปเดตเรียลไทม์' : 'Live updates' }}</span>
+          </div>
+
+          <q-btn flat dense no-caps size="sm" class="lang-toggle" @click="onToggleLanguage">
+            <q-icon name="translate" size="15px" class="q-mr-xs" />
+            {{ language === 'th' ? 'TH' : 'EN' }} ·
+            {{ languageStore.isThai ? 'สลับภาษา' : 'Switch language' }}
+          </q-btn>
         </div>
 
-        <div class="rail-section">
-          <button
-            type="button"
-            class="scope-item"
-            :class="{ 'scope-item--active': pinnedOnly }"
-            @click="pinnedOnly = !pinnedOnly"
-          >
-            <q-icon name="push_pin" size="17px" />
-            <span>{{ languageStore.isThai ? 'ข่าวปักหมุด' : 'Pinned' }}</span>
-            <q-badge
-              v-if="pinnedCount"
-              rounded
-              color="warning"
-              text-color="dark"
-              :label="pinnedCount"
-              class="q-ml-auto"
-            />
-          </button>
+        <!-- วิดเจ็ตข้อมูลประกอบ ย้ายมาจากคอลัมน์ขวาที่ถูกยุบทิ้ง เรียงตามลำดับที่ใช้จริง:
+             ดูว่าตลาดพูดถึงหุ้นตัวไหน -> ข่าวที่เราปักหมุดไว้ -> อะไรกำลังจะประกาศงบ -->
+        <div class="side-card">
+          <div class="side-card__title">
+            <q-icon name="local_fire_department" size="16px" color="warning" />
+            {{ languageStore.isThai ? 'หุ้นที่ถูกพูดถึงมากสุด' : 'Trending symbols' }}
+          </div>
+          <div v-if="trendingSymbols.length" class="trending-list">
+            <button
+              v-for="t in trendingSymbols"
+              :key="t.symbol"
+              type="button"
+              class="trending-row"
+              @click="goToSymbol(t.symbol)"
+            >
+              <span class="trending-symbol">{{ t.symbol }}</span>
+              <span class="trending-count">
+                {{ t.count }} {{ languageStore.isThai ? 'ข่าว' : 'mentions' }}
+              </span>
+            </button>
+          </div>
+          <p v-else class="side-empty">
+            {{ languageStore.isThai ? 'ยังไม่มีข้อมูล' : 'No data yet' }}
+          </p>
         </div>
 
-        <div class="rail-live">
-          <span class="live-dot" />
-          <span>{{ languageStore.isThai ? 'อัปเดตเรียลไทม์' : 'Live updates' }}</span>
+        <div v-if="pinnedPreview.length" class="side-card">
+          <div class="side-card__title">
+            <q-icon name="push_pin" size="16px" color="warning" />
+            {{ languageStore.isThai ? 'ข่าวปักหมุด' : 'Pinned news' }}
+          </div>
+          <div class="pinned-list">
+            <div v-for="item in pinnedPreview" :key="item.id" class="pinned-row">
+              <span class="pinned-dot" />
+              <span class="pinned-title">{{ item.title }}</span>
+            </div>
+          </div>
         </div>
 
-        <q-btn flat dense no-caps size="sm" class="lang-toggle" @click="onToggleLanguage">
-          <q-icon name="translate" size="15px" class="q-mr-xs" />
-          {{ language === 'th' ? 'TH' : 'EN' }} ·
-          {{ languageStore.isThai ? 'สลับภาษา' : 'Switch language' }}
-        </q-btn>
+        <div class="side-card">
+          <div class="side-card__title">
+            <q-icon name="event" size="16px" color="primary" />
+            {{ languageStore.isThai ? 'ปฏิทินผลประกอบการ' : 'Earnings calendar' }}
+          </div>
+          <div v-if="earningsLoading" class="side-loading">
+            <q-spinner-dots size="22px" color="primary" />
+          </div>
+          <div v-else-if="earningsItems.length" class="earnings-list">
+            <div
+              v-for="item in earningsItems"
+              :key="`${item.symbol}-${item.earningsDate}`"
+              class="earnings-row"
+            >
+              <span class="earnings-date">{{ formatEarningsDate(item.earningsDate) }}</span>
+              <span class="earnings-symbol">{{ item.symbol }}</span>
+              <span class="earnings-eps">EPS {{ item.epsEstimate ?? '--' }}</span>
+            </div>
+          </div>
+          <p v-else class="side-empty">
+            {{
+              languageStore.isThai
+                ? 'ยังไม่มีกำหนดการประกาศผลประกอบการในช่วง 14 วันข้างหน้า'
+                : 'No earnings scheduled in the next 14 days'
+            }}
+          </p>
+        </div>
       </aside>
 
-      <!-- ============ CENTER — FEED ============ -->
+      <!-- ============ RIGHT COLUMN — search + filters + feed ============ -->
       <section class="news-main">
         <header class="news-header">
           <div>
@@ -337,7 +409,9 @@ onMounted(() => {
             outlined
             class="search-input"
             :placeholder="
-              languageStore.isThai ? 'ค้นหาข่าว สัญลักษณ์ แหล่งข่าว...' : 'Search headline, symbol, source...'
+              languageStore.isThai
+                ? 'ค้นหาข่าว สัญลักษณ์ แหล่งข่าว...'
+                : 'Search headline, symbol, source...'
             "
             @update:model-value="onSearchInput"
           >
@@ -394,13 +468,7 @@ onMounted(() => {
           <p class="news-empty__title">
             {{ languageStore.isThai ? 'ไม่พบข่าวที่ตรงเงื่อนไข' : 'No news match your filters' }}
           </p>
-          <q-btn
-            v-if="hasActiveFilters"
-            no-caps
-            unelevated
-            color="primary"
-            @click="onClearFilters"
-          >
+          <q-btn v-if="hasActiveFilters" no-caps unelevated color="primary" @click="onClearFilters">
             {{ languageStore.isThai ? 'ล้างตัวกรอง' : 'Clear filters' }}
           </q-btn>
         </div>
@@ -430,7 +498,9 @@ onMounted(() => {
                     {{ (item.source || '?').slice(0, 2).toUpperCase() }}
                   </span>
                   <span class="source-name">
-                    {{ item.source || (languageStore.isThai ? 'ไม่ทราบแหล่งข่าว' : 'Unknown source') }}
+                    {{
+                      item.source || (languageStore.isThai ? 'ไม่ทราบแหล่งข่าว' : 'Unknown source')
+                    }}
                   </span>
                 </template>
               </div>
@@ -457,7 +527,9 @@ onMounted(() => {
                 <span class="econ-value">{{ item.forecast || '--' }}</span>
               </div>
               <div>
-                <span class="econ-label">{{ languageStore.isThai ? 'ครั้งก่อน' : 'Previous' }}</span>
+                <span class="econ-label">{{
+                  languageStore.isThai ? 'ครั้งก่อน' : 'Previous'
+                }}</span>
                 <span class="econ-value econ-value--muted">{{ item.previous || '--' }}</span>
               </div>
             </div>
@@ -488,6 +560,7 @@ onMounted(() => {
                 flat
                 round
                 dense
+                data-test="news-pin"
                 :icon="item.isPinned ? 'star' : 'star_border'"
                 :color="item.isPinned ? 'warning' : 'grey-6'"
                 :loading="isPinning.includes(item.id)"
@@ -520,92 +593,47 @@ onMounted(() => {
           </div>
         </div>
       </section>
-
-      <!-- ============ RIGHT RAIL — WIDGETS ============ -->
-      <aside class="news-side">
-        <div class="side-card">
-          <div class="side-card__title">
-            <q-icon name="local_fire_department" size="16px" color="warning" />
-            {{ languageStore.isThai ? 'หุ้นที่ถูกพูดถึงมากสุด' : 'Trending symbols' }}
-          </div>
-          <div v-if="trendingSymbols.length" class="trending-list">
-            <button
-              v-for="t in trendingSymbols"
-              :key="t.symbol"
-              type="button"
-              class="trending-row"
-              @click="goToSymbol(t.symbol)"
-            >
-              <span class="trending-symbol">{{ t.symbol }}</span>
-              <span class="trending-count">
-                {{ t.count }} {{ languageStore.isThai ? 'ข่าว' : 'mentions' }}
-              </span>
-            </button>
-          </div>
-          <p v-else class="side-empty">{{ languageStore.isThai ? 'ยังไม่มีข้อมูล' : 'No data yet' }}</p>
-        </div>
-
-        <div v-if="pinnedPreview.length" class="side-card">
-          <div class="side-card__title">
-            <q-icon name="push_pin" size="16px" color="warning" />
-            {{ languageStore.isThai ? 'ข่าวปักหมุด' : 'Pinned news' }}
-          </div>
-          <div class="pinned-list">
-            <div v-for="item in pinnedPreview" :key="item.id" class="pinned-row">
-              <span class="pinned-dot" />
-              <span class="pinned-title">{{ item.title }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="side-card">
-          <div class="side-card__title">
-            <q-icon name="event" size="16px" color="primary" />
-            {{ languageStore.isThai ? 'ปฏิทินผลประกอบการ' : 'Earnings calendar' }}
-          </div>
-          <div v-if="earningsLoading" class="side-loading">
-            <q-spinner-dots size="22px" color="primary" />
-          </div>
-          <div v-else-if="earningsItems.length" class="earnings-list">
-            <div
-              v-for="item in earningsItems"
-              :key="`${item.symbol}-${item.earningsDate}`"
-              class="earnings-row"
-            >
-              <span class="earnings-date">{{ formatEarningsDate(item.earningsDate) }}</span>
-              <span class="earnings-symbol">{{ item.symbol }}</span>
-              <span class="earnings-eps">EPS {{ item.epsEstimate ?? '--' }}</span>
-            </div>
-          </div>
-          <p v-else class="side-empty">
-            {{
-              languageStore.isThai
-                ? 'ยังไม่มีกำหนดการประกาศผลประกอบการในช่วง 14 วันข้างหน้า'
-                : 'No earnings scheduled in the next 14 days'
-            }}
-          </p>
-        </div>
-      </aside>
     </div>
   </q-page>
 </template>
 
 <style scoped lang="scss">
 .news-page {
+  /* เพดานกว้างขึ้นจาก 1440 เพราะ sidebar ซ้ายของ layout ถูกถอดออกแล้ว (เหลือ dock ล่าง)
+     ฟีดข่าวจึงมีที่ให้ขยายจริง — ไม่ใช้ none เพราะบรรทัดข่าวที่ยาวเกิน ~120 ตัวอักษร
+     สายตาจะไล่กลับต้นบรรทัดถัดไปยาก */
   padding: 20px 24px 60px;
-  max-width: 1440px;
+  max-width: 1760px;
   margin: 0 auto;
 }
 
+/* สองคอลัมน์: ของประกอบอยู่ซ้ายเสาเดียว ที่เหลือเป็นของฟีดทั้งหมด
+   คอลัมน์ขวาเป็น minmax(0, 1fr) ไม่ใช่ 1fr เฉยๆ — กัน grid blowout ตอนการ์ดข่าว
+   มีสัญลักษณ์ยาวๆ แล้วดันคอลัมน์บานเกินจอ */
 .news-grid {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  grid-template-columns: 296px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
 
-/* ===== Left rail ===== */
+/* ===== Left column ===== */
+/* ตัว aside เป็นแค่ตัวเรียง ไม่ใช่การ์ด — การ์ดจริงคือ .rail-card กับ .side-card ข้างใน
+   (เดิม aside เองเป็นการ์ดใบเดียว พอเอาวิดเจ็ตฝั่งขวามารวมเลยต้องแยกชั้นออกมา) */
 .news-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 20px;
+  /* คอลัมน์นี้ยาวกว่าจอได้ (ตัวกรอง + 3 การ์ด) ถ้า sticky แล้วไม่ให้เลื่อน
+     ส่วนปฏิทินท้ายสุดจะโดนตัดหาย */
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.rail-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -613,8 +641,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  position: sticky;
-  top: 20px;
+  flex-shrink: 0;
 }
 
 .rail-label {
@@ -1055,16 +1082,9 @@ onMounted(() => {
   padding: 8px 0 16px;
 }
 
-/* ===== Right rail ===== */
-.news-side {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  position: sticky;
-  top: 20px;
-}
-
+/* ===== Context widget cards (อยู่ในคอลัมน์ซ้ายแล้ว) ===== */
 .side-card {
+  flex-shrink: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -1200,7 +1220,13 @@ onMounted(() => {
   font-size: 11px;
 }
 
-/* ===== Responsive ===== */
+/* ===== Responsive =====
+   จอแคบ: คอลัมน์ซ้ายตอนนี้ยาวกว่าเดิม (ตัวกรอง + การ์ดประกอบอีก 3 ใบ) ถ้าปล่อยให้
+   เรียงลงมาตรงๆ ฟีดข่าวจะถูกดันตกไปครึ่งหน้าล่าง ซึ่งกลับหัวกลับหางกับที่คนเข้ามาหา
+   จึงพลิกทั้งคอลัมน์เป็นรางเลื่อนแนวนอนใบเดียวจบ:
+     - ตัวกรอง (.rail-card) เป็นใบแรกของราง แล้วจัดชิปในตัวเองเป็นแถวแทนคอลัมน์
+     - การ์ดประกอบเป็นใบถัดๆ ไป ปัดซ้ายขวาดูได้ ไม่กินความสูงหน้าจอ
+   เป็น CSS ล้วน — DOM ชุดเดียวกับจอกว้าง ไม่มี state หรือ breakpoint ใน JS */
 @media (max-width: 1180px) {
   .news-grid {
     grid-template-columns: 1fr;
@@ -1208,9 +1234,28 @@ onMounted(() => {
 
   .news-rail {
     position: static;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .news-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rail-card {
+    flex: 0 0 auto;
+    min-width: min(100%, 340px);
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
+    gap: 10px 16px;
   }
 
   .rail-section {
@@ -1226,14 +1271,9 @@ onMounted(() => {
     padding-top: 0;
   }
 
-  .news-side {
-    position: static;
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
   .side-card {
-    flex: 1 1 260px;
+    flex: 0 0 272px;
+    min-width: 272px;
   }
 }
 
@@ -1244,6 +1284,11 @@ onMounted(() => {
 
   .econ-trio {
     gap: 12px;
+  }
+
+  .side-card {
+    flex: 0 0 250px;
+    min-width: 250px;
   }
 }
 </style>
