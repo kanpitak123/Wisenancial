@@ -44,3 +44,21 @@ export interface StockListResponse {
   page: number;
   pageSize: number;
 }
+
+/**
+ * แถวหุ้นยอดนิยมที่ใช้บนแผงซ้ายของ Stock Terminal
+ *
+ * /stocks/popular (สหรัฐ) กับ /stocks/popular-th (ไทย) คืนคนละรูปร่างกัน — ฝั่งไทยมี
+ * support/resistance/valueMB ส่วนฝั่งสหรัฐมี support1/2, resistance1/2, marketCap
+ * ตรงกลางที่ทั้งคู่มีเหมือนกันคือ 4 ฟิลด์นี้ ซึ่งพอดีกับที่แผงต้องใช้ จึงประกาศเป็น
+ * ตัวร่วมไว้ ไม่ต้องแปลงรูปร่างหรือรวมสองอินเทอร์เฟซเข้าด้วยกัน
+ */
+export interface PopularStockRow {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePercent: number | null;
+}
+
+/** ตลาดของแผงหุ้นยอดนิยม — คนละความหมายกับ StockExchange (NASDAQ/NYSE/SET) */
+export type PopularMarket = 'TH' | 'US';

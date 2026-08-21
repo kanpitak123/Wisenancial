@@ -13,6 +13,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLanguageStore } from 'stores/LanguageStore';
 import StockExplorerRail from 'components/stocks/StockExplorerRail.vue';
+import PopularStocksPanel from 'components/stocks/PopularStocksPanel.vue';
 import StockAnalysisPage from './StockAnalysisPage.vue';
 
 const route = useRoute();
@@ -20,8 +21,46 @@ const router = useRouter();
 const languageStore = useLanguageStore();
 
 const RAIL_STORAGE_KEY = 'wisenancial.stockTerminal.railCollapsed';
+const RAIL_MODE_STORAGE_KEY = 'wisenancial.stockTerminal.railMode';
 
 const railCollapsed = ref(false);
+
+/**
+ * โหมดของแผงซ้าย — สำรวจหุ้น / หุ้นไทยยอดนิยม / หุ้นสหรัฐยอดนิยม
+ *
+ * เดิมแผงซ้ายมีแต่ตัวสำรวจ ส่วน "หุ้นยอดนิยม" ไปกองอยู่ในแท็บ Market ของฝั่งขวา
+ * (StockAnalysisPage) ซึ่งอยู่คนละที่กับตอนที่คนกำลังจะ "เลือกหุ้น" — ย้ายมารวมกัน
+ * ที่แผงเลือกหุ้นแผงเดียว แล้วให้ปุ่มสามตัวบนหัวแผงเป็นตัวสลับ
+ */
+const RAIL_MODES = ['EXPLORE', 'TH', 'US'] as const;
+type RailMode = (typeof RAIL_MODES)[number];
+
+const railMode = ref<RailMode>('EXPLORE');
+
+const modeButtons = computed(() => [
+  {
+    value: 'EXPLORE' as RailMode,
+    icon: 'travel_explore',
+    label: languageStore.isThai ? 'สำรวจหุ้น' : 'Explore',
+  },
+  {
+    value: 'TH' as RailMode,
+    icon: 'flag',
+    label: languageStore.isThai ? 'หุ้นไทย' : 'Thai',
+  },
+  {
+    value: 'US' as RailMode,
+    icon: 'public',
+    label: languageStore.isThai ? 'หุ้นสหรัฐ' : 'US',
+  },
+]);
+
+const setRailMode = (mode: RailMode) => {
+  railMode.value = mode;
+
+  // กดปุ่มโหมดตอนแผงย่ออยู่ = ตั้งใจจะดูของในแผง — กางให้เลย ไม่ต้องกดสองที
+  if (railCollapsed.value) railCollapsed.value = false;
+};
 
 /** symbol จาก URL เป็นแหล่งความจริงเดียว — deep link /stock/:symbol จึงทำงานเหมือนเดิม */
 const activeSymbol = computed<string | null>(() => {
@@ -57,8 +96,19 @@ watch(railCollapsed, (collapsed) => {
   localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? '1' : '0');
 });
 
+watch(railMode, (mode) => {
+  localStorage.setItem(RAIL_MODE_STORAGE_KEY, mode);
+});
+
 onMounted(() => {
   railCollapsed.value = localStorage.getItem(RAIL_STORAGE_KEY) === '1';
+
+  // เช็คว่าค่าที่เก็บไว้ยังเป็นโหมดที่มีอยู่จริง — ถ้าเคยลบโหมดออกในอนาคต
+  // ค่าที่ค้างใน localStorage ของเครื่องผู้ใช้จะได้ไม่ทำให้แผงว่างเปล่า
+  const saved = localStorage.getItem(RAIL_MODE_STORAGE_KEY);
+  if (saved && (RAIL_MODES as readonly string[]).includes(saved)) {
+    railMode.value = saved as RailMode;
+  }
 });
 </script>
 
@@ -70,9 +120,29 @@ onMounted(() => {
       data-test="terminal-rail"
     >
       <div class="rail-head">
-        <span v-if="!railCollapsed" class="rail-title">
-          {{ languageStore.isThai ? 'สำรวจหุ้น' : 'Explorer' }}
-        </span>
+        <!-- แถบปุ่มสามโหมด — ย่อแผงแล้วเหลือแต่ไอคอนเรียงลง เพื่อให้ยังสลับโหมดได้
+             โดยไม่ต้องกางแผงก่อน (กดแล้วมันกางให้เองผ่าน setRailMode) -->
+        <div
+          v-if="!railCollapsed"
+          class="rail-modes"
+          role="tablist"
+          data-test="rail-mode-bar"
+        >
+          <button
+            v-for="mode in modeButtons"
+            :key="mode.value"
+            type="button"
+            role="tab"
+            class="rail-mode"
+            :class="{ 'rail-mode--active': railMode === mode.value }"
+            :aria-selected="railMode === mode.value"
+            :data-test="`rail-mode-${mode.value}`"
+            @click="setRailMode(mode.value)"
+          >
+            <q-icon :name="mode.icon" size="15px" />
+            <span>{{ mode.label }}</span>
+          </button>
+        </div>
         <q-btn
           flat
           dense
@@ -105,12 +175,23 @@ onMounted(() => {
         </q-btn>
       </div>
 
-      <!-- v-show ไม่ใช่ v-if: ย่อแล้วขยายกลับต้องไม่ต้องโหลดตารางใหม่ทั้งชุด -->
+      <!-- v-show ไม่ใช่ v-if: ย่อแล้วขยายกลับต้องไม่ต้องโหลดตารางใหม่ทั้งชุด
+           และสลับโหมดไป-มาต้องไม่ทำให้ตัวสำรวจลืมหน้า/ตัวกรองที่ตั้งไว้ -->
       <StockExplorerRail
-        v-show="!railCollapsed"
+        v-show="!railCollapsed && railMode === 'EXPLORE'"
         :selected-symbol="activeSymbol"
         @select="selectSymbol"
         @loaded="onRailLoaded"
+      />
+
+      <!-- ตรงกันข้ามกับตัวสำรวจ: สองแผงนี้ใช้ v-if เพราะข้อมูลเป็นราคาสด
+           กลับมาดูอีกทีควรได้ราคาใหม่ ไม่ใช่ราคาค้างจากเมื่อสิบนาทีที่แล้ว -->
+      <PopularStocksPanel
+        v-if="!railCollapsed && railMode !== 'EXPLORE'"
+        :key="railMode"
+        :market="railMode"
+        :selected-symbol="activeSymbol"
+        @select="selectSymbol"
       />
     </aside>
 
@@ -181,12 +262,67 @@ onMounted(() => {
   min-height: 44px;
 }
 
-.rail-title {
-  font-size: 12px;
+/* ==========================================================
+   แถบปุ่มสามโหมดบนหัวแผงซ้าย (สำรวจหุ้น / หุ้นไทย / หุ้นสหรัฐ)
+   ทรง segmented control: กล่องเดียวพื้นจาง ปุ่มที่เลือกเป็นการ์ดยกขึ้นมา
+========================================================== */
+.rail-modes {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+}
+
+.rail-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.rail-mode:hover:not(.rail-mode--active) {
+  color: var(--text-primary);
+}
+
+.rail-mode--active {
+  background: var(--bg-card);
+  color: var(--accent-800);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-secondary);
+  box-shadow: 0 1px 3px rgba(15, 42, 40, 0.12);
+}
+
+.body--dark .rail-mode--active {
+  color: var(--accent-400);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* แผงแคบมาก ป้ายกำกับจะเบียดกันจนอ่านไม่ออก — เหลือแต่ไอคอน
+   (ยังมี aria-selected + tooltip ของปุ่มย่อ/ขยายให้บริบทอยู่) */
+@media (max-width: 1180px) {
+  .rail-mode span {
+    display: none;
+  }
 }
 
 .terminal-body {
