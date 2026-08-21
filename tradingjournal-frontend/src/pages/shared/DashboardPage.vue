@@ -13,6 +13,8 @@ import { useQuasar } from 'quasar';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import type { ApexOptions } from 'apexcharts';
 import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
+import { SHARE_QR_OPTIONS, SHARE_QR_TARGET_URL } from 'src/constants/share.constants';
 import { assetClassOf, buildActivityCsv, buildDividendCsv, downloadCsv } from 'src/utils/csv-export';
 import type { InvestorActivity } from 'src/types/investor-portfolio.types';
 
@@ -774,12 +776,199 @@ const shareAllocationTop = computed(() => {
   return top;
 });
 
+/**
+ * เส้น "Monthly Momentum" บนการ์ดแชร์ (ฝั่ง Trader) — กำไรสะสมของเดือนที่กำลังดูอยู่
+ *
+ * อ่านจาก analyticsStore.dailyPnl ชุดเดียวกับปฏิทินด้านบนของหน้านี้ (โหลดโดย
+ * loadCalendarPnl) ไม่ได้ยิง endpoint เพิ่มและไม่ได้ประมาณค่าวันที่ไม่มีข้อมูล
+ * จุดสุดท้ายของเส้นจึงเท่ากับตัวเลข "month p&l" ที่โชว์อยู่บนการ์ดใบเดียวกันเสมอ
+ *
+ * ตัดท้ายที่วันสุดท้ายที่มี P&L จริง ไม่ลากเส้นแบนไปจนสิ้นเดือน — เดือนปัจจุบันที่เพิ่ง
+ * ผ่านไปครึ่งเดือนจะได้ไม่ดูเหมือนหยุดเทรดไปแล้ว
+ */
+const shareMomentum = computed(() => {
+  const year = currentDate.value.getFullYear();
+  const month = currentDate.value.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthStr = String(month + 1).padStart(2, '0');
+  const monthLabel = currentDate.value.toLocaleDateString('en-GB', { month: 'short' });
+
+  const categories: string[] = [];
+  const data: number[] = [];
+  let cumulative = 0;
+  let lastDayWithPnl = 0;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${monthStr}-${String(day).padStart(2, '0')}`;
+    const pnl = analyticsStore.dailyPnl[dateStr];
+
+    if (pnl !== undefined) {
+      cumulative += Number(pnl);
+      lastDayWithPnl = day;
+    }
+
+    categories.push(`${day} ${monthLabel}`);
+    // ปัดที่นี่ไม่ใช่ตอน render เพราะ Apex เอาค่าดิบไปคิดสเกลแกน Y ด้วย
+    data.push(Number(cumulative.toFixed(2)));
+  }
+
+  return {
+    categories: categories.slice(0, lastDayWithPnl),
+    data: data.slice(0, lastDayWithPnl),
+  };
+});
+
+/**
+ * ต้องมีอย่างน้อย 2 จุดถึงจะเป็น "เส้น" ได้ — เดือนที่มี P&L วันเดียวจะได้จุดลอยๆ
+ * จุดเดียวกลางการ์ด ซึ่งดูเหมือนบั๊กมากกว่าข้อมูล
+ */
+const hasShareMomentum = computed(() => shareMomentum.value.data.length >= 2);
+
+/** ปิดท้ายเดือนเป็นบวกไหม — ใช้เลือกสีเส้นให้ตรงกับความจริง ไม่ได้เขียวไว้ก่อนตามเรฟ */
+const shareMomentumIsUp = computed(() => {
+  const data = shareMomentum.value.data;
+  return (data[data.length - 1] ?? 0) >= 0;
+});
+
+const SHARE_MOMENTUM_UP = '#4c8a87';
+const SHARE_MOMENTUM_DOWN = '#e5484d';
+
+const shareMomentumSeries = computed(() => [
+  { name: 'Cumulative P&L', data: shareMomentum.value.data },
+]);
+
+const shareMomentumOptions = computed<ApexOptions>(() => {
+  const stroke = shareMomentumIsUp.value ? SHARE_MOMENTUM_UP : SHARE_MOMENTUM_DOWN;
+  const isDark = $q.dark.isActive;
+  const axisColor = isDark ? '#7d8c89' : '#8a9b98';
+
+  return {
+    chart: {
+      type: 'area',
+      background: 'transparent',
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      parentHeightOffset: 0,
+      // ต้องปิด — html2canvas ถ่ายภาพทันทีที่กด Save ถ้า animation ยังวิ่งอยู่
+      // เส้นจะติดไปในไฟล์แค่ครึ่งเดียว (สาเหตุเดียวกับที่ heroSparklineOptions ปิดไว้)
+      animations: { enabled: false },
+    },
+    colors: [stroke],
+    dataLabels: { enabled: false },
+    stroke: { curve: 'smooth', width: 2.5, lineCap: 'round' },
+    fill: {
+      type: 'gradient',
+      gradient: { shadeIntensity: 1, opacityFrom: 0.32, opacityTo: 0, stops: [0, 100] },
+    },
+    grid: {
+      borderColor: isDark ? '#394141' : '#dae7e5',
+      strokeDashArray: 3,
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+      padding: { top: 0, right: 4, bottom: 0, left: 4 },
+    },
+    markers: { size: 0 },
+    legend: { show: false },
+    tooltip: { enabled: false },
+    xaxis: {
+      categories: shareMomentum.value.categories,
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+      tooltip: { enabled: false },
+      // ตัวเลขวันที่ทุกวันจะทับกันจนอ่านไม่ออกบนการ์ดกว้าง ~380px — ให้ Apex
+      // เว้นระยะเองแล้วเหลือราว 5 หลักเหมือนในเรฟ
+      tickAmount: Math.min(4, Math.max(1, shareMomentum.value.categories.length - 1)),
+      labels: {
+        rotate: 0,
+        hideOverlappingLabels: true,
+        style: { fontSize: '8px', fontWeight: 600, colors: axisColor },
+      },
+    },
+    yaxis: {
+      labels: {
+        style: { fontSize: '8px', fontWeight: 600, colors: axisColor },
+        formatter: (value: number) => formatShareMoney(value, value !== 0),
+      },
+    },
+    theme: { mode: isDark ? 'dark' : 'light' },
+  };
+});
+
+/**
+ * QR บน footer ของการ์ดแชร์ — generate เป็น data URL แล้ว render เป็น <img>
+ * ไม่ใช่ <canvas> เพราะ html2canvas โคลน DOM ก่อนวาด และ canvas ที่ถูกโคลนจะกลาย
+ * เป็นผืนว่าง (บริบทการวาดไม่ได้ถูกโคลนตามไปด้วย) — <img> ที่มี data URL ปลอดภัยกว่า
+ */
+const shareQrDataUrl = ref('');
+
+const buildShareQr = async () => {
+  if (shareQrDataUrl.value) return;
+
+  try {
+    shareQrDataUrl.value = await QRCode.toDataURL(SHARE_QR_TARGET_URL, {
+      ...SHARE_QR_OPTIONS,
+      color: { ...SHARE_QR_OPTIONS.color },
+    });
+  } catch (error) {
+    // QR พังไม่ควรทำให้การ์ดแชร์ทั้งใบเปิดไม่ได้ — footer จะซ่อน QR ไปเฉยๆ
+    console.error('Failed to build share QR code:', error);
+    shareQrDataUrl.value = '';
+  }
+};
+
+/**
+ * สร้างตอนเปิด dialog ไม่ใช่ตอน mount หน้า — คนส่วนใหญ่เข้า Dashboard โดยไม่กด Share
+ * และ toDataURL() เป็น async จึงต้องเสร็จก่อนที่ html2canvas จะเริ่มถ่าย
+ */
+watch(shareDialogOpen, (isOpen) => {
+  if (isOpen) void buildShareQr();
+});
+
+/**
+ * html2canvas โคลน DOM ณ วินาทีที่ถูกเรียก แล้ววาดจากสิ่งที่เห็นตอนนั้น — อะไรที่ยัง
+ * โหลด/วาดไม่เสร็จจะกลายเป็นช่องว่างในไฟล์ PNG โดยไม่มี error ให้จับ จึงต้องรอสองอย่าง
+ * ก่อนกดชัตเตอร์:
+ *
+ *   1. <svg> ของ ApexCharts — Apex วาดแบบ async หลัง mount ถ้าถ่ายก่อนจะได้กรอบเปล่า
+ *   2. <img> ทุกตัวในการ์ด (QR) — data URL ก็ยังต้องรอ decode
+ */
+const waitForShareCardReady = async (element: HTMLElement) => {
+  if (hasShareMomentum.value) {
+    for (let attempt = 0; attempt < 40 && !element.querySelector('.apexcharts-svg'); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  await Promise.all(
+    [...element.querySelectorAll('img')].map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete) {
+            resolve();
+            return;
+          }
+          image.addEventListener('load', () => resolve(), { once: true });
+          image.addEventListener('error', () => resolve(), { once: true });
+        }),
+    ),
+  );
+
+  // เว้นสอง frame ให้เบราว์เซอร์ paint สิ่งที่เพิ่งเสร็จออกมาจริงก่อน
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+  );
+};
+
 const downloadStatsImage = async () => {
   const element = document.getElementById('share-image-area');
   if (!element) return;
 
   isSavingImage.value = true;
   try {
+    // QR สร้างตอนเปิด dialog อยู่แล้ว แต่กันกรณีกด Save เร็วกว่าที่ toDataURL() จะเสร็จ
+    await buildShareQr();
+    await waitForShareCardReady(element);
+
     const canvas = await html2canvas(element, {
       backgroundColor: $q.dark.isActive ? '#1f2323' : '#fdfefe',
       scale: 2,
@@ -1904,6 +2093,18 @@ const downloadStatsImage = async () => {
                 {{ formatShareMoney(monthlyGoal.targetProfit) }}
               </div>
             </div>
+
+            <!-- Monthly Momentum — กำไรสะสมรายวันของเดือนนี้ ซ่อนไปถ้ามี P&L ไม่ถึง 2 วัน -->
+            <div v-if="hasShareMomentum" class="z-top share-momentum" data-test="share-momentum">
+              <div class="share-momentum-label">Monthly Momentum</div>
+              <VueApexCharts
+                type="area"
+                width="100%"
+                height="120"
+                :options="shareMomentumOptions"
+                :series="shareMomentumSeries"
+              />
+            </div>
           </template>
 
           <template v-else>
@@ -2014,7 +2215,20 @@ const downloadStatsImage = async () => {
 
           <!-- Footer -->
           <div class="share-footer-v3 z-top">
-            <div class="share-footer-brand">✦ wisenancial.app</div>
+            <div class="share-footer-tracked">
+              <div class="share-footer-mark">W</div>
+              <div class="share-footer-copy">
+                <span class="share-footer-on">Tracked on</span>
+                <span class="share-footer-brand">wisenancial.app</span>
+              </div>
+            </div>
+            <img
+              v-if="shareQrDataUrl"
+              class="share-footer-qr"
+              data-test="share-qr"
+              :src="shareQrDataUrl"
+              alt="QR code to wisenancial.app"
+            />
           </div>
         </div>
 
@@ -2896,7 +3110,7 @@ const downloadStatsImage = async () => {
   letter-spacing: 0.03em;
 }
 
-/* Account chip — same accent-100/800 pill pattern as DiscoverPage's .discover-credits */
+/* Account chip — same accent-100/800 pill pattern as MarketPulsePage's .pulse-credits */
 .share-account-chip-wrap {
   display: flex;
   align-items: center;
@@ -3142,7 +3356,7 @@ const downloadStatsImage = async () => {
 }
 
 /* Allocation bar (Investor share card) — ใช้ palette เดียวกับ Asset Allocation card จริง
-   ผ่าน seg.color แบบ inline-style ส่วน legend เลียนแบบ .heatmap-legend ของ HeatmapPage.vue */
+   ผ่าน seg.color แบบ inline-style ส่วน legend เลียนแบบ .pulse-legend ของ MarketPulsePage.vue */
 .share-alloc-bar {
   display: flex;
   height: 8px;
@@ -3176,21 +3390,88 @@ const downloadStatsImage = async () => {
   flex-shrink: 0;
 }
 
-/* Footer */
+/* Monthly Momentum (Trader share card) — ใช้ผิวเดียวกับ .share-goal-area
+   ส่วนตัวกราฟเป็น ApexCharts ชุดเดียวกับ hero sparkline ของหน้านี้ */
+.share-momentum {
+  margin: 0 22px 14px;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 10px 2px 6px;
+  position: relative;
+  z-index: 1;
+}
+.share-momentum-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-700);
+  padding-left: 8px;
+  margin-bottom: 2px;
+}
+/* Apex ใส่ margin ของตัวเองมาให้ ทำให้ก้นการ์ดโหว่ — ดันกลับขึ้นไป */
+.share-momentum :deep(.apexcharts-canvas) {
+  margin-bottom: -6px;
+}
+
+/* Footer — "Tracked on wisenancial.app" คู่กับ QR ที่ชี้กลับไปหน้า landing */
 .share-footer-v3 {
   padding: 10px 22px 18px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 12px;
   position: relative;
   z-index: 1;
 }
-.share-footer-brand {
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+.share-footer-tracked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.share-footer-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent-700);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+.share-footer-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.share-footer-on {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+.share-footer-brand {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--text-main);
+}
+.share-footer-qr {
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  display: block;
+  flex-shrink: 0;
+  /* quiet zone ของ QR ต้องขาวจริงถึงจะสแกนติด — ห้ามปล่อยให้ธีมมืดกลืนขอบไป */
+  background: #ffffff;
+  padding: 3px;
 }
 
 /* Action buttons */
@@ -3205,7 +3486,7 @@ const downloadStatsImage = async () => {
   color: var(--text-secondary);
   font-size: 13px;
 }
-/* gradient เดียวกับ .discover-generate ของ DiscoverPage.vue */
+/* gradient เดียวกับ .pulse-generate ของ MarketPulsePage.vue */
 .share-action-save {
   background: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-900) 100%);
   color: #ffffff;
@@ -3248,6 +3529,10 @@ const downloadStatsImage = async () => {
   .share-footer-v3 {
     padding-left: 16px;
     padding-right: 16px;
+  }
+  .share-momentum {
+    margin-left: 16px;
+    margin-right: 16px;
   }
 }
 

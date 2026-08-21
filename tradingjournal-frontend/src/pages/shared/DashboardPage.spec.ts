@@ -25,9 +25,12 @@ import type {
 } from 'src/types/investor-portfolio.types';
 import type { Portfolio } from 'src/types/portfolio.types';
 import type { WorkspaceType } from 'src/types/workspace.types';
+import { SHARE_QR_TARGET_URL } from 'src/constants/share.constants';
 
 const downloadCsv = vi.fn();
 const getMonthlyTarget = vi.fn();
+const getDailyPnl = vi.fn();
+const qrToDataUrl = vi.fn();
 const dividendGetAll = vi.fn();
 const dividendGetSummary = vi.fn();
 
@@ -66,7 +69,7 @@ vi.mock('src/services/analytics.service', () => ({
   analyticsService: {
     getOverview: vi.fn().mockResolvedValue(null),
     getPerformance: vi.fn().mockResolvedValue([]),
-    getDailyPnl: vi.fn().mockResolvedValue({}),
+    getDailyPnl: (...args: unknown[]) => getDailyPnl(...args),
     getTimeline: vi.fn().mockResolvedValue([]),
     getAllocation: vi.fn().mockResolvedValue([]),
   },
@@ -82,9 +85,19 @@ vi.mock('src/utils/csv-export', async () => {
 });
 
 // ApexCharts แตะ DOM API ที่ happy-dom ไม่มี — ไม่เกี่ยวกับสิ่งที่เทสนี้ตรวจ
+// สะท้อน series/สีออกมาเป็น data attribute เพื่อให้เทสตรวจค่าที่หน้าส่งเข้ากราฟได้
+// โดยไม่ต้องพึ่ง Apex จริง (การ์ดแชร์ถูก teleport ออกไปนอก wrapper ด้วย)
 vi.mock('vue3-apexcharts', () => ({
-  default: { name: 'VueApexCharts', props: ['options', 'series'], template: '<div class="apex" />' },
+  default: {
+    name: 'VueApexCharts',
+    props: ['options', 'series'],
+    template:
+      '<div class="apex" :data-series="JSON.stringify(series ?? null)" :data-colors="JSON.stringify(options?.colors ?? null)" />',
+  },
 }));
+
+// qrcode จริงวาดผ่าน <canvas> ซึ่ง happy-dom ไม่มี — ตัวที่สแกนได้จริงถูกตรวจในเบราว์เซอร์
+vi.mock('qrcode', () => ({ default: { toDataURL: (...args: unknown[]) => qrToDataUrl(...args) } }));
 
 vi.mock('html2canvas', () => ({ default: vi.fn() }));
 
@@ -232,6 +245,8 @@ describe('DashboardPage', () => {
     document.body.innerHTML = '';
     vi.clearAllMocks();
     getMonthlyTarget.mockResolvedValue(0);
+    getDailyPnl.mockResolvedValue({});
+    qrToDataUrl.mockResolvedValue('data:image/png;base64,QRSTUB');
     dividendGetAll.mockResolvedValue([]);
     dividendGetSummary.mockResolvedValue(null);
   });
@@ -605,6 +620,178 @@ describe('DashboardPage', () => {
       await wrapper.find('[data-test="activity-export"]').trigger('click');
 
       expect(downloadCsv).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── เฟส 1: ส่วนที่เลื่อนออกไปจาก ca10191 — กราฟ Monthly Momentum + QR ──────
+  //
+  //    ตัวที่เทสนี้ตรวจไม่ได้คือ "ภาพที่ html2canvas ถ่ายออกมาแล้วมีกราฟ/QR ติดมาจริง"
+  //    (ต้องใช้เบราว์เซอร์จริงกับ canvas จริง) — ที่นี่ตรวจว่าค่าที่ป้อนเข้ากราฟกับ
+  //    ปลายทางของ QR ถูกต้อง ซึ่งเป็นส่วนที่ผิดได้เงียบๆ ที่สุด
+  describe('การ์ดแชร์ — Monthly Momentum', () => {
+    beforeEach(() => setWorkspace('TRADER'));
+
+    /** วันที่ในเดือนที่การ์ดกำลังโชว์อยู่ — หน้าเริ่มที่ new Date() เสมอ */
+    function dayOfCurrentMonth(day: number) {
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+
+      return `${now.getFullYear()}-${month}-${String(day).padStart(2, '0')}`;
+    }
+
+    async function openShareCard(wrapper: VueWrapper) {
+      await wrapper.find('.share-btn-main').trigger('click');
+      await nextTick();
+      await nextTick();
+    }
+
+    function momentumChart() {
+      return document.querySelector('[data-test="share-momentum"] .apex');
+    }
+
+    it('สะสม P&L รายวันต่อกัน และตัดท้ายที่วันสุดท้ายที่มีข้อมูลจริง', async () => {
+      getDailyPnl.mockResolvedValue({
+        [dayOfCurrentMonth(1)]: 100,
+        [dayOfCurrentMonth(3)]: -40,
+        [dayOfCurrentMonth(4)]: 250,
+      });
+
+      const wrapper = await mountDashboard();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await openShareCard(wrapper);
+
+      const chart = momentumChart();
+
+      expect(chart).not.toBeNull();
+
+      const series = JSON.parse(chart?.getAttribute('data-series') ?? 'null');
+
+      // วันที่ 2 ไม่มีเทรด -> ยอดสะสมคงเดิม ไม่ใช่ 0 และไม่ใช่ค่าที่เดาขึ้นมา
+      // ตัดจบที่วันที่ 4 ไม่ลากยาวไปจนสิ้นเดือน
+      expect(series[0].data).toEqual([100, 100, 60, 310]);
+    });
+
+    it('จุดสุดท้ายของเส้นเท่ากับ month p&l ที่โชว์บนการ์ดใบเดียวกัน', async () => {
+      getDailyPnl.mockResolvedValue({
+        [dayOfCurrentMonth(2)]: 500,
+        [dayOfCurrentMonth(5)]: -125.5,
+      });
+
+      const wrapper = await mountDashboard();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await openShareCard(wrapper);
+
+      const series = JSON.parse(momentumChart()?.getAttribute('data-series') ?? 'null');
+      const data: number[] = series[0].data;
+
+      expect(data[data.length - 1]).toBe(374.5);
+    });
+
+    it('เดือนที่ปิดติดลบ -> เส้นเป็นสีแดง ไม่ใช่เขียวไว้ก่อนตามเรฟ', async () => {
+      getDailyPnl.mockResolvedValue({
+        [dayOfCurrentMonth(1)]: 100,
+        [dayOfCurrentMonth(2)]: -400,
+      });
+
+      const wrapper = await mountDashboard();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await openShareCard(wrapper);
+
+      expect(JSON.parse(momentumChart()?.getAttribute('data-colors') ?? 'null')).toEqual([
+        '#e5484d',
+      ]);
+    });
+
+    it('มี P&L แค่วันเดียว -> ไม่ render กราฟ (จุดเดียวไม่ใช่เส้น)', async () => {
+      getDailyPnl.mockResolvedValue({ [dayOfCurrentMonth(1)]: 100 });
+
+      const wrapper = await mountDashboard();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await openShareCard(wrapper);
+
+      expect(momentumChart()).toBeNull();
+    });
+
+    it('ไม่มี P&L ทั้งเดือน -> ไม่ render กราฟเปล่า', async () => {
+      const wrapper = await mountDashboard();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await openShareCard(wrapper);
+
+      expect(momentumChart()).toBeNull();
+    });
+
+    it('โหมด Stock ไม่มี Monthly Momentum — ช่องนั้นเป็น Portfolio Allocation ตามเรฟ', async () => {
+      setWorkspace('INVESTOR');
+      getDailyPnl.mockResolvedValue({
+        [dayOfCurrentMonth(1)]: 100,
+        [dayOfCurrentMonth(2)]: 200,
+      });
+      useInvestorPortfolioStore().dashboard = investorDashboard([
+        holding({ symbol: 'PTT.BK', market_value: 4000 }),
+      ]);
+
+      const wrapper = await mountDashboard();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await openShareCard(wrapper);
+
+      expect(momentumChart()).toBeNull();
+      expect(document.querySelector('[data-test="share-alloc-segment"]')).not.toBeNull();
+    });
+  });
+
+  describe('การ์ดแชร์ — QR code', () => {
+    beforeEach(() => setWorkspace('TRADER'));
+
+    async function openShareCard(wrapper: VueWrapper) {
+      await wrapper.find('.share-btn-main').trigger('click');
+      await nextTick();
+      await nextTick();
+    }
+
+    it('ชี้ไปหน้า landing สาธารณะ ไม่ใช่ /profile/:username ที่ยังต้องล็อกอิน', async () => {
+      const wrapper = await mountDashboard();
+
+      await openShareCard(wrapper);
+      await nextTick();
+
+      expect(qrToDataUrl).toHaveBeenCalledWith(SHARE_QR_TARGET_URL, expect.anything());
+      expect(SHARE_QR_TARGET_URL).not.toContain('/profile/');
+    });
+
+    it('render เป็น <img> (ไม่ใช่ <canvas> ที่ html2canvas โคลนแล้วได้ผืนว่าง)', async () => {
+      const wrapper = await mountDashboard();
+
+      await openShareCard(wrapper);
+      await nextTick();
+
+      const qr = document.querySelector('[data-test="share-qr"]');
+
+      expect(qr?.tagName).toBe('IMG');
+      expect(qr?.getAttribute('src')).toBe('data:image/png;base64,QRSTUB');
+    });
+
+    it('สร้าง QR ตอนเปิด dialog เท่านั้น ไม่ใช่ตอนเปิดหน้า', async () => {
+      const wrapper = await mountDashboard();
+
+      expect(qrToDataUrl).not.toHaveBeenCalled();
+
+      await openShareCard(wrapper);
+      await nextTick();
+
+      expect(qrToDataUrl).toHaveBeenCalledTimes(1);
+    });
+
+    it('QR สร้างไม่สำเร็จ -> การ์ดยังเปิดได้ แค่ไม่มี QR', async () => {
+      qrToDataUrl.mockRejectedValue(new Error('nope'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const wrapper = await mountDashboard();
+
+      await openShareCard(wrapper);
+      await nextTick();
+
+      expect(document.getElementById('share-image-area')).not.toBeNull();
+      expect(document.querySelector('[data-test="share-qr"]')).toBeNull();
     });
   });
 });
