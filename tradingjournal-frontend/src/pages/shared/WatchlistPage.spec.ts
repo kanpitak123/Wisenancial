@@ -152,8 +152,8 @@ describe('WatchlistPage — AI radar', () => {
 
     expect(cardsIn(wrapper, 'Upside')).toHaveLength(3);
     expect(cardsIn(wrapper, 'Downside')).toHaveLength(2);
-    // ตัดเหลือ 4 จาก 6
-    expect(cardsIn(wrapper, 'Near-recommended')).toHaveLength(4);
+    // ทุกหมวดเป็นรางเลื่อนแล้ว — ไม่ตัดที่ 4 อีกต่อไป โชว์ครบทั้ง 6
+    expect(cardsIn(wrapper, 'Near-recommended')).toHaveLength(6);
     expect(cardsIn(wrapper, 'Not-recommended')).toHaveLength(2);
   });
 
@@ -202,24 +202,36 @@ describe('WatchlistPage — AI radar', () => {
     );
   });
 
-  it('ปุ่มดูทั้งหมดสลับระหว่าง 4 อันแรกกับทั้งหมด', async () => {
+  it('ปุ่มดูทั้งหมดถูกถอดออกแล้ว — รางเลื่อนโชว์ครบทุกใบตั้งแต่แรก', async () => {
     const wrapper = await mountPage();
 
-    const toggle = wrapper.find('[data-test="radar-view-all-Near-recommended"]');
-
-    expect(toggle.exists()).toBe(true);
-
-    await toggle.trigger('click');
+    expect(wrapper.find('[data-test="radar-view-all-Near-recommended"]').exists()).toBe(false);
     expect(cardsIn(wrapper, 'Near-recommended')).toHaveLength(6);
-
-    await toggle.trigger('click');
-    expect(cardsIn(wrapper, 'Near-recommended')).toHaveLength(4);
   });
 
-  it('หมวดที่มีไม่เกิน 4 ตัว ไม่ต้องมีปุ่มดูทั้งหมด', async () => {
+  it('ทั้ง 4 หมวดเป็นรางเลื่อน ไม่ใช่กริดที่ตัดขึ้นบรรทัดใหม่', async () => {
     const wrapper = await mountPage();
 
-    expect(wrapper.find('[data-test="radar-view-all-Not-recommended"]').exists()).toBe(false);
+    for (const category of ['Upside', 'Downside', 'Near-recommended', 'Not-recommended']) {
+      const section = wrapper.find(`[data-test="radar-section-${category}"]`);
+      expect(
+        section.find('[data-test="scroll-rail-track"]').exists(),
+        `หมวด ${category} ต้องเป็นราง`,
+      ).toBe(true);
+    }
+  });
+
+  it('ปุ่มเลื่อนซ้าย/ขวามีครบทุกหมวด และเริ่มต้นปุ่มซ้ายต้อง disabled', async () => {
+    const wrapper = await mountPage();
+
+    const section = wrapper.find('[data-test="radar-section-Near-recommended"]');
+    const prev = section.find('[data-test="scroll-rail-prev"]');
+    const next = section.find('[data-test="scroll-rail-next"]');
+
+    expect(prev.exists()).toBe(true);
+    expect(next.exists()).toBe(true);
+    // อยู่หัวรางอยู่แล้ว -> เลื่อนย้อนกลับไม่ได้
+    expect(prev.attributes('disabled')).toBeDefined();
   });
 
   it('คลิกการ์ด -> ไปหน้า Stock Analysis ของสัญลักษณ์นั้น', async () => {

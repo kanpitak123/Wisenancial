@@ -365,10 +365,58 @@ export class StocksService {
    * by that return.
    */
   async getRadar(): Promise<RadarRecommendation[]> {
+    const universe = await this.buildRadarUniverse();
     const entries = await Promise.all(
-      LISTING_SEED.map((seed) => this.buildRadarEntry(seed)),
+      universe.map((seed) => this.buildRadarEntry(seed)),
     );
     return entries.filter((e): e is RadarRecommendation => e !== null);
+  }
+
+  /**
+   * หุ้นที่จะเอาไปคำนวณ radar — ดึงจากตาราง stocks เหมือน /stocks/listing
+   * (เดิมอ่านจาก LISTING_SEED ตายตัว 27 ตัว หุ้นที่ seed เพิ่มจึงไม่เคยโผล่ใน radar เลย)
+   *
+   * ⚠️ ต้องจำกัดจำนวน: buildRadarEntry() ยิง getHistoricalData() หนึ่งครั้งต่อหุ้น และ
+   * ตัวนั้นไม่มีแคช (มีแค่ listing metrics ที่แคช 5 นาที) ถ้าปล่อยให้วิ่งครบทั้ง universe
+   * = ยิง Yahoo เกือบ 200 ครั้งต่อการเปิดหน้า Watchlist หนึ่งครั้ง
+   *
+   * แบ่งโควตาเท่ากันสองฝั่งตลาด ไม่ใช่ตัดจากลิสต์รวม — ไม่งั้นฝั่งที่มีหุ้นเยอะกว่า
+   * จะกินโควตาไปหมดแล้วอีกฝั่งหายไปจากฟีด
+   */
+  private async buildRadarUniverse(): Promise<ListingSeed[]> {
+    let rows: {
+      symbol: string;
+      name: string;
+      sector: string | null;
+      exchange: string | null;
+    }[] = [];
+
+    try {
+      rows = await this.prisma.stocks.findMany({
+        where: { is_active: true },
+        select: { symbol: true, name: true, sector: true, exchange: true },
+        orderBy: { symbol: 'asc' },
+      });
+    } catch {
+      rows = [];
+    }
+
+    if (rows.length === 0) return LISTING_SEED;
+
+    const toSeed = (row: (typeof rows)[number]): ListingSeed => ({
+      symbol: row.symbol,
+      name: row.name,
+      sector: row.sector ?? 'Unknown',
+      exchange: (row.exchange as StockListingExchange | null) ?? 'NASDAQ',
+    });
+
+    const thai = rows.filter((row) => row.exchange === 'SET');
+    const global = rows.filter((row) => row.exchange !== 'SET');
+
+    return [
+      ...pickEvenly(thai, RADAR_SYMBOLS_PER_MARKET),
+      ...pickEvenly(global, RADAR_SYMBOLS_PER_MARKET),
+    ].map(toSeed);
   }
 
   private async buildRadarEntry(
@@ -455,6 +503,26 @@ interface ListingSeed {
   name: string;
   exchange: StockListingExchange;
   sector: string;
+}
+
+/** โควตาหุ้นต่อฝั่งตลาดที่ radar เอาไปคำนวณ (ดู buildRadarUniverse ว่าทำไมต้องจำกัด) */
+const RADAR_SYMBOLS_PER_MARKET = 18;
+
+/**
+ * เลือก n ตัวจาก list แบบกระจายทั่วทั้งลิสต์ ไม่ใช่ slice หัวมา
+ *
+ * ลิสต์เรียงตามตัวอักษร ถ้า slice(0, n) จะได้แต่หุ้นต้น A-C ซ้ำเดิมทุกครั้ง กระจุกอยู่
+ * ไม่กี่ sector — เดินทีละ step แทน ได้ผลคงที่ (ไม่สุ่ม) แต่คลุมทั้งลิสต์
+ */
+function pickEvenly<T>(list: T[], n: number): T[] {
+  if (list.length <= n) return list;
+
+  const step = list.length / n;
+  const out: T[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push(list[Math.floor(i * step)]);
+  }
+  return out;
 }
 
 const LISTING_SEED: ListingSeed[] = [

@@ -11,7 +11,8 @@
  * ฟีเจอร์เพิ่ม/ลบสัญลักษณ์เอง (WatchlistStore + /watchlist CRUD จริง) ไม่ได้ถูกลบทิ้ง
  * แค่ย้ายลงไปเป็น section เสริมท้ายหน้า
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import ScrollRail from 'components/stocks/ScrollRail.vue';
 import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
@@ -141,36 +142,28 @@ const filterableSections = computed(() => [
   },
 ]);
 
-// Near-recommended / Not-recommended — ไม่มีตัวกรอง แต่ตัดเหลือ 4 อันแรกจนกว่าจะกดดูทั้งหมด
-const VISIBLE_LIMIT = 4;
-const expandedSections = reactive(new Set<RadarCategory>());
+/**
+ * ทุกหมวดรวมกันเป็นชุดเดียว — Near/Not-recommended ต่างจาก Upside/Downside แค่ไม่มีตัวกรอง
+ *
+ * เดิมสองหมวดหลังตัดเหลือ 4 ใบแล้วมีปุ่ม "ดูทั้งหมด" ให้กางลงมา ตอนนี้ทุกหมวดเป็นราง
+ * เลื่อนแนวนอนที่ใส่การ์ดได้ไม่จำกัดอยู่แล้ว การตัดที่ 4 จึงไม่มีเหตุผลเหลือ (ที่ตัด
+ * แต่แรกก็เพราะกริดแนวตั้งกินความสูงหน้าจอ) — ปุ่มดูทั้งหมดถูกถอดออก ปัดดูได้ครบทุกใบ
+ */
+interface RadarSection {
+  meta: SectionMeta;
+  items: RadarStock[];
+  /** มีเฉพาะ Upside/Downside — หมวดอื่นไม่มีแถวตัวกรอง */
+  filters?: typeof recStore.upsideFilters;
+  setSector?: (sector: StockSector | 'ALL') => void;
+  setDateBucket?: (bucket: RadarDateBucket | 'ALL') => void;
+  setMinChange?: (value: number) => void;
+}
 
-const toggleSection = (category: RadarCategory) => {
-  if (expandedSections.has(category)) {
-    expandedSections.delete(category);
-  } else {
-    expandedSections.add(category);
-  }
-};
-
-const expandableSections = computed(() => {
-  const configs: { meta: SectionMeta; items: RadarStock[] }[] = [
-    { meta: SECTION_META['Near-recommended'], items: recStore.nearRecommendedSection },
-    { meta: SECTION_META['Not-recommended'], items: recStore.notRecommendedSection },
-  ];
-
-  return configs.map(({ meta, items }) => {
-    const expanded = expandedSections.has(meta.category);
-
-    return {
-      meta,
-      items,
-      visibleItems: expanded ? items : items.slice(0, VISIBLE_LIMIT),
-      hasMore: items.length > VISIBLE_LIMIT,
-      expanded,
-    };
-  });
-});
+const radarSections = computed<RadarSection[]>(() => [
+  ...filterableSections.value,
+  { meta: SECTION_META['Near-recommended'], items: recStore.nearRecommendedSection },
+  { meta: SECTION_META['Not-recommended'], items: recStore.notRecommendedSection },
+]);
 
 const radarIsEmpty = computed(
   () => recStore.loaded && !recStore.loading && recStore.recommendations.length === 0,
@@ -366,20 +359,25 @@ const handleRemove = async (item: WatchlistItem) => {
       </section>
 
       <template v-else>
-        <!-- Upside / Downside: แถวตัวกรองแทนปุ่มดูทั้งหมด -->
+        <!-- ทุกหมวดเป็นรางเลื่อนแนวนอนเหมือนกันหมด ต่างกันแค่ Upside/Downside มีแถวตัวกรอง
+             เดิมแยกเป็นสอง v-for ที่ก๊อป markup การ์ดไว้เหมือนกันเป๊ะ — รวมเป็นลูปเดียว -->
         <section
-          v-for="section in filterableSections"
+          v-for="section in radarSections"
           :key="section.meta.category"
           class="watch-section"
           :data-test="`radar-section-${section.meta.category}`"
         >
-          <div class="watch-section__header watch-section__header--filterable">
+          <div
+            class="watch-section__header"
+            :class="{ 'watch-section__header--filterable': section.filters }"
+          >
             <div class="watch-section__title">
               <span class="watch-dot" :class="section.meta.iconClass"></span>
               <h2>{{ sectionTitle(section.meta) }}</h2>
               <span class="watch-section__count">{{ section.items.length }}</span>
             </div>
-            <div class="watch-section__filters">
+
+            <div v-if="section.filters" class="watch-section__filters">
               <q-select
                 :model-value="section.filters.sector"
                 :options="sectorOptions"
@@ -441,11 +439,11 @@ const handleRemove = async (item: WatchlistItem) => {
             </p>
           </section>
 
-          <div v-else class="watch-grid">
+          <ScrollRail v-else :item-count="section.items.length">
             <article
               v-for="rec in section.items"
               :key="rec.symbol"
-              class="watch-card"
+              class="watch-card watch-card--rail"
               :class="section.meta.iconClass"
               data-test="radar-card"
               @click="goToAnalysis(rec.symbol)"
@@ -486,88 +484,7 @@ const handleRemove = async (item: WatchlistItem) => {
                 </span>
               </div>
             </article>
-          </div>
-        </section>
-
-        <!-- Near-recommended / Not-recommended: ปุ่มดูทั้งหมด ไม่มีตัวกรอง -->
-        <section
-          v-for="group in expandableSections"
-          :key="group.meta.category"
-          class="watch-section"
-          :data-test="`radar-section-${group.meta.category}`"
-        >
-          <div class="watch-section__header">
-            <div class="watch-section__title">
-              <span class="watch-dot" :class="group.meta.iconClass"></span>
-              <h2>{{ sectionTitle(group.meta) }}</h2>
-              <span class="watch-section__count">{{ group.items.length }}</span>
-            </div>
-            <button
-              v-if="group.hasMore"
-              type="button"
-              class="watch-section__view-all"
-              :data-test="`radar-view-all-${group.meta.category}`"
-              @click="toggleSection(group.meta.category)"
-            >
-              {{
-                group.expanded
-                  ? languageStore.isThai
-                    ? 'ย่อ'
-                    : 'Show less'
-                  : languageStore.isThai
-                    ? 'ดูทั้งหมด'
-                    : 'View all'
-              }}
-              <q-icon name="chevron_right" size="16px" />
-            </button>
-          </div>
-
-          <div class="watch-grid">
-            <article
-              v-for="rec in group.visibleItems"
-              :key="rec.symbol"
-              class="watch-card"
-              :class="group.meta.iconClass"
-              data-test="radar-card"
-              @click="goToAnalysis(rec.symbol)"
-            >
-              <div class="watch-card__head">
-                <div class="watch-logo" :style="{ background: avatarColor(rec.symbol) }">
-                  {{ avatarInitials(rec.symbol) }}
-                </div>
-                <div class="watch-id">
-                  <div class="watch-ticker">{{ displaySymbol(rec.symbol) }}</div>
-                  <div class="watch-name">{{ rec.name }}</div>
-                </div>
-              </div>
-
-              <div class="watch-card__prices">
-                <div class="watch-price-line">
-                  <span class="watch-price-label">
-                    {{ languageStore.isThai ? 'ปัจจุบัน' : 'Current' }}
-                  </span>
-                  <span class="watch-price watch-price--current">
-                    {{ formatPrice(rec.symbol, rec.currentPrice) }}
-                  </span>
-                </div>
-                <div class="watch-price-line">
-                  <span class="watch-price-label">
-                    {{ languageStore.isThai ? 'เริ่มต้น' : 'Initial' }}
-                  </span>
-                  <span class="watch-price watch-price--initial">
-                    {{ formatPrice(rec.symbol, rec.initialPrice) }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="watch-card__footer">
-                <span class="watch-date">{{ formatStartDate(rec.startDate) }}</span>
-                <span class="watch-return" :class="rec.returnPercent >= 0 ? 'is-up' : 'is-down'">
-                  {{ rec.returnPercent >= 0 ? '+' : '' }}{{ rec.returnPercent.toFixed(2) }}%
-                </span>
-              </div>
-            </article>
-          </div>
+          </ScrollRail>
         </section>
       </template>
     </template>
@@ -905,6 +822,20 @@ const handleRemove = async (item: WatchlistItem) => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+}
+
+/* การ์ดในรางเลื่อน — ต้องกว้างคงที่ ไม่ใช่ 1fr เพราะ flex item ในรางที่ยืดได้จะถูก
+   บีบให้พอดีความกว้างรางแทนที่จะล้นออกไป แล้วรางก็จะไม่มีอะไรให้เลื่อน */
+.watch-card--rail {
+  flex: 0 0 246px;
+  width: 246px;
+}
+
+@media (max-width: 700px) {
+  .watch-card--rail {
+    flex: 0 0 216px;
+    width: 216px;
+  }
 }
 
 .watch-card {
