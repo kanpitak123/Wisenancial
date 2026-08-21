@@ -114,13 +114,8 @@ const routes: RouteRecordRaw[] = [
       // ลิงก์เก่าที่อาจถูก bookmark ไว้ — ส่งต่อแทนการปล่อยให้ตก 404
       { path: 'StockExplorer', redirect: '/Stocks' },
       { path: 'StockAnalysis', redirect: '/Stocks' },
-      {
-        path: 'MonthlyMovers',
-        component: () => import('pages/investor/MonthlyMoversPage.vue'),
-        meta: { workspace: 'INVESTOR' },
-      },
       // Market Pulse ยิง endpoint ที่เป็นข้อมูลหุ้นล้วน (market-insights / ai
-      // growth recommendations) จึงล็อกไว้ที่ INVESTOR เหมือน MonthlyMovers
+      // growth recommendations) จึงล็อกไว้ที่ INVESTOR เหมือนหน้าอื่นในกลุ่มนี้
       //
       // เดิมแยกเป็น /Heatmap กับ /Discover แต่ละหน้ามีของชิ้นเดียวจนดูโล่ง เลยยุบรวม
       // เป็นหน้าเดียว (แถบอารมณ์ตลาด + แท็บ Heatmap/AI Picks) แล้วให้ลิงก์เก่าที่อาจ

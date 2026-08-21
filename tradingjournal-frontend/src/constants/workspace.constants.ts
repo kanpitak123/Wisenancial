@@ -64,7 +64,6 @@ export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLin
     // สำรวจหุ้น + วิเคราะห์หุ้น ถูกยุบรวมเป็นหน้าเดียว (แถบสำรวจซ้าย + เทอร์มินัลขวา)
     // เมนูจึงเหลือรายการเดียว ส่วน /StockExplorer กับ /StockAnalysis เดิม redirect มาที่นี่
     { title: 'Stock Terminal', icon: 'candlestick_chart', link: '/Stocks' },
-    { title: 'Monthly Movers', icon: 'moving', link: '/MonthlyMovers' },
     // Heatmap + Discover ถูกยุบรวมเป็นหน้าเดียว (แถบอารมณ์ตลาด + แท็บ Heatmap/AI Picks)
     // เมนูจึงเหลือรายการเดียว ส่วน /Heatmap กับ /Discover เดิม redirect มาที่นี่
     { title: 'Market Pulse', icon: 'insights', link: '/Market' },

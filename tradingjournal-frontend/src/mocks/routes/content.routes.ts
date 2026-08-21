@@ -6,10 +6,8 @@ import { asString, defineMockRoutes } from '../mock.types';
 import {
   MOCK_USER,
   STOCK_UNIVERSE,
-  createRng,
   isoDaysAgo,
   isoDaysAhead,
-  round,
   stockPrice,
 } from '../data/seed';
 import { portfolioTypeOf } from '../data/portfolios.data';
@@ -382,52 +380,6 @@ const WATCHLIST: WatchlistItem[] = ['NVDA', 'AAPL', 'PTT', 'KBANK', 'XAU/USD', '
   },
 );
 
-// ============================================================
-// Monthly movers (Watchlist + MonthlyMovers pages)
-// ============================================================
-function buildMovers(market: 'TH' | 'GLOBAL', limit: number) {
-  const pool = STOCK_UNIVERSE.filter((s) =>
-    market === 'TH' ? s.exchange === 'SET' : s.exchange !== 'SET',
-  );
-  const rng = createRng(market === 'TH' ? 5150 : 9090);
-
-  const rows = pool.map((stock) => {
-    const changePercent = round((rng() - 0.45) * 46, 2);
-    const startPrice = round(stock.price / (1 + changePercent / 100), 2);
-
-    return {
-      symbol: stock.symbol,
-      name: stock.name,
-      market,
-      monthChangePercent: changePercent,
-      startPrice,
-      endPrice: stock.price,
-      volatility: round(12 + rng() * 48, 2),
-      avgDailyValue: round(stock.volume * stock.price),
-      direction: changePercent >= 0 ? ('UP' as const) : ('DOWN' as const),
-    };
-  });
-
-  const gainers = [...rows]
-    .filter((r) => r.monthChangePercent > 0)
-    .sort((a, b) => b.monthChangePercent - a.monthChangePercent)
-    .slice(0, limit);
-
-  const losers = [...rows]
-    .filter((r) => r.monthChangePercent < 0)
-    .sort((a, b) => a.monthChangePercent - b.monthChangePercent)
-    .slice(0, limit);
-
-  const mostVolatile = [...rows].sort((a, b) => b.volatility - a.volatility).slice(0, limit);
-
-  return {
-    period: new Date().toISOString().slice(0, 7),
-    gainers,
-    losers,
-    mostVolatile,
-  };
-}
-
 export const contentRoutes = defineMockRoutes([
   // ---------- News ----------
   {
@@ -661,12 +613,6 @@ export const contentRoutes = defineMockRoutes([
   },
 
   // ---------- Market insights ----------
-  {
-    method: 'GET',
-    path: '/market-insights/movers',
-    handler: (ctx) =>
-      buildMovers((ctx.query.market as 'TH' | 'GLOBAL') ?? 'GLOBAL', Number(ctx.query.limit ?? 8)),
-  },
   // ทั้งสองอันนี้ต้องคงรูปร่างให้ตรงกับ MarketInsightsService ของหลังบ้านจริง
   // (HeatmapResponse / SentimentResponse) ไม่ใช่รูปร่างที่เดาเอาเอง — MarketPulsePage
   // อ่านตรงจาก field พวกนี้ ถ้าเพี้ยนหน้าจะว่างเฉพาะตอนเปิด mock mode

@@ -178,7 +178,9 @@ describe('MainLayout — sidebar ตามโหมด', () => {
     expect(titles).toContain('Stock Terminal');
     expect(titles).not.toContain('Stock Explorer');
     expect(titles).not.toContain('Stock Analysis');
-    expect(titles).toContain('Monthly Movers');
+    // Monthly Movers ถูกถอดออกทั้งหน้าแล้ว — เมนูต้องไม่มีเหลือค้าง
+    expect(titles).not.toContain('Monthly Movers');
+    expect(titles).toContain('Market Pulse');
     expect(titles).not.toContain('Journal');
     expect(titles).not.toContain('Lot Calculator');
     expect(titles).not.toContain('Active Positions');

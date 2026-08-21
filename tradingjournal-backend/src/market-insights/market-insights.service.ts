@@ -1,27 +1,5 @@
 import { Injectable } from '@nestjs/common';
 
-export type VolatilityMarket = 'TH' | 'GLOBAL';
-export type VolatilityDirection = 'UP' | 'DOWN';
-
-export interface VolatilityMover {
-  symbol: string;
-  name: string;
-  market: VolatilityMarket;
-  monthChangePercent: number;
-  startPrice: number;
-  endPrice: number;
-  volatility: number;
-  avgDailyValue: number;
-  direction: VolatilityDirection;
-}
-
-export interface MonthlyMoversResponse {
-  period: string;
-  gainers: VolatilityMover[];
-  losers: VolatilityMover[];
-  mostVolatile: VolatilityMover[];
-}
-
 export type HeatmapMarket = 'GLOBAL' | 'TH';
 
 export interface HeatmapTile {
@@ -99,16 +77,6 @@ interface SentimentSeed {
   changePercent: number;
 }
 
-interface MoverSeed {
-  symbol: string;
-  name: string;
-  market: VolatilityMarket;
-  endPrice: number;
-  monthChangePercent: number;
-  volatility: number;
-  avgDailyValue: number;
-}
-
 interface HeatmapSeed {
   symbol: string;
   name: string;
@@ -127,29 +95,11 @@ interface HeatmapSeed {
  *
  * TODO(data): replace the seed arrays with a real aggregation that reads the
  * day's OHLCV from the same source used elsewhere (Yahoo Finance via
- * MarketDataService), computes trailing-month % change, a volatility proxy
- * (stdev of daily returns) and average daily traded value, then groups by
- * sector for the heatmap. The controller/route contract will not change.
+ * MarketDataService), then groups by sector for the heatmap. The
+ * controller/route contract will not change.
  */
 @Injectable()
 export class MarketInsightsService {
-  private readonly moverSeed: MoverSeed[] = [
-    { symbol: 'NVDA', name: 'NVIDIA Corp', market: 'GLOBAL', endPrice: 134.2, monthChangePercent: 28.4, volatility: 62, avgDailyValue: 32_400_000_000 },
-    { symbol: 'SMCI', name: 'Super Micro Computer', market: 'GLOBAL', endPrice: 41.8, monthChangePercent: 41.2, volatility: 88, avgDailyValue: 2_100_000_000 },
-    { symbol: 'TSLA', name: 'Tesla, Inc.', market: 'GLOBAL', endPrice: 248.5, monthChangePercent: -18.7, volatility: 71, avgDailyValue: 21_800_000_000 },
-    { symbol: 'COIN', name: 'Coinbase Global', market: 'GLOBAL', endPrice: 215.3, monthChangePercent: 33.9, volatility: 79, avgDailyValue: 1_400_000_000 },
-    { symbol: 'PLTR', name: 'Palantir Technologies', market: 'GLOBAL', endPrice: 28.7, monthChangePercent: 22.1, volatility: 58, avgDailyValue: 1_900_000_000 },
-    { symbol: 'INTC', name: 'Intel Corp', market: 'GLOBAL', endPrice: 19.4, monthChangePercent: -24.3, volatility: 64, avgDailyValue: 3_600_000_000 },
-    { symbol: 'BA', name: 'Boeing Co', market: 'GLOBAL', endPrice: 162.1, monthChangePercent: -12.5, volatility: 47, avgDailyValue: 1_700_000_000 },
-    { symbol: 'AMD', name: 'Advanced Micro Devices', market: 'GLOBAL', endPrice: 158.9, monthChangePercent: 15.6, volatility: 55, avgDailyValue: 5_200_000_000 },
-    { symbol: 'DELTA.BK', name: 'Delta Electronics (Thailand)', market: 'TH', endPrice: 118.5, monthChangePercent: 26.8, volatility: 69, avgDailyValue: 2_900_000_000 },
-    { symbol: 'PTT.BK', name: 'PTT Public Company', market: 'TH', endPrice: 33.25, monthChangePercent: -8.2, volatility: 31, avgDailyValue: 1_200_000_000 },
-    { symbol: 'AOT.BK', name: 'Airports of Thailand', market: 'TH', endPrice: 58.75, monthChangePercent: 12.4, volatility: 38, avgDailyValue: 1_800_000_000 },
-    { symbol: 'KBANK.BK', name: 'Kasikornbank', market: 'TH', endPrice: 142.0, monthChangePercent: -14.1, volatility: 42, avgDailyValue: 1_500_000_000 },
-    { symbol: 'CPALL.BK', name: 'CP All', market: 'TH', endPrice: 61.5, monthChangePercent: 9.3, volatility: 29, avgDailyValue: 1_100_000_000 },
-    { symbol: 'GULF.BK', name: 'Gulf Energy Development', market: 'TH', endPrice: 48.25, monthChangePercent: -19.6, volatility: 53, avgDailyValue: 980_000_000 },
-  ];
-
   private readonly heatmapGlobalSeed: HeatmapSeed[] = [
     { symbol: 'AAPL', name: 'Apple', sector: 'Technology', changePercent: 1.2, weight: 32, tradedValue: 9_800_000_000 },
     { symbol: 'MSFT', name: 'Microsoft', sector: 'Technology', changePercent: 0.8, weight: 30, tradedValue: 8_100_000_000 },
@@ -181,52 +131,6 @@ export class MarketInsightsService {
     { symbol: 'CPALL.BK', name: 'CP All', sector: 'Consumer', changePercent: 1.0, weight: 30, tradedValue: 1_100_000_000 },
     { symbol: 'AOT.BK', name: 'Airports of Thailand', sector: 'Consumer', changePercent: 1.4, weight: 26, tradedValue: 1_800_000_000 },
   ];
-
-  private currentPeriod(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }
-
-  private toMover(seed: MoverSeed): VolatilityMover {
-    const direction: VolatilityDirection =
-      seed.monthChangePercent >= 0 ? 'UP' : 'DOWN';
-    const startPrice = Number(
-      (seed.endPrice / (1 + seed.monthChangePercent / 100)).toFixed(2),
-    );
-    return {
-      symbol: seed.symbol,
-      name: seed.name,
-      market: seed.market,
-      monthChangePercent: seed.monthChangePercent,
-      startPrice,
-      endPrice: seed.endPrice,
-      volatility: seed.volatility,
-      avgDailyValue: seed.avgDailyValue,
-      direction,
-    };
-  }
-
-  getMonthlyMovers(market?: VolatilityMarket, limit = 8): MonthlyMoversResponse {
-    const rows = this.moverSeed
-      .filter((row) => !market || row.market === market)
-      .map((row) => this.toMover(row));
-
-    const gainers = [...rows]
-      .filter((r) => r.direction === 'UP')
-      .sort((a, b) => b.monthChangePercent - a.monthChangePercent)
-      .slice(0, limit);
-
-    const losers = [...rows]
-      .filter((r) => r.direction === 'DOWN')
-      .sort((a, b) => a.monthChangePercent - b.monthChangePercent)
-      .slice(0, limit);
-
-    const mostVolatile = [...rows]
-      .sort((a, b) => b.volatility - a.volatility)
-      .slice(0, limit);
-
-    return { period: this.currentPeriod(), gainers, losers, mostVolatile };
-  }
 
   getHeatmap(market: HeatmapMarket = 'GLOBAL'): HeatmapResponse {
     const seed = market === 'TH' ? this.heatmapThSeed : this.heatmapGlobalSeed;

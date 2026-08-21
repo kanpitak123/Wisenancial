@@ -142,15 +142,6 @@ const actions: CommandAction[] = [
     workspace: 'INVESTOR',
   },
   {
-    id: 'monthly-movers',
-    title: 'Monthly Movers',
-    description: 'Biggest movers this month',
-    icon: 'moving',
-    action: () => void router.push('/MonthlyMovers'),
-    category: 'Navigation',
-    workspace: 'INVESTOR',
-  },
-  {
     id: 'market-pulse',
     title: 'Market Pulse',
     description: 'Positioning, sector heatmap and AI growth picks',
