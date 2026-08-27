@@ -44,3 +44,28 @@ export function outputLanguageRule(
 
   return `Output language: ${name} — always match this exactly, regardless of the language of the supplied data.`;
 }
+
+/**
+ * บรรทัดกันโมเดลพูดเป็นคำสั่งซื้อขาย — ใส่ในทุก prompt ที่แตะหุ้น/พอร์ต
+ *
+ * เดิมมีแค่ Investor review จุดเดียวที่เขียน "Do not predict prices" อีก 6 จุด
+ * ไม่มีอะไรกันเลย ทั้งที่ AI Picks มีเนื้องานคือ "แนะนำหุ้น" ตรง ๆ — เสี่ยงทั้งเรื่อง
+ * ผู้ใช้เอาไปตัดสินใจจริงโดยเข้าใจว่าเป็นคำแนะนำการลงทุน และเรื่องกฎเกณฑ์ที่ห้าม
+ * ให้คำแนะนำการลงทุนโดยไม่มีใบอนุญาต
+ *
+ * ไม่ได้แทนที่ "Do not predict prices" ของเดิม แต่ใช้คู่กัน — คนละเรื่องกัน
+ * (อันนั้นห้ามทำนายอนาคต อันนี้ห้ามสั่งให้ลงมือ)
+ */
+export function investmentGuardrail(): string {
+  return 'Never use words like "buy", "sell", "recommend buying", or promise/guarantee returns. Frame every output as an observation about the supplied data, not an instruction to act.';
+}
+
+/**
+ * บรรทัดเสริมเฉพาะ AI Picks — จุดที่ใกล้เคียงคำว่า "แนะนำให้ซื้อ" ที่สุดในระบบ
+ *
+ * ต่อท้าย investmentGuardrail() ไม่ใช่แทนที่ เพราะงานของมันคือเรียงลำดับหุ้นให้ดู
+ * ซึ่งโดยธรรมชาติชวนให้โมเดลบอกว่าตัวไหน "ดีกว่า" — ต้องปิดช่องนั้นเพิ่มอีกชั้น
+ */
+export function screeningOnlyGuardrail(): string {
+  return "This is educational screening output only, not personalized investment advice. Do not imply any candidate is a 'good buy' or better than the others beyond what the supplied metrics show.";
+}

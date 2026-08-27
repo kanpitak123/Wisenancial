@@ -195,6 +195,11 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
     expect(wrapper.find('[data-test="performers-grid"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="performer-best"]').text()).toContain('NVDA');
     expect(wrapper.find('[data-test="performer-worst"]').text()).toContain('INTC');
+
+    // การ์ด AI ทั้งสองใบต้องมีคำเตือนว่าไม่ใช่คำแนะนำการลงทุนใบละอัน
+    expect(
+      wrapper.findAll('[data-test="ai-disclaimer"]').length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it('performers โดน 403 -> ขึ้นการ์ดต้องอัปเกรด ไม่ใช่กริดว่าง', async () => {

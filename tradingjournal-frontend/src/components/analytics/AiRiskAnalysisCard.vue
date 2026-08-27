@@ -9,7 +9,7 @@
 import { computed } from 'vue';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
-import { WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
+import { WsAiDisclaimer, WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
 import type { PortfolioRiskHolding } from 'src/types/ai.types';
 
 const props = defineProps<{ holdings: PortfolioRiskHolding[] }>();
@@ -97,6 +97,8 @@ const run = async () => {
     </template>
 
     <div class="risk-body">
+      <WsAiDisclaimer dense />
+
       <q-btn
         unelevated
         no-caps

@@ -13,7 +13,7 @@
 import { computed, onMounted } from 'vue';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
-import { WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
+import { WsAiDisclaimer, WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
 
 const props = defineProps<{ portfolioId: number | null; hasHoldings: boolean }>();
 
@@ -124,6 +124,8 @@ const generate = async () => {
     </template>
 
     <div class="advisor-body">
+      <WsAiDisclaimer dense />
+
       <div class="advisor-controls">
         <q-select
           v-model="selectedModel"

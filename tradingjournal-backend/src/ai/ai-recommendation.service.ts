@@ -9,8 +9,10 @@ import {
   type AiModelOption,
 } from './ai-manager.service';
 import {
+  investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
+  screeningOnlyGuardrail,
 } from './ai-prompt.shared';
 import type { StockRecommendation } from './ai-feature.types';
 
@@ -63,6 +65,8 @@ export class AiRecommendationService {
             systemPrompt: [
               'You are a quantitative growth-stock analyst.',
               outputLanguageRule(outputLanguage),
+              investmentGuardrail(),
+              screeningOnlyGuardrail(),
               'Return a valid JSON array only. Do not invent live prices or precise current metrics.',
             ].join('\n'),
             prompt: `Recommend 4-5 publicly traded growth companies across diverse sectors.

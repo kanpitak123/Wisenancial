@@ -250,6 +250,9 @@ describe('MarketPulsePage', () => {
 
       expect(wrapper.find('[data-test="discover-generate"]').exists()).toBe(true);
       expect(wrapper.find('[data-test="heatmap-empty"]').exists()).toBe(false);
+
+      // AI Picks เป็นจุดที่ใกล้ "แนะนำให้ซื้อ" ที่สุด ต้องมีคำเตือนก่อนอ่านผลเสมอ
+      expect(wrapper.find('[data-test="ai-disclaimer"]').exists()).toBe(true);
     });
   });
 

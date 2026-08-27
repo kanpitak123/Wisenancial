@@ -9,7 +9,7 @@ import { useAiStore } from 'stores/AiStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
 import { useGlobalFilterStore } from 'stores/GlobalFilterStore';
 import { useInvestorPortfolioStore } from 'stores/InvestorPortfolioStore';
-import { WsUpgradeNotice } from 'src/components/ui';
+import { WsAiDisclaimer, WsUpgradeNotice } from 'src/components/ui';
 import AiPortfolioAdvisorCard from 'components/analytics/AiPortfolioAdvisorCard.vue';
 import AiRiskAnalysisCard from 'components/analytics/AiRiskAnalysisCard.vue';
 import PerformersSection from 'components/analytics/PerformersSection.vue';
@@ -60,6 +60,9 @@ const AiInsightPanel = defineComponent({
               props.loading ? '...' : '↻ Refresh',
             ),
           ]),
+          // แถบเตือนว่าไม่ใช่คำแนะนำการลงทุน — อยู่เหนือเนื้อผลวิเคราะห์เสมอ
+          // (ตัวนี้ครอบคลุมทั้ง 4 จุดที่ใช้ AiInsightPanel ในหน้านี้)
+          h(WsAiDisclaimer, { dense: true }),
           // Content
           props.loading
             ? h('div', { class: 'flex flex-center column flex-grow q-py-lg' }, [

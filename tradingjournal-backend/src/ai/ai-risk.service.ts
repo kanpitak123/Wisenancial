@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
 import {
+  investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
 } from './ai-prompt.shared';
@@ -32,6 +33,7 @@ export class AiRiskService {
         systemPrompt: [
           'You are a portfolio risk analyst. Rely only on supplied data.',
           outputLanguageRule(outputLanguage),
+          investmentGuardrail(),
           'Return valid JSON only.',
         ].join('\n'),
         prompt: JSON.stringify({

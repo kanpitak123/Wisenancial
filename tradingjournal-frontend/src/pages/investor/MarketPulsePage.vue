@@ -19,7 +19,7 @@ import { useRouter } from 'vue-router';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
-import { WsAiLoader, WsBadge, WsCard, WsUpgradeNotice } from 'src/components/ui';
+import { WsAiDisclaimer, WsAiLoader, WsBadge, WsCard, WsUpgradeNotice } from 'src/components/ui';
 import { heatmapService } from 'src/services/heatmap.service';
 import { sentimentService } from 'src/services/sentiment.service';
 import { isPaidTierError } from 'src/utils/paid-tier';
@@ -431,6 +431,8 @@ const REASON_META = [
 
       <!-- ── แท็บ 2: หุ้นที่ AI คัด ──────────────────────────────────────────── -->
       <q-tab-panel name="picks" class="q-pa-none q-pt-md">
+        <WsAiDisclaimer />
+
         <div class="pulse-picks-bar">
           <p class="pulse-picks-lead">
             {{

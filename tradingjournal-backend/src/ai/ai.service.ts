@@ -18,6 +18,7 @@ import type {
 } from './ai.types';
 import type { NewsEnrichmentResult } from './ai-news.types';
 import {
+  investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
 } from './ai-prompt.shared';
@@ -39,6 +40,7 @@ import {
 const NEWS_ENRICHMENT_SYSTEM_PROMPT = [
   'You are a financial news analyst summarizing news for Thai retail investors.',
   'Base your analysis strictly on the headline/summary/content provided — do not use outside knowledge about the company beyond this article.',
+  investmentGuardrail(),
   'Write aiSummary and stockImpactAnalysis in the language given by "language" ("th" or "en") — this is a hard requirement, not a suggestion.',
   'aiTranslatedSummary must always be in Thai, regardless of "language" (used as a Thai fallback when the article itself is in English).',
   'Return valid JSON only, matching exactly:',
@@ -84,6 +86,7 @@ export class AiService {
       systemPrompt: [
         'You are a professional financial analytics coach.',
         outputLanguageRule(outputLanguage),
+        investmentGuardrail(),
         'Return valid JSON only: {"insight":"concise actionable analysis grounded only in supplied data"}.',
       ].join('\n'),
       prompt: JSON.stringify({
@@ -142,6 +145,7 @@ export class AiService {
           systemPrompt: [
             'You are a disciplined trading coach.',
             outputLanguageRule(outputLanguage),
+            investmentGuardrail(),
             'Return valid JSON only.',
           ].join('\n'),
           prompt: JSON.stringify({
@@ -190,6 +194,7 @@ export class AiService {
         systemPrompt: [
           'You are a professional portfolio advisor. Do not predict prices.',
           outputLanguageRule(outputLanguage),
+          investmentGuardrail(),
           'Return valid JSON only.',
         ].join('\n'),
         prompt: JSON.stringify({

@@ -211,4 +211,23 @@ describe('AiRecommendationService — เลือกและถอยโมเ
       ServiceUnavailableException,
     );
   });
+
+  /**
+   * AI Picks เป็นจุดที่ใกล้เคียง "แนะนำให้ซื้อ" ที่สุดในระบบ จึงต้องมี guardrail
+   * ทั้งสองชั้น ไม่ใช่แค่ชั้นเดียวเหมือนจุดอื่น
+   */
+  it('system prompt มี guardrail ห้ามพูดเป็นคำสั่งซื้อขาย ทั้งสองชั้น', async () => {
+    const { service, manager } = makeService([GEMINI]);
+
+    await service.getGrowthRecommendations(1);
+
+    const { systemPrompt } = (
+      manager.executeAiRequest as unknown as jest.Mock
+    ).mock.calls[0][0];
+
+    expect(systemPrompt).toContain('Never use words like "buy", "sell"');
+    expect(systemPrompt).toContain(
+      'educational screening output only, not personalized investment advice',
+    );
+  });
 });

@@ -84,6 +84,34 @@ describe('AiService', () => {
     );
   });
 
+  it('system prompt ของ analyzeChart มี guardrail ห้ามพูดเป็นคำสั่งซื้อขาย', async () => {
+    const executeAiRequest = jest.fn().mockResolvedValue({
+      data: { insight: 'ok' },
+      model: 'groq-llama3',
+      creditsCharged: 1,
+      creditsRemaining: 9,
+    });
+
+    const service = new AiService(
+      {} as any,
+      { executeAiRequest } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.analyzeChart(1, {
+      portfolioType: 'TRADER',
+      chartType: 'equity_curve',
+      data: {},
+      modelId: 'groq-llama3',
+    });
+
+    expect(executeAiRequest.mock.calls[0][0].systemPrompt).toContain(
+      'Never use words like "buy", "sell"',
+    );
+  });
+
   it('exposes a public news fallback for legacy NewsService', () => {
     const service = new AiService(
       {} as any,
