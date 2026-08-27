@@ -188,6 +188,42 @@ const sortedRatios = computed(() =>
 
 const recommendations = computed(() => aiStore.growthRecommendations);
 
+/**
+ * ตัวเลขในเหตุผลของแต่ละการ์ดมาจากงบไตรมาสไหน
+ *
+ * ผู้ใช้เห็น "รายได้โต 47.4%" แล้วเข้าใจว่าเป็นสถานะล่าสุด ณ ตอนนี้ ทั้งที่จริงคือ
+ * งบไตรมาสที่ปิดไปแล้ว — บอกวันที่ไว้ให้ตีความถูก
+ *
+ * แต่ละหุ้นปิดไตรมาสไม่พร้อมกัน (AAPL 27 มิ.ย. / PTT 30 มิ.ย.) โชว์วันเดียวตรง ๆ
+ * จึงผิดสำหรับตัวอื่น เลยยึด "วันที่เก่าสุด" แล้วต่อท้ายว่าหรือใหม่กว่า — เป็นคำพูด
+ * ที่จริงกับทุกตัวในลิสต์ ไม่ใช่จริงกับตัวเดียว
+ */
+const picksAsOfLabel = computed(() => {
+  const dates = recommendations.value
+    .map((rec) => rec.asOf)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+
+  const oldest = dates[0];
+  if (!oldest) return '';
+
+  // แยกเองแทน new Date(iso) — สตริง YYYY-MM-DD ถูกอ่านเป็น UTC ทำให้ผู้ใช้ที่อยู่
+  // โซนเวลาติดลบเห็นวันก่อนหน้าหนึ่งวัน
+  const [year, month, day] = oldest.split('-').map(Number);
+  if (!year || !month || !day) return '';
+
+  const formatted = new Date(year, month - 1, day).toLocaleDateString(
+    languageStore.isThai ? 'th-TH' : 'en-US',
+    { day: 'numeric', month: 'short', year: 'numeric' },
+  );
+
+  const mixed = dates[dates.length - 1] !== oldest;
+
+  return languageStore.isThai
+    ? `ตัวเลขการเติบโตและอัตรากำไรอ้างอิงงบการเงินถึงไตรมาสที่จบ ${formatted}${mixed ? ' หรือใหม่กว่า' : ''} ไม่ใช่ข้อมูลสด ณ ขณะนี้`
+    : `Growth and margin figures come from financials through the quarter ending ${formatted}${mixed ? ' or later' : ''} — not live data.`;
+});
+
 const canGenerate = computed(() => aiStore.canAfford && !aiStore.loadingRecommendations);
 
 /** ทำไมปุ่มถึงกดไม่ได้ — ปุ่ม disable เฉยๆ โดยไม่บอกอะไรคือสิ่งที่ผู้ใช้เดาไม่ถูก */
@@ -431,7 +467,7 @@ const REASON_META = [
 
       <!-- ── แท็บ 2: หุ้นที่ AI คัด ──────────────────────────────────────────── -->
       <q-tab-panel name="picks" class="q-pa-none q-pt-md">
-        <WsAiDisclaimer />
+        <WsAiDisclaimer :note="picksAsOfLabel" />
 
         <div class="pulse-picks-bar">
           <p class="pulse-picks-lead">

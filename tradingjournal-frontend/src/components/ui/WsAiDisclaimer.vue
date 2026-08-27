@@ -19,9 +19,17 @@ import { useLanguageStore } from 'stores/LanguageStore';
 interface Props {
   /** ใช้ในการ์ดที่พื้นที่จำกัด — เล็กลงแต่ยังอ่านออกและยังอยู่เหนือเนื้อหา */
   dense?: boolean;
+  /**
+   * หมายเหตุเพิ่มเติมของหน้านั้น ๆ เช่น "ตัวเลขอ้างอิงงบไตรมาสที่จบ ..."
+   *
+   * รับเข้ามาแสดงในกล่องเดียวกันแทนที่จะให้แต่ละหน้าไปวางแถบของตัวเองเพิ่ม —
+   * สองแถบสีเหลืองซ้อนกันบนหัวเดียวกันอ่านแล้วรก และแถบที่สองมักถูกมองข้าม
+   * ผู้เรียกส่งข้อความที่แปลแล้วมาเลย เพราะมีแต่ผู้เรียกที่รู้ว่าข้อมูลของตัวเองคืออะไร
+   */
+  note?: string;
 }
 
-const props = withDefaults(defineProps<Props>(), { dense: false });
+const props = withDefaults(defineProps<Props>(), { dense: false, note: '' });
 
 const languageStore = useLanguageStore();
 
@@ -40,7 +48,12 @@ const text = computed(() =>
     data-test="ai-disclaimer"
   >
     <q-icon name="info" :size="props.dense ? '16px' : '18px'" class="ai-disclaimer__icon" />
-    <span class="ai-disclaimer__text">{{ text }}</span>
+    <span class="ai-disclaimer__text">
+      {{ text }}
+      <span v-if="props.note" class="ai-disclaimer__note" data-test="ai-disclaimer-note">
+        {{ props.note }}
+      </span>
+    </span>
   </div>
 </template>
 
@@ -76,5 +89,13 @@ const text = computed(() =>
 
 .ai-disclaimer--dense .ai-disclaimer__text {
   font-size: 11.5px;
+}
+
+/* บรรทัดที่สองในกล่องเดิม — จางลงหน่อยเพราะเป็นที่มาของข้อมูล ไม่ใช่คำเตือน */
+.ai-disclaimer__note {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  opacity: 0.85;
 }
 </style>

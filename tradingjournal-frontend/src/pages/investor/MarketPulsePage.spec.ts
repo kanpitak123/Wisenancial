@@ -86,12 +86,12 @@ const sentimentResponse = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const recommendation = (symbol: string) => ({
+const recommendation = (symbol: string, asOf: string | null = '2026-06-30') => ({
   symbol,
   name: `${symbol} Corp.`,
   sector: 'Technology',
   // backend เขียนทับสองฟิลด์นี้จาก candidate list เสมอ — fixture จึงต้องมีด้วย
-  asOf: '2026-06-30',
+  asOf,
   metrics: {
     revenueGrowthYoY: 0.32,
     netMargin: 0.18,
@@ -455,6 +455,74 @@ describe('MarketPulsePage', () => {
       expect(card.text()).toContain('ลูกค้าองค์กรกระจายตัวดี');
       expect(card.text()).toContain('สภาพคล่องซื้อขายสูง');
       expect(card.text()).toContain('NVDA มีแนวโน้มเติบโตต่อเนื่อง');
+    });
+
+    /**
+     * ตัวเลขในเหตุผล ("รายได้โต 47.4%") มาจากงบไตรมาสที่ปิดไปแล้ว ไม่ใช่ค่าสด
+     * ถ้าไม่บอกวันที่ ผู้ใช้จะอ่านเป็นสถานะปัจจุบัน
+     */
+    describe('วันที่ข้อมูลของตัวเลขที่ AI อ้าง', () => {
+      const scanWith = async (data: unknown[]) => {
+        setCredits(100);
+        getGrowthRecommendations.mockResolvedValue({
+          data,
+          model: 'groq',
+          creditsCharged: 5,
+          creditsRemaining: 95,
+        });
+
+        const wrapper = await mountPage();
+        await openPicksTab(wrapper);
+        await wrapper.find('[data-test="discover-generate"]').trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await nextTick();
+
+        return wrapper;
+      };
+
+      it('ทุกตัวปิดไตรมาสวันเดียวกัน -> บอกวันที่ตรง ๆ', async () => {
+        const wrapper = await scanWith([
+          recommendation('NVDA', '2026-06-30'),
+          recommendation('MSFT', '2026-06-30'),
+        ]);
+
+        const note = wrapper.find('[data-test="ai-disclaimer-note"]');
+
+        expect(note.text()).toContain('30 มิ.ย. 2569');
+        expect(note.text()).not.toContain('หรือใหม่กว่า');
+      });
+
+      /**
+       * AAPL ปิดไตรมาส 27 มิ.ย. ส่วน PTT 30 มิ.ย. — โชว์วันใดวันหนึ่งตรง ๆ จะผิด
+       * สำหรับอีกตัว ต้องยึดวันเก่าสุดแล้วบอกว่า "หรือใหม่กว่า" ถึงจะจริงกับทุกตัว
+       */
+      it('ปิดไตรมาสคนละวัน -> ยึดวันเก่าสุดแล้วบอกว่าหรือใหม่กว่า', async () => {
+        const wrapper = await scanWith([
+          recommendation('PTT.BK', '2026-06-30'),
+          recommendation('AAPL', '2026-06-27'),
+        ]);
+
+        const note = wrapper.find('[data-test="ai-disclaimer-note"]');
+
+        expect(note.text()).toContain('27 มิ.ย. 2569');
+        expect(note.text()).toContain('หรือใหม่กว่า');
+      });
+
+      it('ไม่มีวันที่เลย -> ไม่ขึ้นบรรทัดนี้ แต่คำเตือน AI ยังอยู่', async () => {
+        const wrapper = await scanWith([recommendation('NVDA', null)]);
+
+        expect(wrapper.find('[data-test="ai-disclaimer-note"]').exists()).toBe(false);
+        expect(wrapper.find('[data-test="ai-disclaimer"]').exists()).toBe(true);
+      });
+
+      /** อยู่ในกล่องคำเตือนเดิม ไม่ใช่แถบที่สองซ้อนขึ้นมาให้รก */
+      it('แสดงอยู่ในกล่องคำเตือน AI กล่องเดียวกัน', async () => {
+        const wrapper = await scanWith([recommendation('NVDA', '2026-06-30')]);
+
+        expect(
+          wrapper.find('[data-test="ai-disclaimer"] [data-test="ai-disclaimer-note"]').exists(),
+        ).toBe(true);
+      });
     });
 
     it('เครดิตไม่พอ -> ปุ่มกดไม่ได้ และบอกเหตุผลว่าทำไม', async () => {
