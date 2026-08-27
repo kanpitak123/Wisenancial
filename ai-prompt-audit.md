@@ -474,6 +474,112 @@ Each question must test understanding of a concept in lessonDescription — do n
 
 ---
 
+## สิ่งที่ทำไปแล้วจริง (ปิดงาน 7 เฟส — 2026-08-28)
+
+ส่วนนี้บันทึก **สิ่งที่โค้ดเป็นอยู่จริงหลังแก้** ไม่ใช่แผน — หลายจุดต่างจากที่เสนอไว้ข้างบน
+เพราะพอลงมือแล้วพบว่าของจริงไม่เป็นอย่างที่คิด จุดที่ต่างเขียนกำกับไว้ทุกจุด
+
+| ข้อ | เรื่อง | commit |
+|---|---|---|
+| 1 | Anthropic provider ผูกค่า default กลาง (P8) | `c3c30aa` |
+| 2 | เลิกเรียกฟีเจอร์ที่ไม่ใช่ LLM ว่า "AI" | `7c05ad5` + `5c39d8e` |
+| 3 | `outputLanguage` ทุก endpoint (P3) | `24daaa9` |
+| 4 | Guardrail คำแนะนำลงทุน + disclaimer บน UI (P4) | `2119e75` |
+| 5 | ต่อ P/E + beta จริงเข้า Risk Analysis (P2) | `77bb3d1` |
+| 6 | AI Picks ใช้ candidate list จริง (P1 + P5) | `67e61ab` + `ce3b70e` |
+| 7 | เพดาน token + บรรทัดคุมความยาว (P7) | `07d66e8` |
+
+คำถามในหัวข้อ "ขั้นที่ 4" ถูกตอบครบทั้ง 7 ข้อระหว่างทาง (ข้อ 1 = เปลี่ยนคำ, ข้อ 2 = ทำ candidate list, ข้อ 3 = ส่งเฉพาะ P/E+beta ก่อน, ข้อ 4 = ใช่, ข้อ 5 = ทั้ง prompt และ UI, ข้อ 6 = ทำทั้งสองทางคู่กัน, ข้อ 7 = ทำได้เลย)
+
+### 1) Anthropic provider — `c3c30aa`
+
+`anthropic.provider.ts` เลิก hardcode `1200`/`0.2` เปลี่ยนไปใช้ `DEFAULT_MAX_OUTPUT_TOKENS`/`DEFAULT_TEMPERATURE` เหมือนอีก 3 provider
+
+**เจอเพิ่มระหว่างแก้ (ไม่ได้อยู่ในรายงาน)**: provider นี้ไม่ได้ตั้ง `AI_REQUEST_TIMEOUT_MS` ตอนสร้าง client ด้วย — SDK ของ Anthropic ตั้ง timeout เริ่มต้นไว้ที่ **10 นาที** ขณะที่อีก 3 เจ้าใช้ 30 วินาที คำขอที่ค้างจึงค้างยาวกว่าที่อื่น 20 เท่า ใส่ให้ครบไปพร้อมกัน
+
+### 2) เลิกเรียกสิ่งที่ไม่ใช่ LLM ว่า "AI" — `7c05ad5`, `5c39d8e`
+
+- `WatchlistPage.vue` — "AI Radar" → **"Momentum Radar"** (คำนวณจาก % การเปลี่ยนแปลงราคาย้อนหลังล้วน ๆ ดู `stocks.service.ts` `buildRadarEntry`)
+- `StockAnalysisPage.vue` — เส้นแนวรับ/แนวต้านที่เดิมติดป้าย AI → **"Range S1/S2/R1/R2"** (min/max ของกรอบราคา 20/90 วัน + RSI แบบ Wilder) พร้อมคอมเมนต์อธิบายที่มาไว้ในโค้ด
+- `AssetExplorerPage.vue` (ฝั่ง Trader) — เป็นส่วนขยายที่ Rem อนุมัติทีหลัง จึงแยกเป็น `5c39d8e` ไม่ปนกับก้อนแรก
+
+### 3) `outputLanguage` — `24daaa9`
+
+เพิ่ม `ai-prompt.shared.ts` เป็นที่รวมชิ้นส่วน prompt: `resolveOutputLanguage()` (`:25`) + `outputLanguageRule()` (`:40`) ทุก endpoint รับ `outputLanguage` แล้ว (`growth` รับทาง query string เพราะเป็น GET ไม่มี body)
+
+**กับดักที่เจอ**: `AnalyzeChartDto` ถูกประกาศไว้ **สองที่** — `ai.types.ts` (ตัวที่ `ai.service.ts` import) กับ `dto/ai.dto.ts` (ตัวที่ `ValidationPipe` ใช้จริง) เติมแค่ที่เดียวจะ typecheck ไม่ผ่านหรือโดน `forbidNonWhitelisted` ตีกลับ 400 แล้วแต่ว่าลืมที่ไหน
+
+ฝั่งหน้าบ้าน `AiStore.outputLanguage()` **อ่าน `languageStore` ตอนเรียกทุกครั้ง ไม่ cache** — ผู้ใช้สลับภาษากลางคันแล้วกดใหม่ต้องได้ภาษาใหม่ทันที
+
+### 4) Guardrail + disclaimer — `2119e75`
+
+- `investmentGuardrail()` (`ai-prompt.shared.ts:59`) ใส่ครบทุกจุด **ยกเว้น quiz** (เป็นเนื้อหาบทเรียน ไม่ใช่คำแนะนำลงทุน) — มีเทสล็อกข้อยกเว้นนี้ไว้ที่ `ai-education.service.spec.ts` ไม่ให้ใครเผลอเติมทีหลัง
+- `screeningOnlyGuardrail()` (`:89`) เป็นชั้นที่สองเฉพาะ AI Picks
+- `WsAiDisclaimer.vue` — คำเตือนอยู่ที่เดียวแล้วให้ 4 หน้าเรียกใช้ วางไว้ **เหนือ** ผลวิเคราะห์ ไม่ใช่ตัวเล็ก ๆ ท้ายการ์ด
+- ไม่ได้ทำเป็น i18n key เพราะโปรเจกต์นี้ไม่ได้ใช้ vue-i18n จริง (`src/i18n/` เป็น scaffold ที่ไม่มีใครเรียก — `useI18n`/`$t(` = 0 ที่ใช้) ของจริงคือ `LanguageStore` component นี้จึงเดินตามนั้นเหมือนทั้งโปรเจกต์
+
+### 5) P/E + beta เข้า Risk Analysis — `77bb3d1`
+
+scope ถูกลดเหลือ `peRatio` + `beta` (Rem เลือกทางเลือก C) — `debtToEquity` ยกไปเป็น backlog ท้ายไฟล์นี้
+
+- `GET /stocks/fundamentals?symbols=A,B,C` → `market-data.service.ts` `getRiskFundamentals()` (`:414`) ยิง Yahoo **ครั้งเดียวต่อ 40 symbol** แคช 5 นาที
+- `AnalyticsPage.vue` `riskHoldings` แนบค่าจริงแล้ว, `debtToEquity: null` เป็นของที่ตั้งใจ
+- watcher เฝ้า **"รายชื่อ symbol ที่เรียงแล้ว"** ไม่ใช่ `holdings` ทั้งก้อน — ราคาขยับทุกรอบ poll แต่ P/E กับ beta ไม่ได้เปลี่ยนตาม
+- prompt เพิ่มกฎ null (`ai-risk.service.ts`) และเปลี่ยน `concentration` จาก "large portfolio weights" เป็น `single holding weight >25%`
+
+**สองเรื่องที่ค้นพบระหว่างทางและมีผลต่อการออกแบบ**:
+1. `quote()` แบบไม่ระบุ `fields` **ไม่คืน `beta`** มาให้เลย (ทดสอบแล้วทั้งฝั่ง US และ `.BK`) ต้องระบุชื่อ field ตรง ๆ
+2. แต่การระบุ `fields` ทำให้ Yahoo คืน **เฉพาะ** ที่ขอ — `marketCap` หายไปทันที จึง **ห้าม** ไปเติม `fields` ใน `getListingMetrics()` ที่มีอยู่ (ตาราง listing จะพังทั้ง marketCap/dividendYield/volume) เป็นเหตุผลที่ `getRiskFundamentals()` เป็นฟังก์ชัน+cache แยกต่างหาก ไม่ใช่การขยายของเดิม
+
+### 6) AI Picks — `67e61ab`, `ce3b70e`
+
+**จุดที่แผนข้างบน (ข้อ 3.6) ใช้จริงไม่ได้**: แผนสมมติว่า candidate metrics ดึงจาก listing ที่มีอยู่ได้ทั้งชุด — ทดสอบแล้วไม่จริง
+
+| metric | ดึงยังไงได้จริง |
+|---|---|
+| `peRatio`, `currentPrice`, `marketCap`, `avgDailyVolume3M` | `quote()` batch ได้ |
+| `revenueGrowthYoY`, `netMargin` | **`quoteSummary()` ทีละ symbol เท่านั้น** — ส่ง array เข้าไปมันโยน error ตรง ๆ |
+| `volume30d` | **ไม่มีอยู่จริงใน Yahoo** ของที่มีคือ `averageDailyVolume10Day` / `averageDailyVolume3Month` |
+
+ชนกำแพงเดียวกับ `debtToEquity` แต่ตัดสินใจต่างกัน เพราะ **เจ้าของรายชื่อต่างกัน**: holdings ของการ์ดความเสี่ยงเป็นพอร์ตส่วนตัว จำนวนคุมไม่ได้ แคชร่วมกันไม่ได้ ส่วน candidate ของ AI Picks เป็นชอร์ตลิสต์ ~12 ตัวที่เซิร์ฟเวอร์คัดเอง ทุกคนใช้ร่วมกัน และงบเปลี่ยนไตรมาสละครั้ง → แคช 12 ชม. + concurrency 5 = **~12 request ต่อ 12 ชม. ทั้งระบบ** (วัดจริง: 15 symbol ที่ concurrency 5 = 867ms, ล้มเหลว 0, หุ้นไทยมีข้อมูลครบ 6/6)
+
+โครงที่ได้ (Rem อนุมัติ):
+- `stocks.service.ts` `getGrowthCandidates()` (`:403`) — ขั้น 1 `getListingMetrics()` batch ทั้ง universe คัดเหลือ `GROWTH_CANDIDATE_LIMIT = 12` (`:129`) ขั้น 2 `market-data.service.ts` `getGrowthFundamentals()` (`:479`) เฉพาะ 12 ตัวนั้น
+- ขั้น 1 คัดด้วย **สภาพคล่อง ไม่ใช่การเติบโต** โดยตั้งใจ — ตอนนั้นยังไม่มีตัวเลขการเติบโตในมือ
+- โควตาไทย/global แบ่งครึ่ง และให้ฝั่งที่เหลือเติมโควตาที่อีกฝั่งใช้ไม่หมด (ต่างจาก `pickEvenly` ของ radar ที่ไม่เติมกลับ)
+- `ai-recommendation.service.ts` `reconcile()` (`:190`) — **ตัดหุ้นที่ไม่ได้อยู่ใน candidate list ทิ้ง** และเขียนทับ `symbol/name/sector/asOf/metrics` ด้วยของฝั่งเซิร์ฟเวอร์เสมอ โมเดลมีสิทธิ์แต่งแค่ `reasoning` กับ `aiSummary`
+- candidate < `MIN_GROWTH_CANDIDATES = 5` (`:43`) → โยน `GROWTH_CANDIDATES_UNAVAILABLE` **โดยไม่เรียก LLM** ห้ามถอยกลับไปให้โมเดลนึกหุ้นเอง
+- user prompt เปลี่ยนเป็น `JSON.stringify` เหมือนอีก 7 จุด — **ปิด P5 ไปในตัว**
+
+**ดีกว่าที่แผนเสนอ**: แผนให้โมเดล echo `asOf` กลับมา ของจริงดึง `defaultKeyStatistics.mostRecentQuarter` มาเองในคำขอเดียวกับ `financialData` (ไม่เพิ่ม request เลย) ได้วันปิดไตรมาสจริง เช่น PTT `2026-06-30`, AAPL `2026-06-27` แล้วเซิร์ฟเวอร์เป็นคนกรอก โมเดลแตะไม่ได้
+
+`ce3b70e` เอาวันที่นั้นขึ้นหน้าจอ — ต่อท้าย `WsAiDisclaimer` ในกล่องเดิม (prop `note`) ไม่ใช่แถบที่สอง แต่ละหุ้นปิดไตรมาสคนละวัน จึงยึด **วันเก่าสุด** แล้วต่อท้ายว่า "หรือใหม่กว่า" ซึ่งเป็นคำพูดที่จริงกับทุกใบ
+
+### 7) เพดาน token + ความยาว — `07d66e8`
+
+| จุด | เดิม | ใหม่ |
+|---|---|---|
+| `analyzeChart` | 800 | 1200 |
+| news enrichment (ทั้งอัตโนมัติและกดเอง) | 1000 | 1400 |
+| risk / quiz | 1200 | 1600 |
+| portfolio review (trader + investor) | 1400 | 1800 |
+| AI Picks | 1800 | 2400 |
+
+สองแถวล่างไม่ได้อยู่ในแผน เพิ่มเพราะ: review มี string array 4 ชุด + summary, ส่วน AI Picks output ก้อนใหญ่สุดในระบบ (5 หุ้น × (4 เหตุผล + สรุป) = 25 ฟิลด์ข้อความ) แถมโมเดลตัวแรกคือ **gemini ที่หัก thinking token จากเพดานเดียวกันนี้** (ดูคอมเมนต์ใน `gemini.provider.ts`)
+
+**ข้อกังวลเรื่องต้นทุนในรายงานเดิม (ขั้นที่ 4 ข้อ 6) ไม่เป็นจริง**: ตรวจ `ai-manager.service.ts` แล้วพบว่าเครดิตคิดจาก `result.usage` คือ token ที่ใช้จริง ไม่ใช่จากเพดาน เพดานที่เหลือไม่ได้ใช้จึงไม่มีต้นทุน — ความเสี่ยงเป็นข้างเดียว (คำตอบโดนตัด = parse ไม่ผ่าน = เสียเครดิตฟรีโดยไม่มี fallback ข้าม provider)
+
+แต่เพดานที่สูงขึ้นแปลว่าโมเดล verbose จะเขียนยาวขึ้นจริง จึงมาคู่กับ `concisenessRule()` (`ai-prompt.shared.ts:81`) — ~40 คำต่อฟิลด์, array นับเป็นรายไอเทม, และย้ำว่า **นับแยกรายฟิลด์ ไม่ใช่โควตารวมของทั้ง object** เพราะ schema ซ้อนอย่าง `reasoning` ของ AI Picks ถ้าโมเดลตีความเป็นโควตารวมมันจะเททั้งหมดลง `growth` แล้วอีกสามช่องเหลือห้วน ๆ (จุดนั้นมีบรรทัดระบุชื่อ 4 sub-field เพิ่มอีกชั้น)
+
+ใส่ครบทุกจุดรวม quiz — ข้อยกเว้น "จุดที่เป็นตัวเลข/enum ล้วน" ที่เผื่อไว้ไม่มีอยู่จริงสักจุด (quiz มี `explanation` เป็นฟรีเท็กซ์)
+
+### สถานะเทสตอนปิดงาน
+
+backend jest **283 ผ่าน** · frontend vitest **413 ผ่าน** · `tsc`/`vue-tsc`/`eslint`/`quasar build` ผ่านหมด
+(`test/app.e2e-spec.ts` ยังมี error `supertest` 2 บรรทัดที่ค้างมาก่อนหน้างานนี้ ไม่ได้แตะ)
+
+---
+
 ## รอดำเนินการ — debtToEquity
 
 **สถานะ**: ยกออกจากเฟส 5 โดยตั้งใจ (Rem อนุมัติทางเลือก C — ส่ง `peRatio` + `beta` ก่อน)
