@@ -1,9 +1,11 @@
 <template>
   <q-btn
+    v-if="available"
     flat
     dense
     no-caps
     class="mock-toggle"
+    data-test="mock-toggle"
     :class="{ 'mock-toggle--on': enabled }"
     @click="confirmToggle"
   >
@@ -23,9 +25,15 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useQuasar } from 'quasar';
-import { isMockEnabled, setMockEnabled } from 'src/mocks';
+import { isMockAvailable, isMockEnabled, setMockEnabled } from 'src/mocks';
 
 const $q = useQuasar();
+
+/**
+ * ด่านอยู่ที่ตัวปุ่มเอง ไม่ใช่ที่ MainLayout — call site ใหม่ในอนาคตจะได้ปลอดภัย
+ * ตามไปด้วยโดยไม่ต้องจำว่าต้องครอบ v-if ทุกครั้ง
+ */
+const available = isMockAvailable();
 const enabled = ref(isMockEnabled());
 
 function confirmToggle() {

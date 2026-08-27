@@ -197,5 +197,10 @@ export function installMockAdapter(instance: AxiosInstance): void {
   };
 }
 
-export { isMockEnabled, setMockEnabled, MOCK_STORAGE_KEY } from './mock.config';
+export {
+  isMockAvailable,
+  isMockEnabled,
+  setMockEnabled,
+  MOCK_STORAGE_KEY,
+} from './mock.config';
 export const MOCK_ROUTE_COUNT = ROUTES.length;
