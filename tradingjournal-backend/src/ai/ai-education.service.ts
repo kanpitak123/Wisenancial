@@ -4,6 +4,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
+import {
+  outputLanguageRule,
+  resolveOutputLanguage,
+} from './ai-prompt.shared';
 import type { QuizResponse } from './ai-feature.types';
 
 @Injectable()
@@ -14,14 +18,19 @@ export class AiEducationService {
     userId: number,
     lessonTitle: string,
     lessonDescription: string,
+    requestedLanguage?: string,
   ) {
     const modelId = this.defaultModel();
+    const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
     const result = await this.manager.executeAiRequest<QuizResponse>({
       userId,
       modelId,
-      systemPrompt:
-        'You create finance education quizzes. Return valid JSON only.',
+      systemPrompt: [
+        'You create finance education quizzes.',
+        outputLanguageRule(outputLanguage),
+        'Return valid JSON only.',
+      ].join('\n'),
       prompt: JSON.stringify({
         task: 'Generate exactly 2 multiple-choice questions',
         lessonTitle,

@@ -50,6 +50,18 @@ describe('AiController', () => {
   it('growthRecommendations ใช้ userId จาก request ไม่ใช่ค่าจาก client', () => {
     controller.growthRecommendations({ user: { userId: 7 } } as never);
 
-    expect(recommendationsMock.getGrowthRecommendations).toHaveBeenCalledWith(7);
+    expect(recommendationsMock.getGrowthRecommendations).toHaveBeenCalledWith(
+      7,
+      undefined,
+    );
+  });
+
+  it('growthRecommendations ส่ง outputLanguage จาก query ต่อให้ service', () => {
+    controller.growthRecommendations({ user: { userId: 7 } } as never, 'en');
+
+    expect(recommendationsMock.getGrowthRecommendations).toHaveBeenCalledWith(
+      7,
+      'en',
+    );
   });
 });

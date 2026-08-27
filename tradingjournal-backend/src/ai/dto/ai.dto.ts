@@ -9,11 +9,22 @@ import {
   Min,
 } from 'class-validator';
 
+/**
+ * ภาษาที่อยากให้ AI ตอบกลับมา — หน้าบ้านส่งมาจาก LanguageStore ตัวเดียวกับที่ตั้งภาษา UI
+ *
+ * optional ทุกที่โดยตั้งใจ: client เก่าที่ยังไม่ส่งมาต้องไม่พัง (ValidationPipe ตั้ง
+ * forbidNonWhitelisted ไว้ ถ้าไม่ประกาศไว้ใน DTO การส่งมาจะกลายเป็น 400 แทน)
+ * ฝั่ง service จะ resolve เป็นค่าเริ่มต้น 'th' ให้เอง
+ */
 export class AnalyzeChartDto {
   @IsOptional()
   @IsInt()
   @Min(1)
   portfolioId?: number;
+
+  @IsOptional()
+  @IsIn(['th', 'en'])
+  outputLanguage?: 'th' | 'en';
 
   @IsIn(['TRADER', 'INVESTOR'])
   portfolioType!: 'TRADER' | 'INVESTOR';
@@ -39,6 +50,10 @@ export class AnalyzeChartDto {
 export class ReviewPortfolioDto {
   @IsString()
   modelId!: string;
+
+  @IsOptional()
+  @IsIn(['th', 'en'])
+  outputLanguage?: 'th' | 'en';
 
   @IsOptional()
   @IsArray()
@@ -84,6 +99,10 @@ export class RiskAnalysisDto {
 
   @IsString()
   modelId!: string;
+
+  @IsOptional()
+  @IsIn(['th', 'en'])
+  outputLanguage?: 'th' | 'en';
 }
 
 export class QuizDto {
@@ -92,4 +111,8 @@ export class QuizDto {
 
   @IsString()
   lessonDescription!: string;
+
+  @IsOptional()
+  @IsIn(['th', 'en'])
+  outputLanguage?: 'th' | 'en';
 }

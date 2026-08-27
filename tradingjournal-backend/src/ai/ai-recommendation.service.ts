@@ -8,6 +8,10 @@ import {
   AiManagerService,
   type AiModelOption,
 } from './ai-manager.service';
+import {
+  outputLanguageRule,
+  resolveOutputLanguage,
+} from './ai-prompt.shared';
 import type { StockRecommendation } from './ai-feature.types';
 
 /**
@@ -32,9 +36,13 @@ export class AiRecommendationService {
     private readonly manager: AiManagerService,
   ) {}
 
-  async getGrowthRecommendations(userId: number) {
+  async getGrowthRecommendations(
+    userId: number,
+    requestedLanguage?: string,
+  ) {
     const chain = this.modelChain();
     const [preferred] = chain;
+    const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
     let result: Awaited<
       ReturnType<
@@ -52,8 +60,11 @@ export class AiRecommendationService {
           >({
             userId,
             modelId: model.id,
-            systemPrompt:
-              'You are a quantitative growth-stock analyst. Return a valid JSON array only. Do not invent live prices or precise current metrics.',
+            systemPrompt: [
+              'You are a quantitative growth-stock analyst.',
+              outputLanguageRule(outputLanguage),
+              'Return a valid JSON array only. Do not invent live prices or precise current metrics.',
+            ].join('\n'),
             prompt: `Recommend 4-5 publicly traded growth companies across diverse sectors.
 Return ONLY a JSON array with:
 [{

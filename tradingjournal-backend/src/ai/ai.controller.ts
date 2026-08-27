@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -68,6 +69,7 @@ export class AiController {
       dto.modelId,
       dto.items,
       dto.analytics,
+      dto.outputLanguage,
     );
   }
 
@@ -80,13 +82,22 @@ export class AiController {
       req.user.userId,
       dto.holdings,
       dto.modelId,
+      dto.outputLanguage,
     );
   }
 
+  /**
+   * เป็น GET จึงไม่มี body ให้ใส่ outputLanguage — รับเป็น query string แทน
+   * ค่าที่ไม่รู้จักถูก resolveOutputLanguage() ปัดเป็นค่าเริ่มต้นให้อยู่แล้ว
+   */
   @Get('recommendations/growth')
-  growthRecommendations(@Request() req: any) {
+  growthRecommendations(
+    @Request() req: any,
+    @Query('outputLanguage') outputLanguage?: string,
+  ) {
     return this.recommendations.getGrowthRecommendations(
       req.user.userId,
+      outputLanguage,
     );
   }
 
@@ -99,6 +110,7 @@ export class AiController {
       req.user.userId,
       dto.lessonTitle,
       dto.lessonDescription,
+      dto.outputLanguage,
     );
   }
 

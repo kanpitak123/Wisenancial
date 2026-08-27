@@ -1,5 +1,13 @@
 export type AiPortfolioType = 'TRADER' | 'INVESTOR';
 
+/**
+ * ภาษาที่ขอให้ AI ตอบกลับ — ส่งมาจาก LanguageStore ตัวเดียวกับที่ตั้งภาษา UI
+ *
+ * optional เพราะฝั่ง backend resolve เป็น 'th' ให้เองถ้าไม่ส่ง แต่ทุก action
+ * ใน AiStore ส่งมาให้เสมอ เพื่อให้ผลลัพธ์ตรงกับภาษาที่ผู้ใช้เห็นอยู่จริง
+ */
+export type AiOutputLanguage = 'th' | 'en';
+
 export type AiModelId = string;
 
 export interface AiModel {
@@ -27,6 +35,7 @@ export interface AnalyzeChartPayload {
   extraContext?: Record<string, unknown>;
   modelId?: string;
   useRuleBased?: boolean;
+  outputLanguage?: AiOutputLanguage;
 }
 
 export interface ChartInsight {
@@ -79,6 +88,7 @@ export interface ReviewPortfolioPayload {
   modelId: string;
   items?: unknown[];
   analytics?: Record<string, unknown>;
+  outputLanguage?: AiOutputLanguage;
 }
 
 export interface StockRecommendation {
@@ -136,6 +146,7 @@ export interface QuizResponse {
 export interface GenerateQuizPayload {
   lessonTitle: string;
   lessonDescription: string;
+  outputLanguage?: AiOutputLanguage;
 }
 
 export interface ApiErrorResponse {

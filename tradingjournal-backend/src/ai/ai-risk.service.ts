@@ -3,6 +3,10 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
+import {
+  outputLanguageRule,
+  resolveOutputLanguage,
+} from './ai-prompt.shared';
 import type {
   PortfolioRiskAnalysis,
   PortfolioRiskHolding,
@@ -16,15 +20,20 @@ export class AiRiskService {
     userId: number,
     holdings: PortfolioRiskHolding[],
     modelId: string,
+    requestedLanguage?: string,
   ) {
     const normalized = this.normalizeWeights(holdings);
+    const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
     const result =
       await this.manager.executeAiRequest<PortfolioRiskAnalysis>({
         userId,
         modelId,
-        systemPrompt:
-          'You are a portfolio risk analyst. Return valid JSON only and rely only on supplied data.',
+        systemPrompt: [
+          'You are a portfolio risk analyst. Rely only on supplied data.',
+          outputLanguageRule(outputLanguage),
+          'Return valid JSON only.',
+        ].join('\n'),
         prompt: JSON.stringify({
           task: 'Assess portfolio risk',
           requiredShape: {

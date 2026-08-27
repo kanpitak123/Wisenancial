@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia';
 import { aiService, getAiErrorMessage, isAiCreditError } from 'src/services/ai.service';
 import { useAuthStore } from 'src/stores/AuthStore';
+import { useLanguageStore } from 'src/stores/LanguageStore';
 import type {
   AiModel,
+  AiOutputLanguage,
   AiPortfolioType,
   AnalyzeChartPayload,
   ChartInsight,
@@ -86,6 +88,14 @@ export const useAiStore = defineStore('ai', {
   },
 
   actions: {
+    /**
+     * ภาษาที่จะขอให้ AI ตอบ — อ่านตอนเรียกทุกครั้ง ไม่ได้ cache ไว้
+     * ผู้ใช้สลับภาษากลางคันแล้วกดวิเคราะห์ใหม่ ต้องได้ภาษาใหม่ทันที
+     */
+    outputLanguage(): AiOutputLanguage {
+      return useLanguageStore().currentLanguage;
+    },
+
     clearError() {
       this.error = null;
       this.insufficientCredits = false;
@@ -160,6 +170,7 @@ export const useAiStore = defineStore('ai', {
           portfolioType: payload.portfolioType,
           chartType: payload.chartType,
           data: payload.data,
+          outputLanguage: this.outputLanguage(),
           ...(payload.portfolioId !== undefined ? { portfolioId: payload.portfolioId } : {}),
           ...(payload.extraContext !== undefined ? { extraContext: payload.extraContext } : {}),
           ...(payload.useRuleBased !== undefined ? { useRuleBased: payload.useRuleBased } : {}),
@@ -201,6 +212,7 @@ export const useAiStore = defineStore('ai', {
       try {
         const payload: ReviewPortfolioPayload = {
           modelId,
+          outputLanguage: this.outputLanguage(),
           ...(items !== undefined ? { items } : {}),
           ...(analytics !== undefined ? { analytics } : {}),
         };
@@ -223,7 +235,7 @@ export const useAiStore = defineStore('ai', {
       this.insufficientCredits = false;
 
       try {
-        const result = await aiService.getGrowthRecommendations();
+        const result = await aiService.getGrowthRecommendations(this.outputLanguage());
         this.growthRecommendations = result.data;
         this.syncCredits(result.creditsRemaining);
         return result;
@@ -242,7 +254,11 @@ export const useAiStore = defineStore('ai', {
       this.insufficientCredits = false;
 
       try {
-        const result = await aiService.analyzeRisk({ holdings, modelId });
+        const result = await aiService.analyzeRisk({
+          holdings,
+          modelId,
+          outputLanguage: this.outputLanguage(),
+        });
         this.riskAnalysis = result.data;
         this.normalizedRiskHoldings = result.holdingsData;
         this.syncCredits(result.creditsRemaining);
@@ -264,6 +280,7 @@ export const useAiStore = defineStore('ai', {
         const payload: GenerateQuizPayload = {
           lessonTitle,
           lessonDescription,
+          outputLanguage: this.outputLanguage(),
         };
 
         const result = await aiService.generateQuiz(payload);

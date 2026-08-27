@@ -12,6 +12,8 @@ export interface AnalyzeChartDto {
   extraContext?: Record<string, unknown>;
   modelId?: string;
   useRuleBased?: boolean;
+  /** ต้องตรงกับ AnalyzeChartDto ใน dto/ai.dto.ts ที่เป็นตัว validate ของจริง */
+  outputLanguage?: 'th' | 'en';
 }
 
 export interface ChartInsightResponse {

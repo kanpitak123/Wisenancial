@@ -4,6 +4,7 @@ import type {
   AiActionResponse,
   AiCreditsResponse,
   AiModelsResponse,
+  AiOutputLanguage,
   AnalyzeChartPayload,
   ApiErrorResponse,
   ChartInsight,
@@ -59,9 +60,13 @@ export const aiService = {
     return data;
   },
 
-  async getGrowthRecommendations(): Promise<AiActionResponse<StockRecommendation[]>> {
+  /** เป็น GET จึงส่ง outputLanguage ไปทาง query ไม่ใช่ body เหมือน endpoint อื่น */
+  async getGrowthRecommendations(
+    outputLanguage?: AiOutputLanguage,
+  ): Promise<AiActionResponse<StockRecommendation[]>> {
     const { data } = await api.get<AiActionResponse<StockRecommendation[]>>(
       '/ai/recommendations/growth',
+      outputLanguage ? { params: { outputLanguage } } : undefined,
     );
     return data;
   },
@@ -69,6 +74,7 @@ export const aiService = {
   async analyzeRisk(payload: {
     holdings: PortfolioRiskHolding[];
     modelId: string;
+    outputLanguage?: AiOutputLanguage;
   }): Promise<RiskAnalysisResponse> {
     const { data } = await api.post<RiskAnalysisResponse>('/ai/portfolio/risk-analysis', payload);
     return data;
