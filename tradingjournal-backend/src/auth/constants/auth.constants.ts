@@ -11,6 +11,27 @@ export const AUTH_CONSTANTS = {
   refreshCookiePath: '/auth',
 } as const;
 
+/**
+ * เพดานคำขอเฉพาะ endpoint ที่เดารหัสผ่าน/ยิงซ้ำได้ (login / register / refresh)
+ *
+ * ThrottlerGuard ระดับ global คุมทุก endpoint อยู่แล้วที่ 120 ครั้ง/นาที ซึ่งตั้งไว้
+ * หลวมโดยตั้งใจเพราะหน้า Dashboard ยิงหลาย endpoint พร้อมกันตอนโหลด — แต่เพดาน
+ * เดียวกันนั้นแปลว่าเดารหัสผ่านได้ 120 ครั้ง/นาที/IP ด้วย
+ *
+ * ทำไม 10 ไม่ใช่ 3-5: เพดานนี้นับต่อ IP และผู้ใช้จำนวนมากอยู่หลัง NAT ร่วมกัน
+ * (ออฟฟิศ, มือถือ CGNAT) ตัวเลขที่ต่ำกว่านี้เสี่ยงล็อกคนที่พิมพ์รหัสผิดคนละครั้ง
+ * สองครั้งในออฟฟิศเดียวกัน ส่วน 10 ครั้ง/นาที ยังรัดกว่าเดิม 12 เท่า และหยุด
+ * สคริปต์เดารหัสแบบยิงรัวได้อยู่
+ *
+ * /auth/refresh รวมอยู่ด้วยและไม่กระทบผู้ใช้จริง — หน้าบ้านรวบคำขอ refresh ที่เกิด
+ * พร้อมกันให้เหลือครั้งเดียวอยู่แล้ว (ดู boot/axios.refresh.spec.ts) ของจริงจึงเกิด
+ * ราว 4 ครั้ง/ชั่วโมงตามอายุ access token 15 นาที
+ */
+export const AUTH_THROTTLE = {
+  ttlMs: Number(process.env.AUTH_THROTTLE_TTL_SECONDS ?? 60) * 1000,
+  limit: Number(process.env.AUTH_THROTTLE_LIMIT ?? 10),
+} as const;
+
 export const AUTH_ERROR_MESSAGES = {
   invalidCredentials: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
   accountAlreadyExists: 'อีเมลหรือชื่อผู้ใช้นี้ถูกใช้งานแล้ว',

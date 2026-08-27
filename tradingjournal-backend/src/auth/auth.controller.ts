@@ -10,7 +10,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
+import { AUTH_THROTTLE } from './constants/auth.constants';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -24,6 +26,16 @@ import {
   setRefreshCookie,
 } from './utils/auth-cookie.util';
 
+/**
+ * เขียนทับเพดาน "default" ตัวเดียวกับที่ ThrottlerModule ตั้งไว้ ไม่ได้เพิ่ม throttler
+ * ตัวที่สอง — ใน @nestjs/throttler v6 ถ้าประกาศ throttler หลายตัวตอน forRoot
+ * ทุกตัวจะถูกบังคับใช้กับ "ทุก" route ไม่ใช่เฉพาะที่อ้างถึง ซึ่งจะลากเพดานเข้ม
+ * ของ auth ไปครอบทั้งระบบโดยไม่ตั้งใจ
+ */
+const authThrottle = {
+  default: { limit: AUTH_THROTTLE.limit, ttl: AUTH_THROTTLE.ttlMs },
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -31,11 +43,13 @@ export class AuthController {
     private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
+  @Throttle(authThrottle)
   @Post('register')
   register(@Body() body: RegisterDto) {
     return this.authService.register(body);
   }
 
+  @Throttle(authThrottle)
   @Post('login')
   async login(
     @Body() body: LoginDto,
@@ -57,6 +71,7 @@ export class AuthController {
    * หมดอายุไปแล้วพอดี ถ้าบังคับให้มี access token ที่ยังใช้ได้ก็ไม่มีประโยชน์อะไร
    * ตัวที่ยืนยันตัวตนคือ refresh token ใน httpOnly cookie
    */
+  @Throttle(authThrottle)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
