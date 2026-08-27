@@ -1,22 +1,23 @@
 /**
- * Stock Terminal — หน้าที่ยุบ /StockExplorer กับ /StockAnalysis เดิมเข้าด้วยกัน
+ * Stock Terminal — เปลือกหน้าที่เหลืออยู่หลังถอดแถบสำรวจซ้ายออก
  *
- * สองหน้าเดิมไม่เคยมีสเปคของตัวเอง สวีทนี้จึงเป็นตัวแรกที่ล็อกพฤติกรรมของทั้งคู่หลังรวม:
- *   - ความสามารถของ Explorer (ค้นหา / ฟิลเตอร์ตลาด-กลุ่ม / เรียงลำดับ / ตาราง) ต้องยังอยู่
- *   - คลิกแถวแล้วฝั่งขวาเปลี่ยนหุ้นผ่าน /stock/:symbol ซึ่งเป็น deep link หลัก
- *   - เข้าหน้าโดยไม่มี symbol ต้องไม่ค้างหน้าว่าง
- *   - ย่อ/ขยายแถบซ้ายได้และจำสถานะไว้
- *   - แถบปุ่มสามโหมด (สำรวจหุ้น / หุ้นไทย / หุ้นสหรัฐ) สลับเนื้อในแผงซ้ายและจำโหมดไว้
+ * เดิมหน้านี้เป็นสองเสาและสวีทนี้คุมทั้งแถบซ้าย (ค้นหา/ฟิลเตอร์/ตาราง/ย่อ-ขยาย) กับ
+ * แถบปุ่มสามโหมด ตอนนี้ของพวกนั้นย้ายที่กันหมดแล้ว:
+ *   - ตัวสำรวจหุ้น -> StockExplorerRail.spec.ts (คุมค้นหา/ฟิลเตอร์/เรียง/คลิกแถว)
+ *   - แท็บสามโหมด + ตารางหุ้นยอดนิยม -> StockAnalysisPage.spec.ts (การ์ดใต้กราฟ)
+ *
+ * เหลือให้หน้านี้รับผิดชอบแค่เรื่องเดียว: แปลง URL เป็นหุ้นที่จะแสดง
+ *   - /stock/:symbol -> เปิดเทอร์มินัลของหุ้นตัวนั้น
+ *   - /Stocks (ไม่มี symbol) -> หาหุ้นตั้งต้นมาให้เอง แล้ว replace URL
+ *   - หาไม่ได้ -> empty state ที่กดลองใหม่ได้ ไม่ใช่จอค้าง
  */
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { QBtn, QLayout, QPageContainer, QTable } from 'quasar';
+import { QLayout, QPageContainer } from 'quasar';
 import { h, nextTick, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StockListing } from 'src/types/stocks.types';
 
 const list = vi.fn();
-const getPopular = vi.fn();
 const push = vi.fn();
 const replace = vi.fn();
 const routeParams = ref<Record<string, string>>({});
@@ -24,7 +25,7 @@ const routeParams = ref<Record<string, string>>({});
 vi.mock('src/services/stocks.service', () => ({
   stocksService: {
     list: (...args: unknown[]) => list(...args),
-    getPopular: (...args: unknown[]) => getPopular(...args),
+    getPopular: vi.fn().mockResolvedValue([]),
   },
   SECTOR_OPTIONS: ['Technology', 'Financials'],
   EXCHANGE_OPTIONS: ['NASDAQ', 'NYSE', 'SET'],
@@ -36,18 +37,17 @@ vi.mock('vue-router', () => ({
 }));
 
 // เทอร์มินัลฝั่งขวาเป็นคอมโพเนนต์ใหญ่ที่ลากทั้ง apex/lightweight-charts และ service อีกสิบตัว
-// สวีทนี้สนใจ "โครงหน้ารวม" ไม่ใช่เนื้อในของมัน — ตัวมันมีสเปคของตัวเองอยู่แล้ว
+// สวีทนี้สนใจ "หน้าเลือกหุ้นตัวไหนมาแสดง" ไม่ใช่เนื้อในของมัน — ตัวมันมีสเปคของตัวเองแล้ว
 vi.mock('./StockAnalysisPage.vue', () => ({
   default: {
     name: 'StockAnalysisPageStub',
-    emits: ['browse-all'],
-    template: '<div data-test="analysis-stub"><button data-test="stub-browse-all" @click="$emit(\'browse-all\')" /></div>',
+    template: '<div data-test="analysis-stub" />',
   },
 }));
 
 const StockTerminalPage = (await import('./StockTerminalPage.vue')).default;
 
-function listing(symbol: string, overrides: Partial<StockListing> = {}): StockListing {
+function listingRow(symbol: string) {
   return {
     symbol,
     name: `${symbol} Corporation`,
@@ -59,7 +59,6 @@ function listing(symbol: string, overrides: Partial<StockListing> = {}): StockLi
     peRatio: 30,
     dividendYield: 0.5,
     volume: 1_000_000,
-    ...overrides,
   };
 }
 
@@ -78,65 +77,13 @@ async function mountPage(symbol?: string): Promise<VueWrapper> {
   return wrapper;
 }
 
-const railTable = (wrapper: VueWrapper) =>
-  wrapper.findAllComponents(QTable).find((table) => table.attributes('data-test') === 'rail-table');
-
-describe('StockTerminalPage — โครงหน้ารวม', () => {
+describe('StockTerminalPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     document.body.innerHTML = '';
     localStorage.clear();
     vi.clearAllMocks();
-    list.mockResolvedValue({
-      rows: [listing('AAPL'), listing('MSFT'), listing('NVDA')],
-      total: 3,
-      page: 1,
-      pageSize: 20,
-    });
-  });
-
-  it('แถบสำรวจหุ้นกับเทอร์มินัลอยู่หน้าเดียวกัน ไม่ต้องสลับหน้า', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    expect(wrapper.find('[data-test="stock-explorer-rail"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="analysis-stub"]').exists()).toBe(true);
-  });
-
-  it('ความสามารถของ Explorer เดิมยังอยู่ครบ (ค้นหา/ตลาด/กลุ่ม/เรียงลำดับ/ตาราง)', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    expect(wrapper.find('[data-test="rail-search"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="rail-market-toggle"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="rail-exchange"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="rail-sector"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="rail-sort"]').exists()).toBe(true);
-    expect(railTable(wrapper)).toBeDefined();
-  });
-
-  it('ตารางแสดงหุ้นที่โหลดมาจริง', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    expect(wrapper.text()).toContain('AAPL');
-    expect(wrapper.text()).toContain('MSFT');
-    expect(wrapper.text()).toContain('NVDA');
-  });
-
-  it('คลิกแถว -> ไปที่ /stock/:symbol (deep link หลัก) ไม่ใช่ route อื่น', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    railTable(wrapper)!.vm.$emit('row-click', new Event('click'), listing('MSFT'), 1);
-    await nextTick();
-
-    expect(push).toHaveBeenCalledWith('/stock/MSFT');
-  });
-
-  it('คลิกหุ้นตัวที่เปิดอยู่แล้ว -> ไม่ยิง navigation ซ้ำ', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    railTable(wrapper)!.vm.$emit('row-click', new Event('click'), listing('AAPL'), 0);
-    await nextTick();
-
-    expect(push).not.toHaveBeenCalled();
+    list.mockResolvedValue({ rows: [listingRow('AAPL')], total: 1, page: 1, pageSize: 1 });
   });
 
   it('deep link /stock/:symbol -> เปิดเทอร์มินัลเลย ไม่ขึ้น empty state', async () => {
@@ -146,237 +93,84 @@ describe('StockTerminalPage — โครงหน้ารวม', () => {
     expect(wrapper.find('[data-test="terminal-empty"]').exists()).toBe(false);
   });
 
-  it('เข้าหน้าโดยไม่มี symbol -> เลือกหุ้นตัวแรกในตารางให้เอง (replace ไม่ใช่ push)', async () => {
+  it('มี symbol อยู่แล้ว -> ไม่ต้องไปหาหุ้นตั้งต้นมาให้ซ้ำ', async () => {
+    await mountPage('NVDA');
+
+    expect(list).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('เข้ามาแบบไม่มี symbol -> หาหุ้นตัวแรกมาให้แล้ว replace URL', async () => {
     await mountPage();
 
+    expect(list).toHaveBeenCalledWith({ page: 1, pageSize: 1 });
     expect(replace).toHaveBeenCalledWith('/stock/AAPL');
+    // replace ไม่ใช่ push — ปุ่ม back ต้องไม่ย้อนกลับมาที่หน้าว่าง
     expect(push).not.toHaveBeenCalled();
   });
 
-  it('ไม่มี symbol และตารางว่าง -> ขึ้น empty state เชิญให้เลือก ไม่ใช่จอเปล่า', async () => {
-    list.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 20 });
+  it('สัญลักษณ์ตัวพิมพ์เล็กจาก listing -> normalize เป็นตัวใหญ่ก่อนพาไป', async () => {
+    list.mockResolvedValue({ rows: [listingRow('msft')], total: 1, page: 1, pageSize: 1 });
+
+    await mountPage();
+
+    expect(replace).toHaveBeenCalledWith('/stock/MSFT');
+  });
+
+  it('listing ว่าง -> ขึ้น empty state ที่กดลองใหม่ได้ ไม่ใช่ค้างสปินเนอร์', async () => {
+    list.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 1 });
 
     const wrapper = await mountPage();
 
     expect(replace).not.toHaveBeenCalled();
     expect(wrapper.find('[data-test="terminal-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="terminal-retry"]').exists()).toBe(true);
+  });
+
+  it('listing พัง -> ไม่โยน error ออกไป และยังขึ้น empty state ให้ลองใหม่', async () => {
+    list.mockRejectedValue(new Error('500'));
+
+    const wrapper = await mountPage();
+
+    expect(wrapper.find('[data-test="terminal-empty"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="analysis-stub"]').exists()).toBe(false);
   });
 
-  it('ย่อ/ขยายแถบซ้ายได้ และจำสถานะไว้ข้ามการเปิดหน้า', async () => {
-    const wrapper = await mountPage('AAPL');
-    const rail = wrapper.find('[data-test="terminal-rail"]');
-
-    expect(rail.classes()).not.toContain('terminal-rail--collapsed');
-
-    await wrapper.find('[data-test="rail-toggle"]').trigger('click');
-    await nextTick();
-
-    expect(wrapper.find('[data-test="terminal-rail"]').classes()).toContain(
-      'terminal-rail--collapsed',
-    );
-
-    const reopened = await mountPage('AAPL');
-
-    expect(reopened.find('[data-test="terminal-rail"]').classes()).toContain(
-      'terminal-rail--collapsed',
-    );
-  });
-
-  it('ย่อแถบแล้วตารางต้องไม่ถูกถอดทิ้ง (ขยายกลับไม่ต้องโหลดใหม่)', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    expect(list).toHaveBeenCalledTimes(1);
-
-    await wrapper.find('[data-test="rail-toggle"]').trigger('click');
-    await nextTick();
-    await wrapper.find('[data-test="rail-toggle"]').trigger('click');
-    await nextTick();
-
-    expect(list).toHaveBeenCalledTimes(1);
-  });
-
-  it('ปุ่ม "ดูทั้งหมด" ในเทอร์มินัล -> กางแถบซ้าย แทนการเปลี่ยนหน้าไป /StockExplorer เดิม', async () => {
-    const wrapper = await mountPage('AAPL');
-
-    await wrapper.find('[data-test="rail-toggle"]').trigger('click');
-    await nextTick();
-    expect(wrapper.find('[data-test="terminal-rail"]').classes()).toContain(
-      'terminal-rail--collapsed',
-    );
-
-    await wrapper.find('[data-test="stub-browse-all"]').trigger('click');
-    await nextTick();
-
-    expect(wrapper.find('[data-test="terminal-rail"]').classes()).not.toContain(
-      'terminal-rail--collapsed',
-    );
-    expect(push).not.toHaveBeenCalled();
-  });
-
-  it('มีปุ่มเปิดแถบสำรวจใน empty state ตอนที่แถบถูกย่ออยู่', async () => {
-    list.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 20 });
-    localStorage.setItem('wisenancial.stockTerminal.railCollapsed', '1');
+  it('กดลองใหม่ -> ยิง listing ซ้ำอีกรอบ', async () => {
+    list.mockRejectedValueOnce(new Error('500'));
 
     const wrapper = await mountPage();
-    const empty = wrapper.find('[data-test="terminal-empty"]');
+    expect(wrapper.find('[data-test="terminal-retry"]').exists()).toBe(true);
 
-    expect(empty.exists()).toBe(true);
-    expect(empty.findComponent(QBtn).exists()).toBe(true);
+    list.mockResolvedValue({ rows: [listingRow('TSLA')], total: 1, page: 1, pageSize: 1 });
+    await wrapper.find('[data-test="terminal-retry"]').trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    expect(replace).toHaveBeenCalledWith('/stock/TSLA');
   });
 
-  // ── แถบปุ่มสามโหมดบนหัวแผงซ้าย ──────────────────────────────────────────────
-  describe('แถบปุ่มสามโหมด', () => {
-    const POPULAR_TH = [
-      { symbol: 'PTT.BK', name: 'PTT', price: 33.25, changePercent: 1.2 },
-      { symbol: 'AOT.BK', name: 'Airports of Thailand', price: 58.75, changePercent: -0.8 },
-    ];
-    const POPULAR_US = [{ symbol: 'AAPL', name: 'Apple Inc.', price: 214.5, changePercent: 0.6 }];
+  // ── ของที่ย้ายออกไปแล้ว ต้องไม่เหลือค้างในหน้านี้ ────────────────────────────
+  it('ไม่มีแถบสำรวจซ้ายและปุ่มย่อ/ขยายเหลืออยู่', async () => {
+    const wrapper = await mountPage('AAPL');
 
-    beforeEach(() => {
-      getPopular.mockImplementation((market: string) =>
-        Promise.resolve(market === 'TH' ? POPULAR_TH : POPULAR_US),
-      );
-    });
-
-    /** แผงหุ้นยอดนิยมโหลดแบบ async — รอให้ promise คลี่ก่อนค่อยตรวจ DOM */
-    const settle = async (wrapper: VueWrapper) => {
-      await nextTick();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await nextTick();
-      return wrapper;
-    };
-
-    it('มีปุ่มครบสามโหมด และเริ่มต้นที่ Explore', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      const wrapper = await mountPage('AAPL');
-
-      expect(wrapper.find('[data-test="rail-mode-EXPLORE"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="rail-mode-TH"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="rail-mode-US"]').exists()).toBe(true);
-
-      expect(wrapper.find('[data-test="rail-mode-EXPLORE"]').classes()).toContain(
-        'rail-mode--active',
-      );
-      expect(wrapper.findComponent(QTable).exists(), 'โหมดเริ่มต้นต้องเป็นตัวสำรวจ').toBe(true);
-      expect(wrapper.find('[data-test="popular-panel"]').exists()).toBe(false);
-    });
-
-    it('กดหุ้นไทย -> ยิง /stocks/popular-th และแสดงรายการแทนตัวสำรวจ', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      const wrapper = await mountPage('AAPL');
-
-      await wrapper.find('[data-test="rail-mode-TH"]').trigger('click');
-      await settle(wrapper);
-
-      expect(getPopular).toHaveBeenCalledWith('TH');
-
-      const panel = wrapper.find('[data-test="popular-panel"]');
-      expect(panel.exists()).toBe(true);
-      expect(panel.attributes('data-market')).toBe('TH');
-      expect(wrapper.findAll('[data-test="popular-row"]')).toHaveLength(2);
-      expect(panel.text()).toContain('PTT');
-    });
-
-    it('กดหุ้นสหรัฐ -> ยิง /stocks/popular ชุดของสหรัฐ', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      const wrapper = await mountPage('AAPL');
-
-      await wrapper.find('[data-test="rail-mode-US"]').trigger('click');
-      await settle(wrapper);
-
-      expect(getPopular).toHaveBeenCalledWith('US');
-      expect(wrapper.find('[data-test="popular-panel"]').attributes('data-market')).toBe('US');
-    });
-
-    it('คลิกหุ้นจากแผงหุ้นยอดนิยม -> เปลี่ยน symbol ผ่าน /stock/:symbol เหมือนตัวสำรวจ', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      const wrapper = await mountPage('AAPL');
-
-      await wrapper.find('[data-test="rail-mode-TH"]').trigger('click');
-      await settle(wrapper);
-
-      await wrapper.findAll('[data-test="popular-row"]')[0]!.trigger('click');
-
-      expect(push).toHaveBeenCalledWith('/stock/PTT.BK');
-    });
-
-    it('จำโหมดล่าสุดไว้ใน localStorage และหยิบกลับมาตอนเปิดหน้าใหม่', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-
-      const first = await mountPage('AAPL');
-      await first.find('[data-test="rail-mode-US"]').trigger('click');
-      await settle(first);
-
-      expect(localStorage.getItem('wisenancial.stockTerminal.railMode')).toBe('US');
-
-      first.unmount();
-      const second = await mountPage('AAPL');
-      await settle(second);
-
-      expect(second.find('[data-test="rail-mode-US"]').classes()).toContain('rail-mode--active');
-      expect(second.find('[data-test="popular-panel"]').attributes('data-market')).toBe('US');
-    });
-
-    it('ค่าโหมดที่ค้างอยู่แต่ไม่รู้จักแล้ว -> ถอยกลับไป Explore ไม่ใช่แผงว่าง', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      localStorage.setItem('wisenancial.stockTerminal.railMode', 'CRYPTO');
-
-      const wrapper = await mountPage('AAPL');
-
-      expect(wrapper.find('[data-test="rail-mode-EXPLORE"]').classes()).toContain(
-        'rail-mode--active',
-      );
-      expect(wrapper.findComponent(QTable).exists()).toBe(true);
-    });
-
-    it('กดปุ่มโหมดตอนแผงย่ออยู่ -> กางแผงให้เลย', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      localStorage.setItem('wisenancial.stockTerminal.railCollapsed', '1');
-
-      const wrapper = await mountPage('AAPL');
-      expect(wrapper.find('[data-test="terminal-rail"]').classes()).toContain(
-        'terminal-rail--collapsed',
-      );
-
-      // ย่ออยู่ -> แถบปุ่มถูกซ่อน ต้องกางด้วยปุ่ม toggle ก่อนถึงจะเห็นปุ่มโหมด
-      await wrapper.find('[data-test="rail-toggle"]').trigger('click');
-      await nextTick();
-
-      await wrapper.find('[data-test="rail-mode-TH"]').trigger('click');
-      await settle(wrapper);
-
-      expect(wrapper.find('[data-test="terminal-rail"]').classes()).not.toContain(
-        'terminal-rail--collapsed',
-      );
-    });
-
-    it('โหลดราคาไม่สำเร็จ -> ขึ้นสถานะพลาดพร้อมปุ่มลองใหม่ ไม่ใช่รายการว่างเงียบๆ', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      getPopular.mockRejectedValue(new Error('yahoo down'));
-
-      const wrapper = await mountPage('AAPL');
-      await wrapper.find('[data-test="rail-mode-TH"]').trigger('click');
-      await settle(wrapper);
-
-      expect(wrapper.find('[data-test="popular-error"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="popular-row"]').exists()).toBe(false);
-    });
-
-    it('สลับกลับมา Explore -> ตัวสำรวจต้องไม่โหลดตารางใหม่ (v-show ไม่ใช่ v-if)', async () => {
-      list.mockResolvedValue({ rows: [listing('AAPL')], total: 1, page: 1, pageSize: 20 });
-      const wrapper = await mountPage('AAPL');
-
-      const callsAfterMount = list.mock.calls.length;
-
-      await wrapper.find('[data-test="rail-mode-TH"]').trigger('click');
-      await settle(wrapper);
-      await wrapper.find('[data-test="rail-mode-EXPLORE"]').trigger('click');
-      await nextTick();
-
-      expect(list.mock.calls.length).toBe(callsAfterMount);
-      expect(wrapper.findComponent(QTable).exists()).toBe(true);
-    });
+    expect(wrapper.find('[data-test="terminal-rail"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="rail-toggle"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stock-explorer-rail"]').exists()).toBe(false);
   });
 
+  it('แถบปุ่มสามโหมดไม่ได้อยู่ที่หน้านี้แล้ว (ย้ายไปการ์ดใต้กราฟ)', async () => {
+    const wrapper = await mountPage('AAPL');
+
+    expect(wrapper.find('[data-test="rail-mode-bar"]').exists()).toBe(false);
+    expect(localStorage.getItem('wisenancial.stockTerminal.railCollapsed')).toBeNull();
+  });
+
+  it('เทอร์มินัลกินเต็มความกว้าง ไม่มีเสาซ้ายมาเบียด', async () => {
+    const wrapper = await mountPage('AAPL');
+
+    const page = wrapper.find('[data-test="stock-terminal-page"]');
+    expect(page.element.children).toHaveLength(1);
+    expect(wrapper.find('[data-test="terminal-body"]').exists()).toBe(true);
+  });
 });

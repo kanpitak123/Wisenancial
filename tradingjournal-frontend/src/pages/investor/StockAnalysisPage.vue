@@ -6,6 +6,7 @@ import { useLanguageStore } from 'stores/LanguageStore';
 import { api } from 'boot/axios';
 import StockValuationWidget from 'components/StockValuationWidget.vue';
 import MarketOverviewSection from 'components/MarketOverviewSection.vue';
+import StockExplorerRail from 'components/stocks/StockExplorerRail.vue';
 import PriceChart from 'components/charts/PriceChart.vue';
 import { useLivePrice } from 'src/composables/useLivePrice';
 import { useStockCatalog } from 'src/composables/useStockCatalog';
@@ -152,8 +153,6 @@ interface StockAnalysisResponse {
  * แจ้งหน้าแม่ (StockTerminalPage) ให้กางแถบสำรวจหุ้นด้านซ้าย — ใช้แทนการเปลี่ยนหน้า
  * ไป /StockExplorer แบบเดิมที่ตอนนี้ถูกยุบรวมเข้ามาในหน้าเดียวกันแล้ว
  */
-const emit = defineEmits<{ (event: 'browse-all'): void }>();
-
 const $q = useQuasar();
 const languageStore = useLanguageStore();
 const route = useRoute();
@@ -706,30 +705,98 @@ interface PopularStock {
   marketCap: number | null;
 }
 
+/** แถวหุ้นไทย — /stocks/popular-th คืนคนละรูปร่างกับฝั่งสหรัฐ (ดู PopularStockRow ใน types) */
+interface PopularThStock {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePercent: number | null;
+  support: number | null;
+  resistance: number | null;
+  valueMB: number | null;
+  pe: number | null;
+  eps: number | null;
+  dividendPct: number | null;
+}
+
 const popularStocks = ref<PopularStock[]>([]);
+const popularThStocks = ref<PopularThStock[]>([]);
 const popularLoading = ref(true);
 const popularLogoErrors = ref(new Set<string>());
+const popularError = ref(false);
 
-const fetchPopularStocks = async () => {
+/**
+ * โหมดของการ์ด "หุ้นยอดนิยม" ใต้กราฟ — สำรวจหุ้น / หุ้นไทย / หุ้นสหรัฐ
+ *
+ * ปุ่มสามตัวนี้เคยอยู่บนหัวแถบสำรวจซ้ายของ StockTerminalPage พอแถบซ้ายถูกถอดออก
+ * ทั้งหมด ปุ่มกับเนื้อหาย้ายมาอยู่บนหัวการ์ดนี้แทน กลายเป็นแท็บของการ์ดโดยตรง
+ *
+ * state อยู่ที่นี่ไม่ใช่หน้าแม่ เพราะทั้งปุ่มและเนื้อหาที่มันคุมอยู่ในการ์ดใบเดียวกันแล้ว
+ */
+const POPULAR_MODES = ['EXPLORE', 'TH', 'US'] as const;
+type PopularMode = (typeof POPULAR_MODES)[number];
+
+const POPULAR_MODE_STORAGE_KEY = 'wisenancial.stockTerminal.popularMode';
+
+const popularMode = ref<PopularMode>('US');
+
+const popularModeButtons = computed(() => [
+  {
+    value: 'EXPLORE' as PopularMode,
+    icon: 'travel_explore',
+    label: languageStore.isThai ? 'สำรวจหุ้น' : 'Explore',
+  },
+  {
+    value: 'TH' as PopularMode,
+    icon: 'flag',
+    label: languageStore.isThai ? 'หุ้นไทย' : 'Thai',
+  },
+  {
+    value: 'US' as PopularMode,
+    icon: 'public',
+    label: languageStore.isThai ? 'หุ้นสหรัฐ' : 'US',
+  },
+]);
+
+const setPopularMode = (mode: PopularMode) => {
+  popularMode.value = mode;
+  localStorage.setItem(POPULAR_MODE_STORAGE_KEY, mode);
+
+  if (mode !== 'EXPLORE') void fetchPopularStocks(mode);
+};
+
+/**
+ * โหลดราคาของตลาดที่เลือก
+ *
+ * ยิงใหม่ทุกครั้งที่สลับแท็บโดยตั้งใจ — เป็นราคาสด กลับมาดูอีกทีควรได้ของใหม่
+ * ไม่ใช่ตัวเลขค้างจากเมื่อสิบนาทีที่แล้ว (ฝั่ง Explore ไม่เกี่ยว มันโหลดของตัวเอง)
+ */
+const fetchPopularStocks = async (market: 'TH' | 'US' = 'US') => {
   popularLoading.value = true;
+  popularError.value = false;
+
   try {
-    const response = await api.get<PopularStock[]>('/stocks/popular');
-    popularStocks.value = response.data;
+    if (market === 'TH') {
+      const response = await api.get<PopularThStock[]>('/stocks/popular-th');
+      popularThStocks.value = response.data ?? [];
+    } else {
+      const response = await api.get<PopularStock[]>('/stocks/popular');
+      popularStocks.value = response.data ?? [];
+    }
   } catch (err) {
     console.error('Failed to fetch popular stocks:', err);
-    popularStocks.value = [];
+    popularError.value = true;
+    if (market === 'TH') popularThStocks.value = [];
+    else popularStocks.value = [];
   } finally {
     popularLoading.value = false;
   }
 };
 
-/**
- * เดิมปุ่มนี้พาไปหน้า /StockExplorer แยกอีกหน้า ตอนนี้ตัวสำรวจหุ้นเป็นแถบซ้ายของหน้าเดียวกันแล้ว
- * จึงบอกหน้าแม่ให้กางแถบนั้นออกมาแทนการเปลี่ยนหน้า
- */
-const goToAllStocks = () => {
-  emit('browse-all');
-};
+/** แถวที่กำลังโชว์อยู่มีของไหม — ใช้ตัดสินว่าจะขึ้น empty state หรือตาราง */
+const popularHasRows = computed(() =>
+  popularMode.value === 'TH' ? popularThStocks.value.length > 0 : popularStocks.value.length > 0,
+);
 
 const POPULAR_LOGO_DOMAINS: Record<string, string> = {
   AAPL: 'apple.com',
@@ -757,6 +824,17 @@ const formatPopularPercent = (value: number | null): string =>
 
 const formatPopularDividend = (value: number | null): string =>
   value == null ? '—' : `${value.toFixed(2)}%`;
+
+/** ตัดนามสกุล .BK ออกให้ตรงกับที่ Watchlist/AI Radar โชว์ */
+const displayThSymbol = (symbol: string): string => symbol.replace('.BK', '');
+
+/** มูลค่าซื้อขายจาก /stocks/popular-th มาเป็นล้านบาทอยู่แล้ว — เติมหน่วยให้อ่านออก */
+const formatPopularValueMB = (value: number | null): string =>
+  value == null ? '—' : `${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}M`;
+
+/** P/E กับ EPS ไม่ใช่ราคาและไม่ใช่เปอร์เซ็นต์ — โชว์เป็นตัวเลขเปล่าทศนิยมสองตำแหน่ง */
+const formatPopularPlain = (value: number | null): string =>
+  value == null ? '—' : value.toFixed(2);
 
 const formatPopularMarketCap = (value: number | null): string => {
   if (value == null || value <= 0) return '—';
@@ -825,9 +903,7 @@ const fetchStockData = async (symbol: string, interval: string, range: string) =
 
     console.error('Error fetching stock data:', err);
 
-    const message = languageStore.isThai
-      ? 'โหลดข้อมูลหุ้นไม่สำเร็จ'
-      : 'Failed to fetch stock data';
+    const message = languageStore.isThai ? 'โหลดข้อมูลหุ้นไม่สำเร็จ' : 'Failed to fetch stock data';
 
     // ยังไม่เคยมีข้อมูล -> แทนที่ทั้งหน้าด้วยกล่อง error เดิม
     // มีข้อมูลเก่าค้างอยู่ -> คงกราฟไว้แล้วขึ้นแถบเตือนแทน จะได้ไม่กลายเป็นจอเปล่าเงียบ ๆ
@@ -964,7 +1040,16 @@ watch(liveQuote, (quote) => {
 
 onMounted(() => {
   void loadStockCatalog();
-  void fetchPopularStocks();
+
+  // เช็คว่าค่าที่เก็บไว้ยังเป็นโหมดที่มีอยู่จริง — ค่าที่ค้างในเครื่องผู้ใช้จาก
+  // เวอร์ชันก่อนจะได้ไม่ทำให้การ์ดว่างเปล่า
+  const saved = localStorage.getItem(POPULAR_MODE_STORAGE_KEY);
+  if (saved && (POPULAR_MODES as readonly string[]).includes(saved)) {
+    popularMode.value = saved as PopularMode;
+  }
+
+  if (popularMode.value !== 'EXPLORE') void fetchPopularStocks(popularMode.value);
+  else popularLoading.value = false;
 });
 </script>
 
@@ -1274,7 +1359,11 @@ onMounted(() => {
               data-test="analysis-refreshing"
             />
 
-            <div v-if="refreshError" class="refresh-error-banner" data-test="analysis-refresh-error">
+            <div
+              v-if="refreshError"
+              class="refresh-error-banner"
+              data-test="analysis-refresh-error"
+            >
               <q-icon name="warning" size="18px" />
               <span class="refresh-error-banner__text">{{ refreshError }}</span>
               <q-btn
@@ -1465,21 +1554,53 @@ onMounted(() => {
                   <div class="popular-stocks-section q-mt-md">
                     <q-card class="popular-card" flat bordered>
                       <q-card-section class="popular-header">
-                        <div class="row items-center">
+                        <div class="popular-header__title">
                           <q-icon
                             name="local_fire_department"
                             size="22px"
-                            class="popular-header-icon q-mr-sm"
+                            class="popular-header-icon"
                           />
                           <div class="text-h6 text-weight-bold">
                             {{ languageStore.isThai ? 'หุ้นยอดนิยม' : 'Popular Stocks' }}
                           </div>
                         </div>
+
+                        <!-- แท็บสามโหมด — ย้ายมาจากหัวแถบสำรวจซ้ายที่ถูกถอดออกไปแล้ว
+                             วางชิดขวาของหัวการ์ด ให้อยู่บรรทัดเดียวกับชื่อการ์ด -->
+                        <div class="popular-modes" role="tablist" data-test="popular-mode-bar">
+                          <button
+                            v-for="mode in popularModeButtons"
+                            :key="mode.value"
+                            type="button"
+                            role="tab"
+                            class="popular-mode"
+                            :class="{ 'popular-mode--active': popularMode === mode.value }"
+                            :aria-selected="popularMode === mode.value"
+                            :data-test="`popular-mode-${mode.value}`"
+                            @click="setPopularMode(mode.value)"
+                          >
+                            <q-icon :name="mode.icon" size="18px" />
+                            <span>{{ mode.label }}</span>
+                          </button>
+                        </div>
                       </q-card-section>
 
                       <q-separator />
 
-                      <q-card-section v-if="popularLoading" class="popular-state">
+                      <!-- โหมดสำรวจหุ้น — ตัวสำรวจก้อนเดิมทั้งดุ้น (ค้นหา/ฟิลเตอร์/ตารางแบ่งหน้า)
+                           ที่ย้ายมาจากแถบซ้าย มันโหลดข้อมูลเองไม่เกี่ยวกับ popularLoading -->
+                      <div
+                        v-if="popularMode === 'EXPLORE'"
+                        class="popular-explore"
+                        data-test="popular-explore"
+                      >
+                        <StockExplorerRail
+                          :selected-symbol="selectedSymbol"
+                          @select="selectSearchResult"
+                        />
+                      </div>
+
+                      <q-card-section v-else-if="popularLoading" class="popular-state">
                         <q-spinner-dots size="40px" color="primary" />
                         <span class="q-mt-sm text-grey-6">
                           {{
@@ -1490,7 +1611,11 @@ onMounted(() => {
                         </span>
                       </q-card-section>
 
-                      <q-card-section v-else-if="!popularStocks.length" class="popular-state">
+                      <q-card-section
+                        v-else-if="!popularHasRows"
+                        class="popular-state"
+                        data-test="popular-empty"
+                      >
                         <q-icon name="cloud_off" size="36px" color="grey-6" />
                         <span class="q-mt-sm text-grey-6">
                           {{
@@ -1499,7 +1624,112 @@ onMounted(() => {
                               : 'Could not load stock data right now'
                           }}
                         </span>
+                        <q-btn
+                          flat
+                          dense
+                          no-caps
+                          color="primary"
+                          class="q-mt-sm"
+                          data-test="popular-retry"
+                          :label="languageStore.isThai ? 'ลองใหม่' : 'Retry'"
+                          @click="fetchPopularStocks(popularMode === 'TH' ? 'TH' : 'US')"
+                        />
                       </q-card-section>
+
+                      <!-- ตารางหุ้นไทย — คอลัมน์คนละชุดกับฝั่งสหรัฐโดยตั้งใจ เพราะ
+                           /stocks/popular-th คืน support/resistance เดี่ยว + valueMB/pe/eps
+                           ส่วนฝั่งสหรัฐคืน support1/2, resistance1/2, marketCap
+                           ถ้ายัดสองตลาดลงตารางเดียวกันจะมีคอลัมน์ว่างสลับกันไปมา -->
+                      <div
+                        v-else-if="popularMode === 'TH'"
+                        class="popular-table-wrapper"
+                        data-test="popular-table-th"
+                      >
+                        <table class="popular-table">
+                          <thead>
+                            <tr>
+                              <th class="text-left">
+                                {{ languageStore.isThai ? 'หุ้น' : 'Stock' }}
+                              </th>
+                              <th class="text-right">
+                                {{ languageStore.isThai ? 'ราคา' : 'Price' }}
+                              </th>
+                              <th class="text-right">Percent</th>
+                              <th class="text-right">
+                                {{ languageStore.isThai ? 'แนวรับ' : 'Support' }}
+                              </th>
+                              <th class="text-right">
+                                {{ languageStore.isThai ? 'แนวต้าน' : 'Resistance' }}
+                              </th>
+                              <th class="text-right">
+                                {{ languageStore.isThai ? 'มูลค่าซื้อขาย' : 'Value' }}
+                              </th>
+                              <th class="text-right">P/E</th>
+                              <th class="text-right">EPS</th>
+                              <th class="text-right">
+                                {{ languageStore.isThai ? 'ปันผล' : 'Dividend' }}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr
+                              v-for="stock in popularThStocks"
+                              :key="stock.symbol"
+                              class="popular-row"
+                              data-test="popular-row-th"
+                              @click="selectSearchResult(stock.symbol)"
+                            >
+                              <td>
+                                <div class="stock-cell">
+                                  <div
+                                    class="stock-logo stock-logo--fallback"
+                                    :style="{ background: symbolAvatarColor(stock.symbol) }"
+                                  >
+                                    {{ symbolAvatarInitials(stock.symbol) }}
+                                  </div>
+                                  <div class="stock-cell-text">
+                                    <span class="stock-cell-symbol mono-num">
+                                      {{ displayThSymbol(stock.symbol) }}
+                                    </span>
+                                    <span class="stock-cell-name">{{ stock.name }}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td class="text-right">
+                                <div class="cell-main mono-num">
+                                  {{ formatPopularPrice(stock.price) }}
+                                </div>
+                              </td>
+                              <td class="text-right">
+                                <div
+                                  class="cell-main mono-num"
+                                  :class="percentClass(stock.changePercent)"
+                                >
+                                  {{ formatPopularPercent(stock.changePercent) }}
+                                </div>
+                              </td>
+                              <td class="text-right level-cell mono-num">
+                                {{ formatPopularPrice(stock.support) }}
+                              </td>
+                              <td class="text-right level-cell mono-num">
+                                {{ formatPopularPrice(stock.resistance) }}
+                              </td>
+                              <td class="text-right mono-num">
+                                {{ formatPopularValueMB(stock.valueMB) }}
+                              </td>
+                              <td class="text-right mono-num">
+                                {{ formatPopularPlain(stock.pe) }}
+                              </td>
+                              <td class="text-right mono-num">
+                                {{ formatPopularPlain(stock.eps) }}
+                              </td>
+                              <td class="text-right mono-num">
+                                {{ formatPopularDividend(stock.dividendPct) }}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
 
                       <template v-else>
                         <div class="popular-table-wrapper">
@@ -1614,19 +1844,6 @@ onMounted(() => {
                               </tr>
                             </tbody>
                           </table>
-                        </div>
-
-                        <div class="popular-footer">
-                          <q-btn
-                            flat
-                            no-caps
-                            color="primary"
-                            class="view-all-btn text-weight-bold"
-                            @click="goToAllStocks"
-                          >
-                            {{ languageStore.isThai ? 'ดูทั้งหมด' : 'View All' }}
-                            <q-icon name="arrow_forward" size="16px" class="q-ml-xs" />
-                          </q-btn>
                         </div>
                       </template>
                     </q-card>
@@ -3298,12 +3515,105 @@ onMounted(() => {
   overflow: hidden;
 }
 
+/* หัวการ์ด: ชื่อชิดซ้าย แท็บสามโหมดชิดขวา อยู่บรรทัดเดียวกัน
+   wrap ไว้เผื่อจอแคบ — แท็บจะตกลงมาบรรทัดใหม่แทนที่จะดันชื่อการ์ดจนล้น */
 .popular-header {
-  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 18px;
+}
+
+.popular-header__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .popular-header-icon {
   color: #f97316;
+}
+
+/* ==========================================================
+   แท็บสามโหมด (สำรวจหุ้น / หุ้นไทย / หุ้นสหรัฐ)
+   ทรง segmented control ชุดเดียวกับที่เคยอยู่บนหัวแถบสำรวจซ้าย
+========================================================== */
+.popular-modes {
+  display: flex;
+  align-items: stretch;
+  /* เว้นช่องระหว่างปุ่มจริง ๆ ไม่ให้สามปุ่มติดกันเป็นก้อนเดียว */
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bg-card-soft, rgba(148, 163, 184, 0.12));
+  border: 1px solid var(--border-color);
+  flex: 0 0 auto;
+}
+
+.popular-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  /* กดง่ายขึ้น: สูงพอเป็นเป้านิ้วบนจอสัมผัส และเด่นกว่าตอนอยู่แถบซ้ายแคบ ๆ */
+  min-height: 38px;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted, #64748b);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.popular-mode:hover:not(.popular-mode--active) {
+  color: var(--text-primary, #1e293b);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+/* ปุ่มเปล่า ๆ ไม่มีวงโฟกัสของ q-btn ให้ — ใส่เองไม่งั้นเดินด้วยคีย์บอร์ดแล้วหลง */
+.popular-mode:focus-visible {
+  outline: 2px solid var(--accent-500, #3f766f);
+  outline-offset: 1px;
+}
+
+.popular-mode--active {
+  background: var(--bg-card, #ffffff);
+  color: var(--accent-800, #24504d);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(15, 42, 40, 0.12);
+}
+
+.dark-theme .popular-mode--active {
+  color: var(--accent-400, #a9cfca);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* จอแคบ เหลือแต่ไอคอน — ป้ายสามคำเรียงกันจะดันหัวการ์ดจนชื่อโดนบีบ */
+@media (max-width: 720px) {
+  .popular-mode span {
+    display: none;
+  }
+  .popular-mode {
+    padding: 9px 13px;
+  }
+}
+
+/* ตัวสำรวจหุ้นเคยอยู่ในแถบแคบ 300px มาก่อน พอมาอยู่ในการ์ดเต็มความกว้าง
+   จำกัดความสูงไว้ไม่ให้ตารางแบ่งหน้าดันการ์ดยาวจนต้องเลื่อนหาการ์ดถัดไป */
+.popular-explore {
+  max-height: 560px;
+  overflow-y: auto;
 }
 
 .popular-state {
@@ -3437,16 +3747,6 @@ onMounted(() => {
 
 .level-cell {
   color: var(--text-muted);
-}
-
-.popular-footer {
-  display: flex;
-  justify-content: center;
-  padding: 10px 16px 14px;
-}
-
-.view-all-btn {
-  border-radius: 8px;
 }
 
 /* --- Analyst Recommendations --- */

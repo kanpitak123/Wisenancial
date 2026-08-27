@@ -166,13 +166,50 @@ function mockApi({ defer }: { defer: boolean }) {
 
     if (url.startsWith('/market/analysis/')) return Promise.resolve({ data: null });
     if (url.startsWith('/stocks/analyst/')) return Promise.resolve({ data: null });
-    if (url === '/stocks/popular') return Promise.resolve({ data: [] });
+    if (url === '/stocks/popular') return Promise.resolve({ data: popularUs });
+    if (url === '/stocks/popular-th') return Promise.resolve({ data: popularTh });
     if (url === '/stocks') return Promise.resolve({ data: [] });
     if (url === '/market/quotes/realtime') return Promise.resolve({ data: [] });
 
     return Promise.resolve({ data: {} });
   });
 }
+
+/** แถวหุ้นยอดนิยมที่ mock ของ api.get จะคืน — เทสแต่ละข้อเขียนทับได้ */
+let popularUs: unknown[] = [];
+let popularTh: unknown[] = [];
+
+const US_ROWS = [
+  {
+    symbol: 'AAPL',
+    name: 'Apple Inc.',
+    price: 214.5,
+    changePercent: 0.62,
+    preMarketPrice: 214.9,
+    preMarketChangePercent: 0.18,
+    support1: 210,
+    support2: 205,
+    resistance1: 220,
+    resistance2: 226,
+    dividendYield: 0.53,
+    marketCap: 3_300_000_000_000,
+  },
+];
+
+const TH_ROWS = [
+  {
+    symbol: 'PTT.BK',
+    name: 'PTT Public Company',
+    price: 33.25,
+    changePercent: -1.2,
+    support: 32.5,
+    resistance: 34.75,
+    valueMB: 1820,
+    pe: 11.4,
+    eps: 2.91,
+    dividendPct: 6.02,
+  },
+];
 
 async function settle(rounds = 8) {
   for (let i = 0; i < rounds; i += 1) {
@@ -197,6 +234,8 @@ describe('StockAnalysisPage — โหลดทับของเดิม', () 
     localStorage.clear();
     deferredAnalysis = [];
     routeParams.value = { symbol: 'AAPL' };
+    popularUs = US_ROWS;
+    popularTh = TH_ROWS;
     vi.clearAllMocks();
   });
 
@@ -290,5 +329,200 @@ describe('StockAnalysisPage — โหลดทับของเดิม', () 
 
     expect(wrapper.find('.terminal-skeleton').exists()).toBe(false);
     expect(chartExists(wrapper)).toBe(true);
+  });
+});
+
+/**
+ * การ์ด "หุ้นยอดนิยม" ใต้กราฟ — แท็บสามโหมดที่ย้ายมาจากหัวแถบสำรวจซ้าย
+ *
+ * แถบซ้ายของ Stock Terminal ถูกถอดออกทั้งหมด ปุ่มสามตัว (สำรวจหุ้น/หุ้นไทย/หุ้นสหรัฐ)
+ * กับเนื้อหาที่มันคุมย้ายมาอยู่บนการ์ดใบนี้แทน สวีทนี้ล็อกว่าย้ายแล้วยังทำงานครบ
+ */
+describe('StockAnalysisPage — การ์ดหุ้นยอดนิยม (แท็บ 3 โหมด)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = '';
+    localStorage.clear();
+    deferredAnalysis = [];
+    routeParams.value = { symbol: 'AAPL' };
+    popularUs = US_ROWS;
+    popularTh = TH_ROWS;
+    vi.clearAllMocks();
+  });
+
+  /** mount แล้วรอให้กราฟ + การ์ดโหลดเสร็จ (การ์ดอยู่ในแท็บกราฟซึ่งเป็นแท็บเริ่มต้น) */
+  async function mountReady(): Promise<VueWrapper> {
+    mockApi({ defer: false });
+    const wrapper = mountTerminal();
+    await settle();
+    return wrapper;
+  }
+
+  const modeUrls = () =>
+    get.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.startsWith('/stocks/popular'));
+
+  it('แท็บทั้งสามอยู่บนหัวการ์ด ไม่ใช่บนแถบซ้ายอีกแล้ว', async () => {
+    const wrapper = await mountReady();
+
+    const bar = wrapper.find('[data-test="popular-mode-bar"]');
+    expect(bar.exists()).toBe(true);
+
+    // อยู่ใน q-card-section หัวการ์ดเดียวกับชื่อ "หุ้นยอดนิยม"
+    const header = wrapper.find('.popular-header');
+    expect(header.find('[data-test="popular-mode-bar"]').exists()).toBe(true);
+    expect(header.text()).toContain('หุ้นยอดนิยม');
+
+    expect(wrapper.find('[data-test="popular-mode-EXPLORE"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="popular-mode-TH"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="popular-mode-US"]').exists()).toBe(true);
+
+    // แถบซ้ายเดิมต้องไม่เหลือแล้ว
+    expect(wrapper.find('[data-test="terminal-rail"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="rail-mode-bar"]').exists()).toBe(false);
+  });
+
+  it('ชื่อการ์ดกับแถบแท็บเป็นพี่น้องกัน — อยู่แถวเดียวกัน', async () => {
+    const wrapper = await mountReady();
+
+    // ถ้าแท็บหลุดไปซ้อนในกล่องชื่อ มันจะตกมาคนละบรรทัดทันที
+    const header = wrapper.find('.popular-header').element;
+    const children = Array.from(header.children);
+
+    expect(children).toHaveLength(2);
+    expect(children[0]?.classList.contains('popular-header__title')).toBe(true);
+    expect(children[1]?.getAttribute('data-test')).toBe('popular-mode-bar');
+  });
+
+  it('เริ่มต้นที่หุ้นสหรัฐ และแสดงตารางฝั่งสหรัฐ', async () => {
+    const wrapper = await mountReady();
+
+    expect(wrapper.find('[data-test="popular-mode-US"]').classes()).toContain(
+      'popular-mode--active',
+    );
+    expect(modeUrls()).toContain('/stocks/popular');
+    expect(wrapper.find('.popular-table').text()).toContain('AAPL');
+  });
+
+  it('กดหุ้นไทย -> ยิง /stocks/popular-th และสลับเป็นตารางคอลัมน์ของฝั่งไทย', async () => {
+    const wrapper = await mountReady();
+
+    await wrapper.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+
+    expect(modeUrls()).toContain('/stocks/popular-th');
+
+    const thTable = wrapper.find('[data-test="popular-table-th"]');
+    expect(thTable.exists()).toBe(true);
+    expect(thTable.text()).toContain('PTT');
+
+    // คอลัมน์เฉพาะฝั่งไทย (P/E, EPS, มูลค่าซื้อขาย) ต้องมี ส่วน "แนวรับ 2" ของฝั่งสหรัฐต้องไม่มี
+    expect(thTable.text()).toContain('P/E');
+    expect(thTable.text()).toContain('EPS');
+    expect(thTable.text()).not.toContain('แนวรับ 2');
+  });
+
+  it('ตารางหุ้นไทยตัดนามสกุล .BK ออกเหมือนหน้าอื่น', async () => {
+    const wrapper = await mountReady();
+
+    await wrapper.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+
+    const symbolCell = wrapper.find('[data-test="popular-row-th"] .stock-cell-symbol');
+    expect(symbolCell.text()).toBe('PTT');
+  });
+
+  it('กดสำรวจหุ้น -> แสดงตัวสำรวจหุ้นในการ์ด ไม่ใช่ตารางหุ้นยอดนิยม', async () => {
+    const wrapper = await mountReady();
+
+    await wrapper.find('[data-test="popular-mode-EXPLORE"]').trigger('click');
+    await settle();
+
+    expect(wrapper.find('[data-test="popular-explore"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="popular-table-th"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: 'StockExplorerRail' }).exists()).toBe(true);
+  });
+
+  it('คลิกแถวในตารางหุ้นไทย -> เปลี่ยนหุ้นผ่าน /stock/:symbol', async () => {
+    const wrapper = await mountReady();
+
+    await wrapper.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+
+    await wrapper.find('[data-test="popular-row-th"]').trigger('click');
+
+    expect(push).toHaveBeenCalledWith('/stock/PTT.BK');
+  });
+
+  it('จำโหมดล่าสุดไว้ และหยิบกลับมาตอนเปิดหน้าใหม่', async () => {
+    const first = await mountReady();
+    await first.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+
+    expect(localStorage.getItem('wisenancial.stockTerminal.popularMode')).toBe('TH');
+
+    first.unmount();
+    vi.clearAllMocks();
+
+    const second = await mountReady();
+
+    expect(second.find('[data-test="popular-mode-TH"]').classes()).toContain(
+      'popular-mode--active',
+    );
+    expect(modeUrls()).toContain('/stocks/popular-th');
+    expect(modeUrls()).not.toContain('/stocks/popular');
+  });
+
+  it('ค่าโหมดที่ค้างอยู่แต่ไม่รู้จักแล้ว -> ถอยกลับไปค่าเริ่มต้น ไม่ใช่การ์ดว่าง', async () => {
+    localStorage.setItem('wisenancial.stockTerminal.popularMode', 'CRYPTO');
+
+    const wrapper = await mountReady();
+
+    expect(wrapper.find('[data-test="popular-mode-US"]').classes()).toContain(
+      'popular-mode--active',
+    );
+    expect(wrapper.find('.popular-table').exists()).toBe(true);
+  });
+
+  it('โหมด Explore ที่จำไว้ ต้องไม่ยิงขอราคาหุ้นยอดนิยมโดยเปล่าประโยชน์', async () => {
+    localStorage.setItem('wisenancial.stockTerminal.popularMode', 'EXPLORE');
+
+    const wrapper = await mountReady();
+
+    expect(wrapper.find('[data-test="popular-explore"]').exists()).toBe(true);
+    expect(modeUrls()).toHaveLength(0);
+  });
+
+  it('ตลาดที่เลือกไม่มีข้อมูล -> ขึ้น empty state ที่กดลองใหม่ได้', async () => {
+    popularTh = [];
+
+    const wrapper = await mountReady();
+    await wrapper.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+
+    expect(wrapper.find('[data-test="popular-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="popular-retry"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="popular-row-th"]').exists()).toBe(false);
+  });
+
+  it('สลับไทย -> สหรัฐ -> ไทย ยิงราคาใหม่ทุกครั้ง (ราคาสด ไม่ใช่ค่าค้าง)', async () => {
+    const wrapper = await mountReady();
+
+    await wrapper.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+    await wrapper.find('[data-test="popular-mode-US"]').trigger('click');
+    await settle();
+    await wrapper.find('[data-test="popular-mode-TH"]').trigger('click');
+    await settle();
+
+    expect(modeUrls().filter((url) => url === '/stocks/popular-th')).toHaveLength(2);
+  });
+
+  it('ปุ่ม "ดูทั้งหมด" เดิมถูกถอดออก — Explore เป็นแท็บอยู่ตรงนั้นแล้ว', async () => {
+    const wrapper = await mountReady();
+
+    expect(wrapper.find('.popular-footer').exists()).toBe(false);
+    expect(wrapper.find('.view-all-btn').exists()).toBe(false);
   });
 });
