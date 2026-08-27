@@ -54,6 +54,32 @@ export class StocksController {
     return this.marketDataService.getPopularStocks();
   }
 
+  /**
+   * P/E + beta ของหลาย symbol พร้อมกัน — ใช้โดยการ์ด AI Risk Analysis
+   *
+   * รับเป็น comma list ตามแบบเดียวกับ /market/prices ที่มีอยู่แล้ว คืนเป็น array
+   * เรียงตาม symbol ที่ขอมา symbol ที่ Yahoo ไม่รู้จักได้ค่า null ทั้งคู่ ไม่ใช่หายไป
+   * เฉย ๆ เพื่อให้ผู้เรียกแยกออกว่า "ไม่มีข้อมูล" กับ "ไม่ได้ขอ"
+   */
+  @Get('fundamentals')
+  async getRiskFundamentals(@Query('symbols') symbols?: string) {
+    const requested = (symbols ?? '')
+      .split(',')
+      .map((symbol) => symbol.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (requested.length === 0) return [];
+
+    const found =
+      await this.marketDataService.getRiskFundamentals(requested);
+
+    return requested.map((symbol) => ({
+      symbol,
+      peRatio: found.get(symbol)?.peRatio ?? null,
+      beta: found.get(symbol)?.beta ?? null,
+    }));
+  }
+
   // Real index-level stats (level, change, day/52w range, pivots) for the
   // Market Overview header. Symbol is a Yahoo index symbol, e.g. ^SET.BK.
   @Get('index-quote/:symbol')

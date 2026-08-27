@@ -3,8 +3,16 @@
  * AI Risk Analysis — ต่อกับ AiStore.analyzeRisk() (POST /ai/portfolio/risk-analysis)
  *
  * แสดง gauge คะแนน 0-100 + legend 3 ระดับ + ตาราง fundamentals รายหุ้น (Beta/D-E/P-E/
- * น้ำหนักพอร์ต) ตามต้นฉบับ ค่าปัจจัยพื้นฐานมาจาก holdingsData ที่ backend คืนกลับมา
- * (backend เป็นคนไปดึง fundamentals เอง ไม่ใช่ frontend ส่งไป)
+ * น้ำหนักพอร์ต) ตามต้นฉบับ
+ *
+ * ⚠️ ค่าปัจจัยพื้นฐานมาจาก "หน้าบ้าน" ไม่ใช่ backend — AnalyticsPage ดึง P/E + beta
+ * จาก GET /stocks/fundamentals แล้วแนบมากับ holdings ที่ส่งเข้า risk-analysis
+ * ฝั่ง backend แค่ normalize น้ำหนักแล้วส่งต่อให้โมเดล ไม่ได้ไปดึงอะไรเอง
+ * (คอมเมนต์เดิมเขียนกลับด้าน ทำให้เข้าใจผิดว่า backend จัดการให้อยู่แล้ว ทั้งที่
+ * ตอนนั้นไม่มีใครส่งค่ามาเลย ตาราง Beta/D-E/P-E จึงขึ้น "—" ทุกแถวมาตลอด)
+ *
+ * คอลัมน์ D/E ยังขึ้น "—" อยู่โดยตั้งใจ — ดู "รอดำเนินการ — debtToEquity"
+ * ใน ai-prompt-audit.md
  */
 import { computed } from 'vue';
 import { useLanguageStore } from 'stores/LanguageStore';

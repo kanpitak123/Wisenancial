@@ -34,6 +34,10 @@ export class AiRiskService {
           'You are a portfolio risk analyst. Rely only on supplied data.',
           outputLanguageRule(outputLanguage),
           investmentGuardrail(),
+          // กันหลอน: ก่อนหน้านี้ทุกฟิลด์ปัจจัยพื้นฐานเป็น null เสมอ (หน้าบ้านไม่เคยส่งมา)
+          // โมเดลจึงเดาค่าจากชื่อหุ้นในความจำเก่าแล้วอ้างว่าประเมินตามกติกาที่ให้ไป
+          'A null field means the data is unavailable — never infer, recall, or estimate it from your own knowledge of the company.',
+          'When a field is null, exclude that holding from that rule and state the gap in analysisSummary instead of guessing.',
           'Return valid JSON only.',
         ].join('\n'),
         prompt: JSON.stringify({
@@ -48,7 +52,8 @@ export class AiRiskService {
             highBeta: '>1.2',
             highDebtToEquity: '>1.0',
             highPe: '>30',
-            concentration: 'large portfolio weights',
+            // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
+            concentration: 'single holding weight >25%',
           },
           holdings: normalized,
         }),

@@ -10,6 +10,7 @@ import { usePortfolioStore } from 'stores/PortfolioStore';
 import { useGlobalFilterStore } from 'stores/GlobalFilterStore';
 import { useInvestorPortfolioStore } from 'stores/InvestorPortfolioStore';
 import { WsAiDisclaimer, WsUpgradeNotice } from 'src/components/ui';
+import { stocksService } from 'src/services/stocks.service';
 import AiPortfolioAdvisorCard from 'components/analytics/AiPortfolioAdvisorCard.vue';
 import AiRiskAnalysisCard from 'components/analytics/AiRiskAnalysisCard.vue';
 import PerformersSection from 'components/analytics/PerformersSection.vue';
@@ -245,6 +246,34 @@ const loadInvestorTools = async () => {
   await safeLoad(() => investorStore.load(portfolioId), 'โหลดข้อมูลพอร์ตหุ้นไม่สำเร็จ');
 };
 
+/**
+ * ปัจจัยพื้นฐานรายหุ้นสำหรับ AI Risk Analysis (P/E + beta)
+ *
+ * ก่อนหน้านี้ riskHoldings ส่งแค่ symbol/quantity/weight/currentPrice ทั้งที่ prompt
+ * ฝั่ง backend ตั้งกติกาไว้ด้วย beta/P/E — โมเดลจึงตัดสินความเสี่ยงจากฟิลด์ที่เป็น
+ * null ทุกครั้ง ตรงนี้คือส่วนที่เติมค่าจริงเข้าไป
+ */
+const riskFundamentals = ref(new Map<string, { peRatio: number | null; beta: number | null }>());
+
+async function loadRiskFundamentals(symbols: string[]) {
+  if (symbols.length === 0) {
+    riskFundamentals.value = new Map();
+    return;
+  }
+
+  try {
+    const rows = await stocksService.getRiskFundamentals(symbols);
+    riskFundamentals.value = new Map(
+      rows.map((row) => [row.symbol, { peRatio: row.peRatio, beta: row.beta }]),
+    );
+  } catch (error) {
+    // ไม่ใช่ข้อมูลหลักของหน้า — พลาดแล้วปล่อยให้ส่ง null ไปดีกว่าทำทั้งแท็บพัง
+    // prompt ฝั่ง backend สั่งให้ตัดกติกาข้อที่ไม่มีข้อมูลออกอยู่แล้ว
+    console.error('Failed to load risk fundamentals:', error);
+    riskFundamentals.value = new Map();
+  }
+}
+
 /** หุ้นที่ถืออยู่ ในรูปแบบที่ /ai/portfolio/risk-analysis รับ */
 const riskHoldings = computed<PortfolioRiskHolding[]>(() => {
   const holdings = store.holdings;
@@ -255,12 +284,18 @@ const riskHoldings = computed<PortfolioRiskHolding[]>(() => {
 
   return holdings.map((item) => {
     const value = Number(item.market_value ?? item.cost_basis ?? 0);
+    const fundamental = riskFundamentals.value.get(item.symbol.toUpperCase());
 
     return {
       symbol: item.symbol,
       quantity: Number(item.shares ?? item.quantity ?? 0),
       ...(total > 0 ? { weight: value / total } : {}),
       ...(item.market_price !== null ? { currentPrice: Number(item.market_price) } : {}),
+      peRatio: fundamental?.peRatio ?? null,
+      beta: fundamental?.beta ?? null,
+      // ยังไม่มีแหล่งที่ยิงรวมทีเดียวได้ — ตั้งใจส่ง null ไม่ใช่ลืมใส่
+      // (ดู "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
+      debtToEquity: null,
     };
   });
 });
@@ -374,6 +409,28 @@ watch(
 watch(activeTab, async () => {
   await safeLoad(() => loadActiveTabData(), TAB_LOAD_FAILED);
 });
+
+/**
+ * ดึง P/E + beta ใหม่เมื่อรายการหุ้นที่ถืออยู่เปลี่ยน
+ *
+ * เฝ้าที่ "รายชื่อ symbol" ไม่ใช่ที่ตัว holdings ทั้งก้อน — ราคาตลาดขยับทุกครั้งที่
+ * poll แต่ P/E กับ beta ไม่ได้เปลี่ยนตามนั้น ถ้าเฝ้าทั้งก้อนจะยิงซ้ำทุกรอบราคา
+ * (backend cache ไว้ 5 นาทีอยู่แล้ว แต่ไม่มีเหตุให้ยิงตั้งแต่แรก)
+ *
+ * ครอบทุกทางที่ holdings ถูกโหลด (เข้าหน้าครั้งแรก / สลับพอร์ต / เปลี่ยนช่วงวันที่)
+ * จึงไม่ต้องไปแขวนเพิ่มทีละจุด
+ */
+watch(
+  () =>
+    store.holdings
+      .map((item) => item.symbol.toUpperCase())
+      .sort()
+      .join(','),
+  async (joined) => {
+    await loadRiskFundamentals(joined ? joined.split(',') : []);
+  },
+  { immediate: true },
+);
 
 // ==========================================
 // Summary Cards Setup

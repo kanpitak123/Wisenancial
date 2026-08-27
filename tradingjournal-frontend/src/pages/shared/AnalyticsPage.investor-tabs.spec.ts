@@ -14,16 +14,34 @@ import { h, nextTick } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AnalyticsPage from './AnalyticsPage.vue';
 import { useAnalyticsStore } from 'stores/AnalyticsStore';
+import { useAiStore } from 'stores/AiStore';
+import { useAuthStore } from 'stores/AuthStore';
 import type { AnalyticsOverview, PerformersResponse } from 'src/types/analytics.types';
 import type * as PaidTierModule from 'src/utils/paid-tier';
 
 const getPerformers = vi.fn();
 const investorLoad = vi.fn();
 
+// vi.mock ถูก hoist ขึ้นบนสุดของไฟล์ ตัวแปรที่ factory อ้างถึงจึงต้องถูกสร้างก่อนนั้น
+// (ประกาศเป็น const ธรรมดาแล้ว factory จะเห็นเป็น undefined -> mock ทั้งไฟล์พัง)
+const { analyzeRisk } = vi.hoisted(() => ({ analyzeRisk: vi.fn() }));
+
 // DcaPredictorCard ใช้ StockSymbolPicker ที่ดึงรายชื่อหุ้นผ่าน api.get('/stocks')
 // mock ไว้ไม่ให้เทสยิงเน็ตจริง
+//
+// /stocks/fundamentals ตอบค่าจริงกลับไป เพราะเทสด้านล่างต้องพิสูจน์ว่า P/E + beta
+// เดินทางจาก endpoint นี้ไปถึง payload ของ risk-analysis ครบจริง
 vi.mock('boot/axios', () => ({
-  api: { get: vi.fn().mockResolvedValue({ data: [] }) },
+  api: {
+    get: vi.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.startsWith('/stocks/fundamentals')) {
+        return Promise.resolve({
+          data: [{ symbol: 'NVDA', peRatio: 45.2, beta: 1.74 }],
+        });
+      }
+      return Promise.resolve({ data: [] });
+    }),
+  },
 }));
 
 vi.mock('src/services/analytics.service', async () => {
@@ -66,7 +84,7 @@ vi.mock('src/services/ai.service', () => ({
   aiService: {
     getModels: vi.fn().mockResolvedValue({ models: [], minBalance: 10 }),
     reviewPortfolio: vi.fn(),
-    analyzeRisk: vi.fn(),
+    analyzeRisk,
     analyzeChart: vi.fn(),
     getCredits: vi.fn(),
   },
@@ -247,5 +265,59 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
     await mountPage();
 
     expect(getPerformers).not.toHaveBeenCalled();
+  });
+
+  /**
+   * บั๊ก P2: prompt ฝั่ง backend ตั้งกติกาด้วย beta/P-E มาตลอด แต่หน้านี้ส่งแค่
+   * symbol/quantity/weight/currentPrice โมเดลจึงตัดสินจาก null ทุกครั้ง
+   *
+   * เทสนี้ไล่ตั้งแต่ /stocks/fundamentals จนถึง payload ที่ส่งเข้า analyzeRisk จริง
+   */
+  it('ส่ง P/E + beta จริงเข้า risk-analysis ไม่ใช่ null เหมือนเดิม', async () => {
+    analyzeRisk.mockResolvedValue({
+      data: {
+        riskLevel: 'Moderate',
+        riskScore: 50,
+        analysisSummary: 's',
+        keyRiskFactors: [],
+      },
+      holdingsData: [],
+      model: 'groq-llama3',
+      creditsCharged: 1,
+      creditsRemaining: 9,
+    });
+
+    // ปุ่มวิเคราะห์ถูก disable ถ้าเครดิตไม่พอหรือยังไม่ได้เลือกโมเดล
+    useAuthStore().user = {
+      id: 1,
+      username: 'qa',
+      ai_token_balance: 100,
+    } as unknown as ReturnType<typeof useAuthStore>['user'];
+
+    const wrapper = await mountPage();
+    await openTab(wrapper, 'ai');
+
+    const aiStore = useAiStore();
+    aiStore.models = [
+      { id: 'groq-llama3', label: 'Groq', creditsPer1kInput: 1, creditsPer1kOutput: 1 },
+    ];
+    aiStore.selectedModelId = 'groq-llama3';
+    await nextTick();
+
+    await wrapper.find('[data-test="ai-risk-run"]').trigger('click');
+    await nextTick();
+
+    expect(analyzeRisk).toHaveBeenCalled();
+    const sent = analyzeRisk.mock.calls[0]![0] as {
+      holdings: Array<Record<string, unknown>>;
+    };
+
+    expect(sent.holdings[0]).toMatchObject({
+      symbol: 'NVDA',
+      peRatio: 45.2,
+      beta: 1.74,
+      // ยกไปเฟสอนาคตโดยตั้งใจ — ยืนยันว่าเป็น null จริง ไม่ใช่ค่าที่ใครแต่งขึ้น
+      debtToEquity: null,
+    });
   });
 });

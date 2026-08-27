@@ -51,6 +51,31 @@ const listingMetricCache = new Map<
   { metric: ListingMetric; expires: number }
 >();
 
+/**
+ * ปัจจัยพื้นฐานรายตัวที่ AI Risk Analysis ใช้ตัดสินความเสี่ยง
+ *
+ * debtToEquity ไม่ได้อยู่ในนี้เพราะ Yahoo ให้เฉพาะทาง quoteSummary() ซึ่งยิงได้
+ * ทีละ symbol เท่านั้น (ดูหัวข้อ "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
+ */
+export interface RiskFundamental {
+  peRatio: number | null;
+  beta: number | null;
+}
+
+/**
+ * แยก cache ออกจาก listingMetricCache โดยตั้งใจ ไม่ได้ไปขยาย getListingMetrics()
+ *
+ * เพราะการระบุ `fields` ให้ Yahoo ทำให้มันคืน "เฉพาะ" ฟิลด์ที่ขอ — ทดสอบแล้วพบว่า
+ * marketCap หายไปเลยเมื่อระบุ fields ถ้าไปใส่ fields ในตัวเดิม ตาราง listing จะพัง
+ * ทั้ง marketCap/dividendYield/volume ส่วน beta ก็จำเป็นต้องระบุ fields เพราะ
+ * quote() แบบ default ไม่คืน beta มาให้ (ทดสอบแล้ว MISSING ทั้ง US และ .BK)
+ */
+const RISK_FUNDAMENTAL_TTL_MS = 5 * 60 * 1000;
+const riskFundamentalCache = new Map<
+  string,
+  { fundamental: RiskFundamental; expires: number }
+>();
+
 function mapQuoteToListingMetric(quote: any): ListingMetric {
   const num = (value: unknown): number | null => {
     const n = Number(value);
@@ -325,6 +350,71 @@ export class MarketDataService {
       } catch (error) {
         this.logger.warn(
           `Yahoo batch quote failed for [${chunk.join(', ')}]: ${error instanceof Error ? error.message : error}`,
+        );
+      }
+    }
+
+    return out;
+  }
+
+  /**
+   * P/E และ beta ของหลาย symbol พร้อมกัน สำหรับ AI Risk Analysis
+   *
+   * ยิง Yahoo ครั้งเดียวต่อ chunk ไม่ใช่ทีละตัว — การ์ดความเสี่ยงต้องการค่าพวกนี้
+   * ให้ครบทุกหุ้นในพอร์ตพร้อมกัน ถ้าวนยิงทีละตัวพอร์ต 30 ตัวก็ 30 request
+   *
+   * symbol ที่ Yahoo ไม่รู้จักจะไม่อยู่ใน map ที่คืนกลับ (ผู้เรียกส่ง null ต่อไป
+   * ให้โมเดลเห็นว่า "ไม่มีข้อมูล" ดีกว่าแต่งตัวเลขปลอมขึ้นมา) และถ้าทั้ง chunk พัง
+   * ก็ยังคืน map ที่มีของเท่าที่ได้ ไม่โยน error ทิ้งทั้งงาน
+   */
+  async getRiskFundamentals(
+    symbols: string[],
+  ): Promise<Map<string, RiskFundamental>> {
+    const now = Date.now();
+    const out = new Map<string, RiskFundamental>();
+    const toFetch: string[] = [];
+
+    for (const symbol of symbols) {
+      const cached = riskFundamentalCache.get(symbol);
+      if (cached && cached.expires > now) {
+        out.set(symbol, cached.fundamental);
+      } else if (!toFetch.includes(symbol)) {
+        toFetch.push(symbol);
+      }
+    }
+    if (toFetch.length === 0) return out;
+
+    const num = (value: unknown): number | null => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? Number(parsed.toFixed(3)) : null;
+    };
+
+    for (let i = 0; i < toFetch.length; i += 40) {
+      const chunk = toFetch.slice(i, i + 40);
+      try {
+        // ต้องระบุ beta ตรง ๆ — quote() แบบไม่ระบุ fields ไม่คืน beta มาให้
+        const quotes = await yahooFinance.quote(chunk, {
+          fields: ['symbol', 'beta', 'trailingPE'],
+        });
+        const arr = (Array.isArray(quotes) ? quotes : [quotes]) as any[];
+        for (const quote of arr) {
+          const symbol = quote?.symbol;
+          if (!symbol) continue;
+          const fundamental: RiskFundamental = {
+            peRatio: num(quote?.trailingPE),
+            beta: num(quote?.beta),
+          };
+          riskFundamentalCache.set(symbol, {
+            fundamental,
+            expires: now + RISK_FUNDAMENTAL_TTL_MS,
+          });
+          out.set(symbol, fundamental);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Yahoo risk-fundamentals batch failed for [${chunk.join(', ')}]: ${
+            error instanceof Error ? error.message : error
+          }`,
         );
       }
     }

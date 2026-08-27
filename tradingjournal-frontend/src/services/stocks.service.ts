@@ -45,6 +45,13 @@ export interface RadarStock {
   returnPercent: number;
 }
 
+/** ปัจจัยพื้นฐานรายตัวจาก GET /stocks/fundamentals — null = Yahoo ไม่มีข้อมูลให้ */
+export interface RiskFundamental {
+  symbol: string;
+  peRatio: number | null;
+  beta: number | null;
+}
+
 export const stocksService = {
   async list(params: StockListParams = {}): Promise<StockListResponse> {
     const {
@@ -67,6 +74,21 @@ export const stocksService = {
   /** Fetch the Momentum Radar feed (price-momentum buckets computed by the backend). */
   async getRadar(): Promise<RadarStock[]> {
     const { data } = await api.get<RadarStock[]>('/stocks/radar');
+    return data;
+  },
+
+  /**
+   * P/E + beta ของหลาย symbol ในคำขอเดียว — ใช้ประกอบ AI Risk Analysis
+   *
+   * ยิงรวมทีเดียวไม่ใช่วนทีละตัว พอร์ตหลายสิบหุ้นจะได้ไม่กลายเป็นหลายสิบ request
+   * (debtToEquity ยังไม่มีในนี้ — ดู "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
+   */
+  async getRiskFundamentals(symbols: string[]): Promise<RiskFundamental[]> {
+    if (symbols.length === 0) return [];
+
+    const { data } = await api.get<RiskFundamental[]>('/stocks/fundamentals', {
+      params: { symbols: symbols.join(',') },
+    });
     return data;
   },
 
