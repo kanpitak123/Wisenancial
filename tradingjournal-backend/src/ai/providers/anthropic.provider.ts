@@ -5,7 +5,12 @@ import type {
   AiJsonResult,
   IAiProvider,
 } from './ai-provider.interface';
-import { parseJsonResponse } from './ai-provider.interface';
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  DEFAULT_TEMPERATURE,
+  parseJsonResponse,
+} from './ai-provider.interface';
 
 @Injectable()
 export class AnthropicProvider implements IAiProvider {
@@ -16,7 +21,11 @@ export class AnthropicProvider implements IAiProvider {
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    this.client = apiKey ? new Anthropic({ apiKey }) : null;
+    // timeout เดียวกับอีก 3 เจ้า — SDK ของ Anthropic ตั้ง default ไว้ 10 นาที
+    // ซึ่งนานเกินกว่าที่ ai-manager จะรอไหวตอน fallback ข้าม provider
+    this.client = apiKey
+      ? new Anthropic({ apiKey, timeout: AI_REQUEST_TIMEOUT_MS })
+      : null;
   }
 
   isConfigured(): boolean {
@@ -33,8 +42,8 @@ export class AnthropicProvider implements IAiProvider {
     try {
       const response = await this.client.messages.create({
         model: options.upstreamModel,
-        max_tokens: options.maxOutputTokens ?? 1200,
-        temperature: options.temperature ?? 0.2,
+        max_tokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        temperature: options.temperature ?? DEFAULT_TEMPERATURE,
         system: options.systemPrompt ?? 'Return valid JSON only.',
         messages: [
           {
