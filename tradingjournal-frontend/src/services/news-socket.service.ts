@@ -1,4 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
+import { AUTH_STORAGE_KEYS } from '../constants/auth.constants';
 import { NEWS_SOCKET_EVENTS, NEWS_SOCKET_URL } from '../constants/news.constants';
 import type { NewsSocketPayload } from '../types/news.types';
 
@@ -15,6 +16,15 @@ export const newsSocketService = {
     if (!socket) {
       socket = io(NEWS_SOCKET_URL, {
         transports: ['websocket', 'polling'],
+        /**
+         * ฝั่งเซิร์ฟเวอร์ตรวจ token ตอน handshake แล้ว (news.gateway.ts) — ไม่แนบมา
+         * = ถูกตัดการเชื่อมต่อทันที เดิม endpoint นี้เปิดให้ใครก็ต่อได้ทั้งที่
+         * /news ฝั่ง HTTP บังคับล็อกอินอยู่แล้ว
+         *
+         * อ่านตอน connect ทุกครั้ง ไม่ cache ไว้ — token ถูกหมุนใหม่ทุกครั้งที่
+         * refresh และ socket จะถูกสร้างใหม่หลัง disconnect() อยู่แล้ว
+         */
+        auth: { token: localStorage.getItem(AUTH_STORAGE_KEYS.accessToken) ?? '' },
       });
     }
 

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AiModule } from '../ai/ai.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NewsController } from './news.controller';
@@ -9,7 +10,9 @@ import { NewsService } from './news.service';
 import { NewsSyncService } from './news-sync.service';
 
 @Module({
-  imports: [PrismaModule, AiModule],
+  // JwtModule ถูก register เป็น global ไว้ที่ AuthModule — NewsGateway ใช้ตัวนั้น
+  // ตรวจ token ตอน handshake เหมือน ChatGateway ไม่มี JwtModule ของตัวเอง
+  imports: [PrismaModule, AiModule, ConfigModule],
   controllers: [NewsController],
   providers: [
     NewsService,

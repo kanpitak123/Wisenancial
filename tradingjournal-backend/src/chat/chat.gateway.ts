@@ -13,18 +13,19 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
-import { AuthUser, JwtAccessPayload } from '../auth/types/auth-user.type';
+import { AuthUser } from '../auth/types/auth-user.type';
+import { verifySocketUser } from '../auth/utils/socket-auth.util';
+import { resolveCorsOrigins } from '../config/cors-origins.util';
 
 /** socket ที่ผ่าน handshake แล้วจะมี user ติดมาด้วยเสมอ */
 type AuthenticatedSocket = Socket & {
   data: { user?: AuthUser };
 };
 
-// ตั้งค่า Gateway ให้เปิดรับ Cors จากหน้าบ้าน
+// origin เดียวกับฝั่ง HTTP ไม่ใช่ '*' — main.ts บังคับให้ตั้ง CORS_ORIGINS บน
+// production และไม่ยอมรับ '*' อยู่แล้ว gateway ต้องเดินตามกติกาเดียวกัน
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: resolveCorsOrigins(), credentials: true },
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
@@ -38,55 +39,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly configService: ConfigService,
   ) {}
 
-  // 🌐 เมื่อมี Client เชื่อมต่อเข้ามา (Handshake ทำการตรวจสอบสิทธิ์ JWT Token)
+  /**
+   * 🌐 Handshake — ตรวจ JWT ก่อนอนุญาตให้ต่อ
+   *
+   * ตรรกะย้ายไปอยู่ที่ auth/utils/socket-auth.util.ts แล้ว เพราะ NewsGateway ต้องใช้
+   * ชุดเดียวกัน (ของเดิมที่นั่นไม่ตรวจอะไรเลย) พฤติกรรมทุกข้อเหมือนเดิมทั้งหมด —
+   * ไม่มี token / ไม่มี secret / token เสีย / claim ไม่ครบ = ตัดการเชื่อมต่อ
+   */
   handleConnection(client: AuthenticatedSocket) {
-    // ดึง Token ได้ทั้งจาก Headers หรือ Auth Payload ของ Socket.io
-    const rawToken = this.extractToken(client);
+    const user = verifySocketUser(
+      client,
+      this.jwtService,
+      this.configService.get<string>('JWT_ACCESS_SECRET'),
+      this.logger,
+      'Chat',
+    );
 
-    if (!rawToken) {
-      this.logger.warn('Chat WS connection rejected: no token provided');
+    if (!user) {
       client.disconnect();
       return;
     }
 
-    // ใช้ JWT_ACCESS_SECRET ตัวเดียวกับที่ AuthService ใช้เซ็น access token
-    // และตัวเดียวกับที่ JwtAuthGuard ใช้ตรวจฝั่ง HTTP — ระบุตรงนี้ให้ชัด
-    // จะได้ไม่มีทางหล่นไปใช้ config อื่นแม้วันหลังมีใครมา register JwtModule ทับ
-    const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
+    client.data.user = user;
 
-    if (!secret) {
-      this.logger.error('JWT_ACCESS_SECRET is not configured — rejecting chat WS connection');
-      client.disconnect();
-      return;
-    }
-
-    let payload: JwtAccessPayload;
-
-    try {
-      payload = this.jwtService.verify<JwtAccessPayload>(rawToken, { secret });
-    } catch {
-      this.logger.warn('Chat WS connection rejected: invalid or expired token');
-      client.disconnect();
-      return;
-    }
-
-    // ตรวจ claim ชุดเดียวกับ JwtAuthGuard — ของเดิมรับ payload อะไรก็ได้ที่ decode ผ่าน
-    // แล้ว handleMessage ไปหยิบ .sub ทีหลัง ถ้า token ไม่มี sub จะบันทึกข้อความ
-    // ด้วย user_id เป็น undefined
-    if (!payload.sub || !payload.email || !payload.username || !payload.role) {
-      this.logger.warn('Chat WS connection rejected: token payload is incomplete');
-      client.disconnect();
-      return;
-    }
-
-    client.data.user = {
-      userId: payload.userId ?? payload.sub,
-      email: payload.email,
-      username: payload.username,
-      role: payload.role,
-    };
-
-    this.logger.log(`User connected to chat WS: ${client.data.user.username}`);
+    this.logger.log(`User connected to chat WS: ${user.username}`);
   }
 
   // 🔌 เมื่อ Client ตัดการเชื่อมต่อ
@@ -143,18 +119,5 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // 2. กระจายข้อความ (Broadcast) ไปให้ทุกคนที่เปิดหน้าจออยู่ในห้อง (roomName) เดียวกัน
     this.server.to(payload.roomName).emit('newMessage', savedMsg);
-  }
-
-  private extractToken(client: Socket): string | undefined {
-    const raw =
-      client.handshake.headers.authorization || client.handshake.auth?.token;
-
-    if (typeof raw !== 'string' || !raw.trim()) {
-      return undefined;
-    }
-
-    const value = raw.trim();
-
-    return value.startsWith('Bearer ') ? value.slice('Bearer '.length).trim() : value;
   }
 }
