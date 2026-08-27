@@ -550,13 +550,20 @@ const chartOverlays = computed<OverlaySpec[]>(() => {
   return overlays;
 });
 
-// AI Technical Analysis State
-interface AITechnicalAnalysis {
+/**
+ * แนวรับ/แนวต้านจาก /market/analysis/:symbol
+ *
+ * ไม่ใช่ผลจากโมเดลภาษา — backend คำนวณล้วน ๆ จากราคาปิดย้อนหลัง (min/max ของช่วง
+ * 20 วันและ 90 วัน) กับ RSI แบบ Wilder เดิมตั้งชื่อทุกอย่างว่า "AI" ทั้งที่ไม่มี
+ * LLM เกี่ยวข้องเลย ทำให้ทั้งผู้ใช้และคนอ่านโค้ดเข้าใจผิด
+ */
+interface TechnicalLevels {
   rsi: number;
   resistance1: number;
   resistance2: number;
   support1: number;
   support2: number;
+  /** ชื่อฟิลด์ตาม payload ของ backend — เป็นข้อความที่ประกอบจากเทมเพลต ไม่ใช่ LLM (ยังไม่ถูกใช้ในหน้านี้) */
   aiSummary: {
     th: string;
     en: string;
@@ -565,15 +572,16 @@ interface AITechnicalAnalysis {
   confidence: number;
 }
 
-const aiAnalysis = ref<AITechnicalAnalysis | null>(null);
-const aiAnalysisLoading = ref(false);
+const technicalLevels = ref<TechnicalLevels | null>(null);
+const technicalLevelsLoading = ref(false);
 
 /**
  * แนวรับ/แนวต้านเป็นเส้นแนวนอนคงที่ -> createPriceLine() ของ lightweight-charts
  * (ของเดิมเป็น yaxis annotation ของ ApexCharts)
  *
- * เส้นจาก /market/analysis/:symbol (AI S1/S2, AI R1/R2) ใช้สีจางกว่าเส้นที่คำนวณ
- * จากราคาตรง ๆ เพื่อให้แยกออกว่าอันไหนมาจากไหน
+ * เส้นจาก /market/analysis/:symbol (Range S1/S2, Range R1/R2) ใช้สีจางกว่าเส้นที่มาจาก
+ * technicalIndicators เพื่อให้แยกออกว่าอันไหนมาจากไหน — ทั้งสองชุดเป็นการคำนวณจากราคา
+ * เหมือนกัน ต่างกันที่แหล่ง คำว่า "Range" บอกว่ามาจากกรอบราคาสูง/ต่ำย้อนหลัง
  */
 const chartPriceLines = computed<PriceLineSpec[]>(() => {
   const lines: PriceLineSpec[] = [];
@@ -590,11 +598,11 @@ const chartPriceLines = computed<PriceLineSpec[]>(() => {
     addLine(level, '#f97316', `R${index + 1}`),
   );
 
-  if (aiAnalysis.value) {
-    addLine(aiAnalysis.value.support1, '#22d3ee', 'AI S1');
-    addLine(aiAnalysis.value.support2, '#0ea5e9', 'AI S2');
-    addLine(aiAnalysis.value.resistance1, '#fb7185', 'AI R1');
-    addLine(aiAnalysis.value.resistance2, '#f43f5e', 'AI R2');
+  if (technicalLevels.value) {
+    addLine(technicalLevels.value.support1, '#22d3ee', 'Range S1');
+    addLine(technicalLevels.value.support2, '#0ea5e9', 'Range S2');
+    addLine(technicalLevels.value.resistance1, '#fb7185', 'Range R1');
+    addLine(technicalLevels.value.resistance2, '#f43f5e', 'Range R2');
   }
 
   return lines;
@@ -602,20 +610,20 @@ const chartPriceLines = computed<PriceLineSpec[]>(() => {
 
 const isIntradayInterval = computed(() => INTRADAY_INTERVALS.has(selectedInterval.value));
 
-// Fetch AI Technical Analysis
-const fetchAIAnalysis = async (symbol: string) => {
-  aiAnalysisLoading.value = true;
+// โหลดแนวรับ/แนวต้านที่คำนวณจากกรอบราคาย้อนหลัง
+const fetchTechnicalLevels = async (symbol: string) => {
+  technicalLevelsLoading.value = true;
   try {
     const response = await api.get(`/market/analysis/${symbol}`);
     if (isStaleSymbol(symbol)) return;
-    aiAnalysis.value = response.data;
+    technicalLevels.value = response.data;
   } catch (err) {
     if (isStaleSymbol(symbol)) return;
-    console.error('Failed to fetch AI analysis:', err);
-    // Don't show error notification - AI analysis is optional
+    console.error('Failed to fetch technical levels:', err);
+    // ไม่ต้องเด้ง notification — เส้นแนวรับ/แนวต้านชุดนี้เป็นของเสริม ไม่มีก็ดูกราฟได้
   } finally {
     if (!isStaleSymbol(symbol)) {
-      aiAnalysisLoading.value = false;
+      technicalLevelsLoading.value = false;
     }
   }
 };
@@ -825,7 +833,7 @@ const formatPopularPercent = (value: number | null): string =>
 const formatPopularDividend = (value: number | null): string =>
   value == null ? '—' : `${value.toFixed(2)}%`;
 
-/** ตัดนามสกุล .BK ออกให้ตรงกับที่ Watchlist/AI Radar โชว์ */
+/** ตัดนามสกุล .BK ออกให้ตรงกับที่ Watchlist/Momentum Radar โชว์ */
 const displayThSymbol = (symbol: string): string => symbol.replace('.BK', '');
 
 /** มูลค่าซื้อขายจาก /stocks/popular-th มาเป็นล้านบาทอยู่แล้ว — เติมหน่วยให้อ่านออก */
@@ -891,11 +899,11 @@ const fetchStockData = async (symbol: string, interval: string, range: string) =
     if (seq !== analysisSeq) return;
 
     stockData.value = response.data;
-    // Also fetch intrinsic value, seasonality data, AI analysis, and analyst recommendations
+    // Also fetch intrinsic value, seasonality data, technical levels, and analyst recommendations
     await Promise.all([
       fetchIntrinsicValue(symbol),
       fetchSeasonalityData(symbol),
-      fetchAIAnalysis(symbol),
+      fetchTechnicalLevels(symbol),
       fetchAnalystRecommendations(symbol),
     ]);
   } catch (err) {
@@ -1781,7 +1789,7 @@ onMounted(() => {
                                       @error="popularLogoErrors.add(stock.symbol)"
                                     />
                                     <!-- โลโก้ Clearbit โดน ad blocker บล็อกบ่อย -> ใช้ป้ายตัวย่อ
-                                         ชุดเดียวกับ Watchlist/AI Radar แทนช่องว่าง -->
+                                         ชุดเดียวกับ Watchlist/Momentum Radar แทนช่องว่าง -->
                                     <div
                                       v-else
                                       class="stock-logo stock-logo--fallback"
@@ -3686,7 +3694,7 @@ onMounted(() => {
 }
 
 /* พื้นหลังมาจาก symbolAvatarColor() ผูกแบบ inline — หุ้นแต่ละตัวจึงได้สีคงที่ของตัวเอง
-   เหมือนที่ Watchlist/AI Radar ใช้ (ของเดิมเป็น gradient สีเดียวกันหมดทุกตัว) */
+   เหมือนที่ Watchlist/Momentum Radar ใช้ (ของเดิมเป็น gradient สีเดียวกันหมดทุกตัว) */
 .stock-logo--fallback {
   display: flex;
   align-items: center;

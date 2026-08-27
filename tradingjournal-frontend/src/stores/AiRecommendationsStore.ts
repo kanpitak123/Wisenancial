@@ -1,5 +1,9 @@
 /**
- * ฟีด AI stock-recommendations ของหน้า Watchlist (ต้นฉบับคือหน้า StockRadar)
+ * ฟีด Momentum Radar ของหน้า Watchlist (ต้นฉบับคือหน้า StockRadar)
+ *
+ * ⚠️ ชื่อ store ยังขึ้นต้นว่า Ai... ตามของเดิม แต่ฟีดนี้ไม่ได้ผ่านโมเดลภาษาเลย —
+ * getRadar() ฝั่ง backend จัดหมวดจาก % การเปลี่ยนแปลงราคา 1D/1W/1M ล้วน ๆ
+ * ข้อความที่ผู้ใช้เห็นจึงเลิกเรียกว่า "AI" แล้ว
  *
  * ไม่ได้สร้าง endpoint ใหม่ — GET /stocks/radar กับ stocksService.getRadar() มีอยู่แล้วและ
  * ทำงานได้ ตัวนี้แค่ถือ state + ตัวกรองรายหมวดให้หน้า Watchlist เรียกใช้
@@ -84,7 +88,7 @@ export const useAiRecommendationsStore = defineStore('aiRecommendations', {
         this.recommendations = await stocksService.getRadar();
         this.loaded = true;
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'โหลดคำแนะนำจาก AI ไม่สำเร็จ';
+        this.error = error instanceof Error ? error.message : 'โหลด Momentum Radar ไม่สำเร็จ';
         this.recommendations = [];
       } finally {
         this.loading = false;

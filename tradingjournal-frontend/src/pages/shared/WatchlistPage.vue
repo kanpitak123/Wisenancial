@@ -1,9 +1,13 @@
 <script setup lang="ts">
 /**
- * Watchlist — ฟีดคำแนะนำหุ้นจาก AI (ต้นฉบับคือหน้า StockRadar ของโปรเจกต์เก่า)
+ * Watchlist — ฟีด Momentum Radar (ต้นฉบับคือหน้า StockRadar ของโปรเจกต์เก่า)
  *
  * ของเดิมที่ path นี้เป็นรายการที่ผู้ใช้กดเพิ่มเอง ซึ่งไม่ใช่หน้าต้นฉบับ — ตัวจริงคือฟีด
- * AI stock-recommendations 4 หมวด ที่ backend มีให้อยู่แล้วที่ GET /stocks/radar
+ * 4 หมวด ที่ backend มีให้อยู่แล้วที่ GET /stocks/radar
+ *
+ * ⚠️ ฟีดนี้ไม่ได้มาจากโมเดลภาษา — getRadar() จัดหมวด Upside/Near/Not/Downside จาก
+ * % การเปลี่ยนแปลงราคาในกรอบ 1D/1W/1M ล้วน ๆ เดิมหน้านี้เรียกมันว่า "AI" ทั้งที่ไม่มี
+ * LLM เกี่ยวข้อง ทำให้ผู้ใช้เข้าใจว่ามีการวิเคราะห์มากกว่าที่เกิดขึ้นจริง
  *
  * ⚠️ route /Watchlist ใช้ร่วมกันทั้งโหมด Forex และ Stock แต่ฟีด radar เป็นข้อมูลหุ้นล้วน
  * โหมด Forex จึงเห็นเฉพาะส่วน "ติดตามเอง" ด้านล่าง ไม่งั้นเมนู Watchlist ของ Forex จะพัง
@@ -44,7 +48,7 @@ const { currentItems, isLoading, isSubmitting, loadForPortfolio, addAsset, remov
   useWatchlist();
 
 /* ------------------------------------------------------------------ */
-/* AI radar feed                                                       */
+/* Momentum Radar feed                                                 */
 /* ------------------------------------------------------------------ */
 onMounted(() => {
   if (isInvestor.value) void recStore.loadRecommendations();
@@ -296,8 +300,8 @@ const handleRemove = async (item: WatchlistItem) => {
           {{
             isInvestor
               ? languageStore.isThai
-                ? 'หุ้นที่ AI คัดมาให้ พร้อมผลตอบแทนตั้งแต่วันที่เริ่มแนะนำ'
-                : 'AI-selected stocks with return since the recommendation started.'
+                ? 'หุ้นที่คัดจากโมเมนตัมราคา พร้อมผลตอบแทนตั้งแต่วันที่เข้าเกณฑ์'
+                : 'Stocks screened by price momentum, with return since they qualified.'
               : `สัญลักษณ์ที่ติดตามอยู่ในพอร์ต${workspaceMeta.label}ที่เลือก`
           }}
         </div>
@@ -315,7 +319,7 @@ const handleRemove = async (item: WatchlistItem) => {
       />
     </div>
 
-    <!-- ══ AI radar (โหมด Stock เท่านั้น) ══════════════════════════════════════ -->
+    <!-- ══ Momentum Radar (โหมด Stock เท่านั้น) ═══════════════════════════════ -->
     <template v-if="isInvestor">
       <div
         v-if="recStore.loading && recStore.recommendations.length === 0"
@@ -324,7 +328,7 @@ const handleRemove = async (item: WatchlistItem) => {
       >
         <q-spinner-dots size="40px" color="primary" class="q-mb-sm" />
         <div class="text-caption watch-subtitle">
-          {{ languageStore.isThai ? 'กำลังโหลดคำแนะนำจาก AI…' : 'Loading AI recommendations…' }}
+          {{ languageStore.isThai ? 'กำลังโหลด Momentum Radar…' : 'Loading Momentum Radar…' }}
         </div>
       </div>
 
@@ -352,8 +356,8 @@ const handleRemove = async (item: WatchlistItem) => {
         <p class="state-text">
           {{
             languageStore.isThai
-              ? 'AI ยังไม่พบหุ้นที่เข้าเกณฑ์ ลองกลับมาดูใหม่ภายหลัง'
-              : 'The AI has not surfaced any picks yet. Check back later.'
+              ? 'ยังไม่มีหุ้นตัวไหนเข้าเกณฑ์โมเมนตัม ลองกลับมาดูใหม่ภายหลัง'
+              : 'No stock meets the momentum thresholds yet. Check back later.'
           }}
         </p>
       </section>
@@ -862,7 +866,7 @@ const handleRemove = async (item: WatchlistItem) => {
   border-color: var(--primary-accent);
 }
 
-/* top-accent border ตามหมวด AI radar — สีเดียวกับ .watch-dot ของหัว section */
+/* top-accent border ตามหมวด Momentum Radar — สีเดียวกับ .watch-dot ของหัว section */
 .watch-card.is-upside {
   border-top-color: var(--profit-color);
 }

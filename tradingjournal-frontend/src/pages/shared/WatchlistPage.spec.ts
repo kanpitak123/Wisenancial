@@ -137,7 +137,7 @@ function cardsIn(wrapper: VueWrapper, category: RadarCategory) {
   return wrapper.findAll(`[data-test="radar-section-${category}"] [data-test="radar-card"]`);
 }
 
-describe('WatchlistPage — AI radar', () => {
+describe('WatchlistPage — Momentum Radar', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     document.body.innerHTML = '';

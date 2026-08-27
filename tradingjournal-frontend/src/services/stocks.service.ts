@@ -27,7 +27,7 @@ const SECTORS: StockSector[] = [
 export const SECTOR_OPTIONS = SECTORS;
 export const EXCHANGE_OPTIONS: StockExchange[] = ['NASDAQ', 'NYSE', 'SET'];
 
-// ---- AI radar feed ----
+// ---- Momentum Radar feed ----
 
 export type RadarCategory = 'Upside' | 'Downside' | 'Near-recommended' | 'Not-recommended';
 
@@ -64,7 +64,7 @@ export const stocksService = {
     return data;
   },
 
-  /** Fetch the AI radar recommendations (real momentum data from the backend). */
+  /** Fetch the Momentum Radar feed (price-momentum buckets computed by the backend). */
   async getRadar(): Promise<RadarStock[]> {
     const { data } = await api.get<RadarStock[]>('/stocks/radar');
     return data;

@@ -1,5 +1,5 @@
 /**
- * ScrollRail — รางเลื่อนแนวนอนที่ใช้ในหมวดของ AI Stock Radar
+ * ScrollRail — รางเลื่อนแนวนอนที่ใช้ในหมวดของ Momentum Radar
  *
  * jsdom ไม่ได้ทำ layout จริง: clientWidth/scrollWidth เป็น 0 หมดและ scrollBy() ไม่มีผล
  * เทสนี้จึงเซ็ตค่าพวกนั้นลง element เองเพื่อจำลอง "รางที่มีของล้น" แล้ววัดว่า
