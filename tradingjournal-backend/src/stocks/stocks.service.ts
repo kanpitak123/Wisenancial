@@ -99,6 +99,35 @@ export interface RadarRecommendation {
   returnPercent: number;
 }
 
+// ---- AI Picks (growth candidates) ----
+
+/**
+ * หุ้นหนึ่งตัวที่ระบบคัดมาให้ AI Picks จัดอันดับ พร้อมตัวเลขจริงประกอบ
+ *
+ * มีไว้เพื่อเปลี่ยนงานของโมเดลจาก "นึกชื่อหุ้น growth จากความจำตอนเทรน" (ซึ่งล้าสมัย
+ * และตรวจสอบไม่ได้เลย) เป็น "จัดอันดับจากรายชื่อที่ให้ไปพร้อมตัวเลขที่ดึงมาสด"
+ */
+export interface GrowthCandidate {
+  symbol: string;
+  name: string;
+  sector: string;
+  exchange: StockListingExchange;
+  /** ไตรมาสล่าสุดที่ revenueGrowthYoY/netMargin ครอบคลุม (null = Yahoo ไม่ได้บอก) */
+  asOf: string | null;
+  metrics: {
+    /** สัดส่วน ไม่ใช่เปอร์เซ็นต์ (0.32 = +32%) */
+    revenueGrowthYoY: number | null;
+    /** สัดส่วน ไม่ใช่เปอร์เซ็นต์ (0.18 = 18%) */
+    netMargin: number | null;
+    peRatio: number | null;
+    currentPrice: number;
+    avgDailyVolume3M: number | null;
+  };
+}
+
+/** จำนวน candidate ที่ส่งเข้า prompt — ตัวเลขนี้คือจำนวน request ของขั้นที่ 2 ด้วย */
+const GROWTH_CANDIDATE_LIMIT = 12;
+
 @Injectable()
 export class StocksService {
   private readonly logger = new Logger(StocksService.name);
@@ -359,6 +388,93 @@ export class StocksService {
   }
 
   /**
+   * รายชื่อหุ้นพร้อมตัวเลขจริง ที่ AI Picks เอาไปจัดอันดับ (ดู GrowthCandidate)
+   *
+   * ทำเป็นสองขั้นเพราะ Yahoo ให้ข้อมูลคนละทาง:
+   *   ขั้น 1 — quote() แบบ batch (1 request ต่อ 40 ตัว, แคช 5 นาที) ได้ราคา/P-E/
+   *            marketCap/สภาพคล่อง ครบทั้ง universe ใช้คัดเหลือ ~12 ตัว
+   *   ขั้น 2 — quoteSummary() ทีละตัวเฉพาะ 12 ตัวที่คัดแล้ว (แคช 12 ชม.) ได้
+   *            revenueGrowthYoY/netMargin ซึ่งไม่มีทางดึงแบบ batch ได้
+   *
+   * ขั้น 1 คัดด้วย "สภาพคล่อง" ไม่ใช่ "การเติบโต" โดยตั้งใจ — ตัวเลขการเติบโตยัง
+   * ไม่มีในมือตอนนั้น การแกล้งคัดด้วยสิ่งที่ยังไม่รู้คือการเดา หน้าที่จัดอันดับตาม
+   * การเติบโตเป็นของโมเดลหลังได้ตัวเลขครบแล้ว
+   */
+  async getGrowthCandidates(
+    limit: number = GROWTH_CANDIDATE_LIMIT,
+  ): Promise<GrowthCandidate[]> {
+    // ทั้ง universe ไม่ต้องหั่นโควตาเหมือน radar — ขั้นนี้ยิงเป็น batch และใช้แคช
+    // ตัวเดียวกับตาราง listing อยู่แล้ว เพิ่มหุ้นเข้ามาก็แทบไม่มีต้นทุนเพิ่ม
+    const universe = (await this.loadActiveStocks()).map(
+      (row): ListingSeed => ({
+        symbol: row.symbol,
+        name: row.name,
+        sector: row.sector ?? 'Other',
+        exchange: inferExchange(row.exchange, row.symbol),
+      }),
+    );
+    if (universe.length === 0) return [];
+
+    const metrics = await this.marketData.getListingMetrics(
+      universe.map((seed) => seed.symbol),
+    );
+
+    // ซื้อขายจริงไม่ได้ก็ไม่ควรอยู่ในรายการให้แนะนำ — ไม่มีราคา = Yahoo quote ไม่ได้
+    const tradeable = universe
+      .map((seed) => ({ seed, metric: metrics.get(seed.symbol) }))
+      .filter(
+        (row): row is { seed: ListingSeed; metric: ListingMetric } =>
+          row.metric !== undefined && row.metric.price > 0,
+      );
+
+    const byLiquidity = (
+      a: { metric: ListingMetric },
+      b: { metric: ListingMetric },
+    ) => (b.metric.avgDailyVolume3M ?? 0) - (a.metric.avgDailyVolume3M ?? 0);
+
+    const thai = tradeable
+      .filter((row) => row.seed.exchange === 'SET')
+      .sort(byLiquidity);
+    const global = tradeable
+      .filter((row) => row.seed.exchange !== 'SET')
+      .sort(byLiquidity);
+
+    /**
+     * แบ่งครึ่งต่อฝั่งตลาด แล้วให้ฝั่งที่เหลือมาเติมโควตาที่อีกฝั่งใช้ไม่หมด
+     *
+     * ต่างจาก radar ที่ไม่เติมกลับ — ที่นี่จำนวน candidate มีผลกับคุณภาพคำตอบโดยตรง
+     * (เหลือ 7 ตัวแล้วให้เลือก 5 = แทบไม่ได้เลือก) ยอมเอียงข้างดีกว่าลิสต์บาง
+     */
+    const half = Math.ceil(limit / 2);
+    const picked = [
+      ...thai.slice(0, half),
+      ...global.slice(0, limit - Math.min(thai.length, half)),
+    ].slice(0, limit);
+
+    const fundamentals = await this.marketData.getGrowthFundamentals(
+      picked.map((row) => row.seed.symbol),
+    );
+
+    return picked.map(({ seed, metric }) => {
+      const fundamental = fundamentals.get(seed.symbol);
+      return {
+        symbol: seed.symbol,
+        name: seed.name,
+        sector: seed.sector,
+        exchange: seed.exchange,
+        asOf: fundamental?.asOf ?? null,
+        metrics: {
+          revenueGrowthYoY: fundamental?.revenueGrowthYoY ?? null,
+          netMargin: fundamental?.netMargin ?? null,
+          peRatio: metric.peRatio,
+          currentPrice: metric.price,
+          avgDailyVolume3M: metric.avgDailyVolume3M,
+        },
+      };
+    });
+  }
+
+  /**
    * AI radar feed — momentum-based stock picks computed from live Yahoo Finance
    * price history (no mock data). One entry per symbol, bucketed by whichever
    * window (1D / 1W / 1M) produced the largest absolute move, then categorized
@@ -370,6 +486,34 @@ export class StocksService {
       universe.map((seed) => this.buildRadarEntry(seed)),
     );
     return entries.filter((e): e is RadarRecommendation => e !== null);
+  }
+
+  /**
+   * หุ้นที่เปิดใช้งานทั้งหมดจากตาราง stocks — ถ้าตารางว่าง/ต่อ DB ไม่ได้ ใช้ seed แทน
+   *
+   * เดิม logic นี้ถูกเขียนซ้ำใน buildListingUniverse() กับ buildRadarUniverse()
+   * แยกกัน ตัวนี้เป็นทางเข้าเดียวกันสำหรับผู้เรียกที่อยากได้ทั้งลิสต์แบบไม่ตัดโควตา
+   */
+  private async loadActiveStocks(): Promise<
+    { symbol: string; name: string; sector: string | null; exchange: string | null }[]
+  > {
+    try {
+      const rows = await this.prisma.stocks.findMany({
+        where: { is_active: true },
+        select: { symbol: true, name: true, sector: true, exchange: true },
+        orderBy: { symbol: 'asc' },
+      });
+      if (rows.length > 0) return rows;
+    } catch {
+      // ตกลงไปใช้ seed ด้านล่าง
+    }
+
+    return LISTING_SEED.map((seed) => ({
+      symbol: seed.symbol,
+      name: seed.name,
+      sector: seed.sector,
+      exchange: seed.exchange,
+    }));
   }
 
   /**

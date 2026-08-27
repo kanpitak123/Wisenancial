@@ -11,6 +11,15 @@ export interface ListingMetric {
   peRatio: number | null;
   dividendYield: number | null;
   volume: number;
+  /**
+   * ปริมาณซื้อขายเฉลี่ย 3 เดือน — วัดสภาพคล่องจริง ต่างจาก `volume` ที่เป็นของวันนี้
+   * วันเดียวและแกว่งแรงตามข่าว
+   *
+   * ตาราง listing ไม่ได้ใช้ (StockListingRow ไม่มีฟิลด์นี้) แต่ AI Picks ใช้คัด
+   * candidate ในขั้นแรก — เก็บไว้ตรงนี้เพราะ quote() คืนมาให้ฟรีอยู่แล้วในคำขอ
+   * เดียวกัน ไม่ต้องยิง Yahoo เพิ่มอีกรอบ
+   */
+  avgDailyVolume3M: number | null;
 }
 
 /** Real index-level stats for the Market Overview header (e.g. ^SET.BK). */
@@ -76,6 +85,40 @@ const riskFundamentalCache = new Map<
   { fundamental: RiskFundamental; expires: number }
 >();
 
+/**
+ * ตัวเลข "การเติบโต" ที่ AI Picks ใช้จัดอันดับ candidate
+ *
+ * ทั้งสองค่าเป็นสัดส่วน ไม่ใช่เปอร์เซ็นต์ (0.852 = +85.2%) — Yahoo คืนมาแบบนี้
+ * และเราส่งต่อดิบ ๆ โดยบอกหน่วยไว้ใน prompt แทนการคูณ 100 กลางทาง
+ */
+export interface GrowthFundamental {
+  /** รายได้เทียบไตรมาสเดียวกันปีก่อน (financialData.revenueGrowth) */
+  revenueGrowthYoY: number | null;
+  /** กำไรสุทธิ/รายได้ (financialData.profitMargins) */
+  netMargin: number | null;
+  /** ไตรมาสล่าสุดที่ตัวเลขข้างบนครอบคลุม รูปแบบ YYYY-MM-DD */
+  asOf: string | null;
+}
+
+/**
+ * ทำไมตัวนี้ยอมยิงทีละ symbol ทั้งที่ debtToEquity ในเฟส 5 ไม่ยอม
+ *
+ * revenueGrowth/profitMargins อยู่ใน quoteSummary() เท่านั้น ซึ่งรับ symbol เดียว
+ * (ยืนยันแล้ว: ส่ง array เข้าไปมันโยน error ตรง ๆ) — กำแพงเดียวกับ debtToEquity
+ *
+ * ต่างกันตรง "ใครเป็นเจ้าของรายชื่อ": holdings ของการ์ดความเสี่ยงเป็นพอร์ตส่วนตัว
+ * ของผู้ใช้แต่ละคน จำนวนหุ้นคุมไม่ได้ และแคชร่วมกันไม่ได้ ส่วน candidate ของ AI Picks
+ * เป็นชอร์ตลิสต์ที่เซิร์ฟเวอร์คัดเอง ~12 ตัว ทุกคนใช้ร่วมกัน และงบการเงินเปลี่ยน
+ * ไตรมาสละครั้ง → แคช 12 ชม. + จำกัดพร้อมกัน 5 = ~12 request ต่อ 12 ชม. ทั้งระบบ
+ * (วัดจริง 15 symbol ที่ concurrency 5 = 867ms, ล้มเหลว 0)
+ */
+const GROWTH_FUNDAMENTAL_TTL_MS = 12 * 60 * 60 * 1000;
+const GROWTH_FUNDAMENTAL_CONCURRENCY = 5;
+const growthFundamentalCache = new Map<
+  string,
+  { fundamental: GrowthFundamental; expires: number }
+>();
+
 function mapQuoteToListingMetric(quote: any): ListingMetric {
   const num = (value: unknown): number | null => {
     const n = Number(value);
@@ -93,6 +136,7 @@ function mapQuoteToListingMetric(quote: any): ListingMetric {
     dividendYield:
       yieldFraction !== null ? Number((yieldFraction * 100).toFixed(2)) : null,
     volume: num(quote?.regularMarketVolume) ?? 0,
+    avgDailyVolume3M: num(quote?.averageDailyVolume3Month),
   };
 }
 
@@ -418,6 +462,84 @@ export class MarketDataService {
         );
       }
     }
+
+    return out;
+  }
+
+  /**
+   * revenueGrowthYoY + netMargin + วันที่ข้อมูล สำหรับ candidate ของ AI Picks
+   *
+   * ยิงทีละ symbol เพราะ quoteSummary() ไม่รับหลายตัว แต่คุมไว้สามชั้น:
+   * แคช 12 ชม. (ดูคอมเมนต์ที่ GROWTH_FUNDAMENTAL_TTL_MS ว่าทำไมยาวได้), จำกัด
+   * พร้อมกัน 5, และผู้เรียกส่งมาแค่ชอร์ตลิสต์ที่คัดแล้ว ไม่ใช่ทั้ง universe
+   *
+   * symbol ที่ดึงไม่สำเร็จจะไม่อยู่ใน map — ผู้เรียกส่ง null ต่อให้โมเดลเห็นว่า
+   * "ไม่มีข้อมูล" ดีกว่าปล่อยให้มันเดาตัวเลขการเติบโตขึ้นมาเอง
+   */
+  async getGrowthFundamentals(
+    symbols: string[],
+  ): Promise<Map<string, GrowthFundamental>> {
+    const now = Date.now();
+    const out = new Map<string, GrowthFundamental>();
+    const toFetch: string[] = [];
+
+    for (const symbol of symbols) {
+      const cached = growthFundamentalCache.get(symbol);
+      if (cached && cached.expires > now) {
+        out.set(symbol, cached.fundamental);
+      } else if (!toFetch.includes(symbol)) {
+        toFetch.push(symbol);
+      }
+    }
+    if (toFetch.length === 0) return out;
+
+    const num = (value: unknown): number | null => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? Number(parsed.toFixed(4)) : null;
+    };
+    const isoDate = (value: unknown): string | null => {
+      if (!value) return null;
+      const date = value instanceof Date ? value : new Date(value as string);
+      return Number.isNaN(date.getTime())
+        ? null
+        : date.toISOString().slice(0, 10);
+    };
+
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(GROWTH_FUNDAMENTAL_CONCURRENCY, toFetch.length) },
+      async () => {
+        while (cursor < toFetch.length) {
+          const symbol = toFetch[cursor++];
+          try {
+            // ทั้งสอง module อยู่ในคำขอเดียวกัน — วันที่ข้อมูลจึงได้มาฟรี
+            const summary = (await yahooFinance.quoteSummary(symbol, {
+              modules: ['financialData', 'defaultKeyStatistics'],
+            })) as any;
+
+            const fundamental: GrowthFundamental = {
+              revenueGrowthYoY: num(summary?.financialData?.revenueGrowth),
+              netMargin: num(summary?.financialData?.profitMargins),
+              asOf: isoDate(summary?.defaultKeyStatistics?.mostRecentQuarter),
+            };
+
+            growthFundamentalCache.set(symbol, {
+              fundamental,
+              expires: now + GROWTH_FUNDAMENTAL_TTL_MS,
+            });
+            out.set(symbol, fundamental);
+          } catch (error) {
+            this.logger.warn(
+              `Yahoo growth-fundamentals failed for ${symbol}: ${
+                error instanceof Error ? error.message : error
+              }`,
+            );
+          }
+        }
+      },
+    );
+
+    await Promise.all(workers);
 
     return out;
   }

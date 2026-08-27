@@ -90,6 +90,15 @@ const recommendation = (symbol: string) => ({
   symbol,
   name: `${symbol} Corp.`,
   sector: 'Technology',
+  // backend เขียนทับสองฟิลด์นี้จาก candidate list เสมอ — fixture จึงต้องมีด้วย
+  asOf: '2026-06-30',
+  metrics: {
+    revenueGrowthYoY: 0.32,
+    netMargin: 0.18,
+    peRatio: 41.2,
+    currentPrice: 123.4,
+    avgDailyVolume3M: 12_000_000,
+  },
   reasoning: {
     growth: 'รายได้โต 30% ต่อปี',
     profit: 'อัตรากำไรขั้นต้นสูง',

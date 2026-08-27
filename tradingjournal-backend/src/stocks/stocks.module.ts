@@ -7,5 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 @Module({
   controllers: [StocksController],
   providers: [StocksService, MarketDataService, PrismaService],
+  // AiModule ใช้ StocksService สร้าง candidate list ให้ AI Picks
+  exports: [StocksService, MarketDataService],
 })
 export class StocksModule {}

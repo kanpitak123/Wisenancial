@@ -4,6 +4,10 @@ import {
 } from '@nestjs/common';
 import { AiRecommendationService } from './ai-recommendation.service';
 import type { AiManagerService } from './ai-manager.service';
+import type {
+  GrowthCandidate,
+  StocksService,
+} from '../stocks/stocks.service';
 
 /**
  * AI Picks (GET /ai/recommendations/growth) ไม่รับ modelId — เซิร์ฟเวอร์เลือกให้
@@ -50,6 +54,29 @@ const PICKS = [
   },
 ];
 
+/** candidate ปลอม — ต้องมี TSLA ไม่งั้นคำตอบข้างบนถูกตัดทิ้งตามกติกาใหม่ */
+const CANDIDATES: GrowthCandidate[] = [
+  'TSLA',
+  'NVDA',
+  'AAPL',
+  'PTT.BK',
+  'CPALL.BK',
+  'DELTA.BK',
+].map((symbol) => ({
+  symbol,
+  name: `${symbol} Inc.`,
+  sector: 'Technology',
+  exchange: symbol.endsWith('.BK') ? 'SET' : 'NASDAQ',
+  asOf: '2026-06-30',
+  metrics: {
+    revenueGrowthYoY: 0.32,
+    netMargin: 0.18,
+    peRatio: 41.2,
+    currentPrice: 123.4,
+    avgDailyVolume3M: 1_000_000,
+  },
+}));
+
 const providerUnavailable = (modelId: string) =>
   new ServiceUnavailableException({
     statusCode: 503,
@@ -69,6 +96,7 @@ const insufficientCredits = () =>
 function makeService(
   models: Array<typeof GEMINI>,
   behaviour: Record<string, unknown> = {},
+  candidates: GrowthCandidate[] = CANDIDATES,
 ) {
   const calls: string[] = [];
 
@@ -97,10 +125,21 @@ function makeService(
     ),
   } as unknown as AiManagerService;
 
+  const getGrowthCandidates = jest
+    .fn()
+    .mockResolvedValue(candidates);
+  const stocks = {
+    getGrowthCandidates,
+  } as unknown as StocksService;
+
   return {
-    service: new AiRecommendationService(manager),
+    service: new AiRecommendationService(
+      manager,
+      stocks,
+    ),
     calls,
     manager,
+    getGrowthCandidates,
   };
 }
 

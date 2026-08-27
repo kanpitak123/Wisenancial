@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { StockPurchasesModule } from '../stock-purchases/stock-purchases.module';
+import { StocksModule } from '../stocks/stocks.module';
 import { AiController } from './ai.controller';
 import { AiCompatibilityController } from './ai-compatibility.controller';
 import { AiService } from './ai.service';
@@ -20,6 +21,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     PrismaModule,
     AnalyticsModule,
     StockPurchasesModule,
+    StocksModule,
   ],
   controllers: [
     AiController,

@@ -92,9 +92,24 @@ export interface ReviewPortfolioPayload {
 }
 
 export interface StockRecommendation {
+  /**
+   * symbol/name/sector/asOf/metrics มาจาก candidate list ฝั่ง backend ไม่ใช่จาก
+   * คำตอบของโมเดล (backend เขียนทับให้แล้ว) — เชื่อถือเป็นตัวเลขจริงได้
+   */
   symbol: string;
   name: string;
   sector: string;
+  /** ไตรมาสล่าสุดที่ตัวเลขใน metrics ครอบคลุม (null = ไม่มีข้อมูล) */
+  asOf: string | null;
+  metrics: {
+    /** สัดส่วน ไม่ใช่เปอร์เซ็นต์ (0.32 = +32%) */
+    revenueGrowthYoY: number | null;
+    /** สัดส่วน ไม่ใช่เปอร์เซ็นต์ (0.18 = 18%) */
+    netMargin: number | null;
+    peRatio: number | null;
+    currentPrice: number;
+    avgDailyVolume3M: number | null;
+  };
   reasoning: {
     growth: string;
     profit: string;
