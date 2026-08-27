@@ -9,6 +9,7 @@ import {
   type AiModelOption,
 } from './ai-manager.service';
 import {
+  concisenessRule,
   investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
@@ -93,6 +94,11 @@ export class AiRecommendationService {
               outputLanguageRule(outputLanguage),
               investmentGuardrail(),
               screeningOnlyGuardrail(),
+              concisenessRule(),
+              // schema ที่นี่ซ้อนลึกที่สุดในระบบ (5 หุ้น × reasoning 4 ช่อง + สรุป)
+              // ถ้าโมเดลอ่านโควตาเป็นของทั้ง reasoning มันจะเทไปที่ growth ช่องเดียว
+              // แล้วอีกสามช่องเหลือประโยคเดียวห้วน ๆ — การ์ดดูเหมือนข้อมูลขาด
+              'Each of the four reasoning sub-fields gets its own budget: give growth, profit, customerBase and liquidity comparable weight instead of spending it all on the first one.',
               'Only reason about the stocks listed in "candidates". Never return, name, or compare against a symbol that is not in that list, even if you know of a better one.',
               'Use only the numbers in candidates[].metrics. A null metric means the data is unavailable — say so plainly instead of recalling or estimating it from your own knowledge.',
               'revenueGrowthYoY and netMargin are fractions, not percentages (0.32 means +32%). Convert them for the reader.',
@@ -104,7 +110,14 @@ export class AiRecommendationService {
               task: 'Rank the 4-5 strongest growth candidates from the list below and explain each one using only the metrics given.',
               candidates,
             }),
-            maxOutputTokens: 1800,
+            /**
+             * สูงสุดในระบบเพราะ output ก้อนใหญ่สุด: 5 หุ้น × (reasoning 4 ช่อง +
+             * aiSummary) = 25 ฟิลด์ข้อความในคำตอบเดียว
+             *
+             * แถมโมเดลตัวแรกคือ gemini ซึ่งหัก thinking token จากเพดานเดียวกันนี้
+             * (ดู gemini.provider.ts) เพดานที่พอดีเป๊ะจึงกลายเป็นไม่พอเงียบ ๆ
+             */
+            maxOutputTokens: 2400,
           });
         servedBy = model;
         break;

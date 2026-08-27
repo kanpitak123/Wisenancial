@@ -131,4 +131,16 @@ describe('AiRiskService — ปัจจัยพื้นฐานที่ส�
     const { rules } = JSON.parse(executeAiRequest.mock.calls[0][0].prompt);
     expect(rules.concentration).toBe('single holding weight >25%');
   });
+
+  it('คุมความยาวรายฟิลด์ และเพดาน token พอสำหรับ analysisSummary + keyRiskFactors', async () => {
+    const { service, executeAiRequest } = makeService();
+
+    await service.analyze(1, [{ symbol: 'AAPL', quantity: 1 }], 'groq-llama3');
+
+    const { systemPrompt, maxOutputTokens } =
+      executeAiRequest.mock.calls[0][0];
+
+    expect(systemPrompt).toContain('applies to every field on its own');
+    expect(maxOutputTokens).toBeGreaterThanOrEqual(1600);
+  });
 });

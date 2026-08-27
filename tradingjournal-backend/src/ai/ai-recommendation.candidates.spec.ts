@@ -211,4 +211,25 @@ describe('AiRecommendationService — candidate list ของจริง', () 
       'A null metric means the data is unavailable',
     );
   });
+
+  /**
+   * การ์ดหนึ่งใบมีช่องเหตุผล 4 ช่องเท่า ๆ กัน ถ้าโมเดลเข้าใจว่า ~40 คำเป็นโควตา
+   * ของทั้ง reasoning มันจะเทไปที่ growth ช่องเดียวแล้วอีกสามช่องเหลือห้วน ๆ
+   * ผู้ใช้เห็นเป็นการ์ดที่ข้อมูลขาด ทั้งที่จริงคือถูกจัดสรรผิด
+   */
+  it('คุมความยาวแยกรายช่อง ไม่ให้เทโควตาลงช่องแรกช่องเดียว', async () => {
+    const { service, executeAiRequest } = makeService([reply('NVDA')]);
+
+    await service.getGrowthRecommendations(1);
+
+    const { systemPrompt, maxOutputTokens } = sentPayload(executeAiRequest);
+
+    expect(systemPrompt).toContain('applies to every field on its own');
+    expect(systemPrompt).toContain(
+      'Each of the four reasoning sub-fields gets its own budget',
+    );
+    // 5 หุ้น × (4 ช่อง + สรุป) = 25 ฟิลด์ข้อความ และ gemini หัก thinking token
+    // จากเพดานเดียวกันนี้ — จุดนี้ต้องสูงกว่าจุดอื่นเสมอ
+    expect(maxOutputTokens).toBeGreaterThanOrEqual(2400);
+  });
 });

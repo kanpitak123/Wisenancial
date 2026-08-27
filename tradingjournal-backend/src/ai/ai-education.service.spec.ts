@@ -70,4 +70,18 @@ describe('AiEducationService — system prompt', () => {
       'Output language: English',
     );
   });
+
+  /**
+   * quiz ไม่ได้รับ investmentGuardrail (เทสด้านบนล็อกไว้) แต่ conciseness เป็นคนละ
+   * เรื่องกัน — explanation เป็นฟรีเท็กซ์ที่ยาวเกินได้จริง จึงต้องมีบรรทัดคุมความยาว
+   */
+  it('มีบรรทัดคุมความยาว ถึงจะไม่มี guardrail เรื่องคำแนะนำลงทุนก็ตาม', async () => {
+    const { service, executeAiRequest } = makeService();
+
+    await service.generateQuiz(1, 'Order types', 'Market vs limit orders');
+
+    expect(executeAiRequest.mock.calls[0][0].systemPrompt).toContain(
+      'about 40 words at most',
+    );
+  });
 });

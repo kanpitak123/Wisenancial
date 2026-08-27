@@ -112,6 +112,42 @@ describe('AiService', () => {
     );
   });
 
+  /**
+   * เพดาน token ถูกขยับขึ้นทุกจุดเพื่อกันคำตอบโดนตัดกลางคัน ถ้าไม่มีบรรทัดคุมความยาว
+   * คู่กัน โมเดล verbose จะใช้ที่ว่างนั้นเขียนยาวขึ้นเฉย ๆ — ผู้ใช้จ่ายเครดิตตาม
+   * output token ที่ใช้จริง เพดานที่สูงขึ้นจึงมีราคาถ้าปล่อยให้เขียนเต็มเพดาน
+   */
+  it('system prompt ของ analyzeChart คุมความยาวรายฟิลด์ ไม่ใช่โควตารวม', async () => {
+    const executeAiRequest = jest.fn().mockResolvedValue({
+      data: { insight: 'ok' },
+      model: 'groq-llama3',
+      creditsCharged: 1,
+      creditsRemaining: 9,
+    });
+
+    const service = new AiService(
+      {} as any,
+      { executeAiRequest } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.analyzeChart(1, {
+      portfolioType: 'TRADER',
+      chartType: 'equity_curve',
+      data: {},
+      modelId: 'groq-llama3',
+    });
+
+    const { systemPrompt, maxOutputTokens } =
+      executeAiRequest.mock.calls[0][0];
+
+    expect(systemPrompt).toContain('about 40 words at most');
+    expect(systemPrompt).toContain('applies to every field on its own');
+    expect(maxOutputTokens).toBeGreaterThanOrEqual(1200);
+  });
+
   it('exposes a public news fallback for legacy NewsService', () => {
     const service = new AiService(
       {} as any,

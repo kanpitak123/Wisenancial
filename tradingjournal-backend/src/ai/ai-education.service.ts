@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
 import {
+  concisenessRule,
   outputLanguageRule,
   resolveOutputLanguage,
 } from './ai-prompt.shared';
@@ -29,6 +30,10 @@ export class AiEducationService {
       systemPrompt: [
         'You create finance education quizzes.',
         outputLanguageRule(outputLanguage),
+        // ยังไม่ใส่ investmentGuardrail() ที่นี่ (เป็นเนื้อหาบทเรียน ไม่ใช่คำแนะนำลงทุน
+        // — มีเทสล็อกไว้) แต่ conciseness ไม่เกี่ยวกับเรื่องนั้น explanation เป็น
+        // ฟรีเท็กซ์ที่ยาวเกินได้จริง
+        concisenessRule(),
         'Return valid JSON only.',
       ].join('\n'),
       prompt: JSON.stringify({
@@ -46,7 +51,7 @@ export class AiEducationService {
           ],
         },
       }),
-      maxOutputTokens: 1200,
+      maxOutputTokens: 1600,
     });
 
     const quiz = result.data;

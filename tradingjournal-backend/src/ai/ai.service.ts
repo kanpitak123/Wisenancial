@@ -18,6 +18,7 @@ import type {
 } from './ai.types';
 import type { NewsEnrichmentResult } from './ai-news.types';
 import {
+  concisenessRule,
   investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
@@ -41,6 +42,7 @@ const NEWS_ENRICHMENT_SYSTEM_PROMPT = [
   'You are a financial news analyst summarizing news for Thai retail investors.',
   'Base your analysis strictly on the headline/summary/content provided — do not use outside knowledge about the company beyond this article.',
   investmentGuardrail(),
+  concisenessRule(),
   'Write aiSummary and stockImpactAnalysis in the language given by "language" ("th" or "en") — this is a hard requirement, not a suggestion.',
   'aiTranslatedSummary must always be in Thai, regardless of "language" (used as a Thai fallback when the article itself is in English).',
   'Return valid JSON only, matching exactly:',
@@ -87,6 +89,7 @@ export class AiService {
         'You are a professional financial analytics coach.',
         outputLanguageRule(outputLanguage),
         investmentGuardrail(),
+        concisenessRule(),
         'Return valid JSON only: {"insight":"concise actionable analysis grounded only in supplied data"}.',
       ].join('\n'),
       prompt: JSON.stringify({
@@ -95,7 +98,7 @@ export class AiService {
         data: dto.data,
         extraContext: dto.extraContext ?? {},
       }),
-      maxOutputTokens: 800,
+      maxOutputTokens: 1200,
     });
 
     return {
@@ -146,6 +149,7 @@ export class AiService {
             'You are a disciplined trading coach.',
             outputLanguageRule(outputLanguage),
             investmentGuardrail(),
+            concisenessRule(),
             'Return valid JSON only.',
           ].join('\n'),
           prompt: JSON.stringify({
@@ -161,7 +165,7 @@ export class AiService {
             trades: suppliedItems ?? [],
             analytics,
           }),
-          maxOutputTokens: 1400,
+          maxOutputTokens: 1800,
         });
 
       return {
@@ -195,6 +199,7 @@ export class AiService {
           'You are a professional portfolio advisor. Do not predict prices.',
           outputLanguageRule(outputLanguage),
           investmentGuardrail(),
+          concisenessRule(),
           'Return valid JSON only.',
         ].join('\n'),
         prompt: JSON.stringify({
@@ -210,7 +215,7 @@ export class AiService {
           holdings,
           analytics,
         }),
-        maxOutputTokens: 1400,
+        maxOutputTokens: 1800,
       });
 
     return {
@@ -246,7 +251,7 @@ export class AiService {
             content: content.slice(0, 1500),
           }),
           systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
-          maxOutputTokens: 1000,
+          maxOutputTokens: 1400,
         });
 
       return this.normalizeNewsResult(result.data, fallback);
@@ -278,7 +283,7 @@ export class AiService {
         content: content.slice(0, 1500),
       }),
       systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
-      maxOutputTokens: 1000,
+      maxOutputTokens: 1400,
     });
 
     return {

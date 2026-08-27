@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
 import {
+  concisenessRule,
   investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
@@ -34,6 +35,7 @@ export class AiRiskService {
           'You are a portfolio risk analyst. Rely only on supplied data.',
           outputLanguageRule(outputLanguage),
           investmentGuardrail(),
+          concisenessRule(),
           // กันหลอน: ก่อนหน้านี้ทุกฟิลด์ปัจจัยพื้นฐานเป็น null เสมอ (หน้าบ้านไม่เคยส่งมา)
           // โมเดลจึงเดาค่าจากชื่อหุ้นในความจำเก่าแล้วอ้างว่าประเมินตามกติกาที่ให้ไป
           'A null field means the data is unavailable — never infer, recall, or estimate it from your own knowledge of the company.',
@@ -57,7 +59,7 @@ export class AiRiskService {
           },
           holdings: normalized,
         }),
-        maxOutputTokens: 1200,
+        maxOutputTokens: 1600,
       });
 
     const data = result.data;

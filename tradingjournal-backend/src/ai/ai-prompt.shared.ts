@@ -66,6 +66,26 @@ export function investmentGuardrail(): string {
  * ต่อท้าย investmentGuardrail() ไม่ใช่แทนที่ เพราะงานของมันคือเรียงลำดับหุ้นให้ดู
  * ซึ่งโดยธรรมชาติชวนให้โมเดลบอกว่าตัวไหน "ดีกว่า" — ต้องปิดช่องนั้นเพิ่มอีกชั้น
  */
+/**
+ * บรรทัดคุมความยาวของทุกฟิลด์ข้อความ
+ *
+ * เพดาน maxOutputTokens ถูกขยับขึ้นทุกจุดในเฟสนี้เพื่อกันคำตอบโดนตัดกลางคัน แต่
+ * เพดานที่สูงขึ้นอย่างเดียวแปลว่าโมเดล verbose จะเขียนยาวขึ้นจริง ๆ ไม่ได้ตอบดีขึ้น
+ * — ผู้ใช้ต้องอ่านเยอะขึ้นและจ่ายเครดิตตาม output token ที่ใช้จริง สองอย่างนี้จึงต้อง
+ * มาคู่กัน: เพดานกันพัง + บรรทัดนี้กันเฟ้อ
+ *
+ * ย้ำว่า "นับแยกรายฟิลด์" เพราะ schema ที่ซ้อนกัน (reasoning ของ AI Picks มี 4
+ * sub-field) ถ้าโมเดลตีความว่าเป็นโควตารวมของทั้ง object มันจะทุ่มไปที่ฟิลด์แรก
+ * ฟิลด์เดียวแล้วเหลือที่เหลือสั้นจนไม่มีเนื้อหา
+ */
+export function concisenessRule(): string {
+  return [
+    'Keep each text field concise — about 40 words at most.',
+    'That budget applies to every field on its own, including each sub-field of a nested object; it is not a total shared across them.',
+    'For fields that are arrays of strings, keep each item to one short sentence.',
+  ].join(' ');
+}
+
 export function screeningOnlyGuardrail(): string {
   return "This is educational screening output only, not personalized investment advice. Do not imply any candidate is a 'good buy' or better than the others beyond what the supplied metrics show.";
 }
