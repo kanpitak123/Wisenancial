@@ -11,6 +11,7 @@ import {
   type AiJsonResult,
   type IAiProvider,
 } from './ai-provider.interface';
+import { API_KEY_FORMATS, resolveApiKey } from './api-key.util';
 
 interface OpenAiChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -30,10 +31,11 @@ export class OpenAiProvider implements IAiProvider {
   private readonly http: AxiosInstance;
 
   constructor() {
-    this.apiKey = process.env.OPENAI_API_KEY;
-    if (!this.apiKey) {
-      this.logger.warn('OPENAI_API_KEY not set; OpenAI models are unavailable');
-    }
+    this.apiKey = resolveApiKey(
+      process.env.OPENAI_API_KEY,
+      API_KEY_FORMATS.openai,
+      this.logger,
+    );
     this.http = axios.create({
       baseURL: process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
       timeout: AI_REQUEST_TIMEOUT_MS,

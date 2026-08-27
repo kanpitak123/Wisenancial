@@ -11,6 +11,7 @@ import {
   type AiJsonResult,
   type IAiProvider,
 } from './ai-provider.interface';
+import { API_KEY_FORMATS, resolveApiKey } from './api-key.util';
 
 interface GeminiResponse {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -31,10 +32,11 @@ export class GeminiProvider implements IAiProvider {
   private readonly http: AxiosInstance;
 
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY;
-    if (!this.apiKey) {
-      this.logger.warn('GEMINI_API_KEY not set; Gemini models are unavailable');
-    }
+    this.apiKey = resolveApiKey(
+      process.env.GEMINI_API_KEY,
+      API_KEY_FORMATS.gemini,
+      this.logger,
+    );
     this.http = axios.create({
       baseURL: 'https://generativelanguage.googleapis.com/v1beta',
       timeout: AI_REQUEST_TIMEOUT_MS,

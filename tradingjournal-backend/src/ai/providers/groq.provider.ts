@@ -11,6 +11,7 @@ import {
   type AiJsonResult,
   type IAiProvider,
 } from './ai-provider.interface';
+import { API_KEY_FORMATS, resolveApiKey } from './api-key.util';
 
 @Injectable()
 export class GroqProvider implements IAiProvider {
@@ -20,11 +21,12 @@ export class GroqProvider implements IAiProvider {
   private readonly client: Groq | null;
 
   constructor() {
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = resolveApiKey(
+      process.env.GROQ_API_KEY,
+      API_KEY_FORMATS.groq,
+      this.logger,
+    );
     this.client = apiKey ? new Groq({ apiKey, timeout: AI_REQUEST_TIMEOUT_MS }) : null;
-    if (!this.client) {
-      this.logger.warn('GROQ_API_KEY not set; Groq models are unavailable');
-    }
   }
 
   isConfigured(): boolean {

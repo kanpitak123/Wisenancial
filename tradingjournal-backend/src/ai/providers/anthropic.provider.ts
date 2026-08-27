@@ -11,6 +11,7 @@ import {
   DEFAULT_TEMPERATURE,
   parseJsonResponse,
 } from './ai-provider.interface';
+import { API_KEY_FORMATS, resolveApiKey } from './api-key.util';
 
 @Injectable()
 export class AnthropicProvider implements IAiProvider {
@@ -20,7 +21,13 @@ export class AnthropicProvider implements IAiProvider {
   private readonly client: Anthropic | null;
 
   constructor() {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // ตรวจรูปแบบด้วย ไม่ใช่แค่ "มีค่า" — ช่องนี้เคยถูกใส่คีย์ของ Groq ไว้จริง
+    // แล้ว Claude ก็โผล่ในตัวเลือกให้กดทั้งที่ยิงไม่ผ่านสักครั้ง
+    const apiKey = resolveApiKey(
+      process.env.ANTHROPIC_API_KEY,
+      API_KEY_FORMATS.anthropic,
+      this.logger,
+    );
     // timeout เดียวกับอีก 3 เจ้า — SDK ของ Anthropic ตั้ง default ไว้ 10 นาที
     // ซึ่งนานเกินกว่าที่ ai-manager จะรอไหวตอน fallback ข้าม provider
     this.client = apiKey
