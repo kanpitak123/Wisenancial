@@ -174,7 +174,11 @@ const currentPriceInfo = computed(() => {
   };
 });
 
-// ตรวจจับ Pattern พื้นฐาน
+/**
+ * ตรวจจับ Pattern พื้นฐาน — เทียบแท่งล่าสุดกับแท่งก่อนหน้าด้วยเงื่อนไขตรง ๆ
+ * (engulfing / doji) ไม่ใช่ผลจากโมเดลภาษา ป้ายบนหน้าจอเดิมเขียนว่า "AI Detected"
+ * ซึ่งทำให้เข้าใจผิด จึงเหลือแค่ "Pattern Detected"
+ */
 const detectedPattern = computed(() => {
   const data = assetStore.chartData;
   if (!data || data.length < 2) return 'Scanning...';
@@ -241,7 +245,7 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
           Asset Explorer
         </div>
         <div class="text-subtitle2 text-muted q-mt-xs">
-          World market data & AI technical analysis
+          World market data & technical analysis
         </div>
       </div>
 
@@ -337,8 +341,8 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
               </span>
             </div>
             <q-space />
-            <div class="ai-pattern-badge">
-              <q-icon name="auto_awesome" color="warning" /> AI Detected:
+            <div class="pattern-badge">
+              <q-icon name="auto_awesome" color="warning" /> Pattern Detected:
               <b>{{ detectedPattern }}</b>
             </div>
           </div>
@@ -451,7 +455,7 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 }
 
 /* Badges */
-.ai-pattern-badge {
+.pattern-badge {
   background: rgba(245, 158, 11, 0.1);
   color: #f59e0b;
   padding: 8px 16px;
