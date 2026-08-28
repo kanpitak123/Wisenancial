@@ -1,7 +1,7 @@
 # Wisenancial — สถานะก่อนเปิดใช้งานจริง
 
 **ตรวจเมื่อ**: 2026-08-28 (ชื่อไฟล์ใช้ตามที่ Rem ระบุ)
-**อัปเดตล่าสุด**: 2026-08-28 — ปิดชุด security hardening 4 ข้อ (E1, C4/A4, A3, C2+C3) ดูหัวข้อ 7
+**อัปเดตล่าสุด**: 2026-08-28 — ลบบัญชีทดสอบ `test@gmail.com` / `tester@gmail.com` ออกจาก Supabase จริง (A7 ปิดแล้ว) · ก่อนหน้านั้น ปิดชุด security hardening 4 ข้อ (E1, C4/A4, A3, C2+C3) ดูหัวข้อ 7
 **แทนที่**: รายงานวันที่ 2026-08-20 (`9f77156` เป็น commit สุดท้ายที่รายงานนั้นเห็น)
 **ขอบเขต**: ไล่ commit 17 ตัวหลัง `9f77156` + ตรวจสถานะจริงของข้อที่ Rem ระบุมาทีละข้อ
 
@@ -96,22 +96,46 @@
 
 `grep "^JWT_SECRET" .env` → ไม่พบ เหลือแค่ `JWT_ACCESS_SECRET` (128 ตัว) กับ `JWT_REFRESH_SECRET` (128 ตัว) ซึ่งยาวพอ
 
-### A7. QA test user ค้างใน Supabase — ✅ ปิดแล้ว (บัญชีที่ระบุ) / 🔴 มีตัวอื่นค้างอยู่
+### A7. QA test user ค้างใน Supabase — ✅ ปิดแล้ว (2026-08-28)
 
-ยิง Prisma เข้า Supabase `oheqnzvujkmtemgubhnz` จริง ตาราง `users` มี **4 แถวทั้งหมด**:
+**ลบ `test@gmail.com` (id 2) และ `tester@gmail.com` (id 6) ออกจาก Supabase `oheqnzvujkmtemgubhnz` จริงแล้ว** (Rem อนุมัติ) เหลือแต่บัญชี QA ที่ยังต้องใช้ทดสอบ paid-tier lock/upgrade flow
 
-| id | email | tier |
-|---|---|---|
-| 2 | `test@gmail.com` | — |
-| 6 | `tester@gmail.com` | PACK_279 |
-| 10 | `qa@wisenancial.test` | PACK_279 |
-| 11 | `qafree@wisenancial.test` | — |
+**สถานะตาราง `users` ตอนนี้ — 2 แถว:**
+
+| id | email | tier | สถานะ |
+|---|---|---|---|
+| ~~2~~ | ~~`test@gmail.com`~~ | — | 🗑️ ลบแล้ว 2026-08-28 |
+| ~~6~~ | ~~`tester@gmail.com`~~ | ~~PACK_279~~ | 🗑️ ลบแล้ว 2026-08-28 |
+| 10 | `qa@wisenancial.test` | PACK_279 | ✅ เก็บไว้ (ทดสอบ paid tier) |
+| 11 | `qafree@wisenancial.test` | — | ✅ เก็บไว้ (ทดสอบ free tier + upgrade flow) |
+
+**ขั้นตอนที่ทำ (ตรวจก่อนลบ ไม่ได้ลบตรง ๆ):**
+
+1. **ยืนยัน id จาก DB จริง** — query ด้วย `email` ไม่ได้ใช้ id จากรายงานเก่า ได้ `id 2` / `id 6` ตรงกับที่เคยเจอ สคริปต์มี guard: ถ้า id ที่ resolve ได้ไม่ใช่ `[2, 6]` เป๊ะ หรือมีบัญชี KEEP หลุดเข้ามาในชุดที่จะลบ → throw ทิ้งก่อนแตะ DB
+2. **ตรวจ `onDelete` ครบทุก relation** — relation ที่ชี้มาที่ `users` **เป็น `Cascade` ทั้ง 20 ตัว** (`subscriptions`, `refresh_tokens`, `portfolios`, `trades`, `posts`, `comments`, `post_likes`, `share_logs`, `chat_messages`, `user_missions`, `point_transactions`, `token_transactions`, `user_pinned_news`, `user_pinned_market_news`, `dividends`, `watchlist`, `lesson_progress`, `readiness_assessments`, `coach_sessions`, `ai_usage_logs`) — ไม่มี `Restrict` ที่ชี้มาที่ `users` เลย
+   - ตรวจ FK ระดับ DB จริงด้วย (`pg_constraint`) ไม่ได้เชื่อแค่ `schema.prisma` → ตรงกัน FK ที่ไม่ใช่ cascade ในทั้ง DB มีแค่ `subscriptions→plans` (RESTRICT), `users→plans` (SET NULL), `dividends→portfolios` (SET NULL), `stock_sale_allocations→stock_purchases` (RESTRICT)
+   - **จุดเดียวที่อันตราย**: `stock_sale_allocations → stock_purchases` เป็น `Restrict` ถ้ามีแถวค้างจะบล็อกการลบ `portfolios` ทั้งสาย → query แล้วได้ **0 แถว** (ทั้งของ portfolio ตัวเอง และจาก portfolio อื่นที่อาจชี้ข้ามมา) จึงไม่บล็อก
+   - หมายเหตุ: ไม่มีตาราง `ai_credit_transactions` ในสคีมา ตัวที่ทำหน้าที่นี้จริงคือ `token_transactions` กับ `ai_usage_logs`
+3. **นับข้อมูลลูกจริงก่อนลบ — 85 แถว** ใน 11 ตาราง (อีก 18 ตารางที่เกี่ยวข้อง = 0 แถว)
+
+   | ตาราง | แถว | | ตาราง | แถว |
+   |---|---|---|---|---|
+   | `user_missions` | 41 | | `portfolios` | 4 |
+   | `refresh_tokens` | 26 | | `trades` | 3 |
+   | `records` | 4 | | `stock_purchases` | 2 |
+   | `goals` | 1 | | `posts` | 1 |
+   | `post_images` | 1 | | `chat_messages` | 1 |
+   | `coach_sessions` | 1 | | | |
+
+4. **ลบด้วย `prisma.$transaction([...])` ก้อนเดียว** 29 `deleteMany` เรียงแบบ leaf-first (ปิด edge `Restrict` ก่อนเป็นอันดับแรก แล้วค่อยไล่ `stock_sales` → `stock_purchases` → `records`/`goals` → `trades` → `posts` → `portfolios` → ตารางระดับ user → `users`) ถ้าพังกลางทาง transaction จะ rollback ทั้งก้อน ไม่เหลือข้อมูลครึ่ง ๆ กลาง ๆ — รันผ่าน `DIRECT_URL` ไม่ผ่าน pgbouncer
+   **ลบจริง 87 แถว** = 85 แถวลูก + 2 แถว `users` ตรงกับที่นับไว้เป๊ะ
+5. **ยืนยันหลังลบ** — `users` ที่ email/id เดิม = `[]`, ตาราง `users` ทั้งตารางเหลือ `id 10` กับ `id 11`, กวาดหา orphan ที่ยังชี้มาที่ `user_id 2/6` หรือ `portfolio_id 1/6/7/8` = **0 ทุกตาราง**
+   บัญชี QA ไม่ถูกกระทบ: `qa@wisenancial.test` (PACK_279, ai_token 4978, points 1000) และ `qafree@wisenancial.test` (free, ai_token 5000, points 1000) ยังครบ พร้อมข้อมูลลูก — portfolios 2, trades 15, stock_purchases 4, records 19, user_missions 5, refresh_tokens 31
 
 - `qa_inv_1786912308@example.com` และ `qa_tr_*` ที่รายงานเดิมระบุ — **ไม่มีแล้ว ลบเรียบร้อย** (ค้นด้วย `qa_inv_`, `qa_tr_`, `@example.com` = 0 แถว)
-- แต่ยังเหลือ **4 บัญชีทดสอบ ซึ่งคือทั้งตาราง** — `id 6` กับ `id 10` เป็น **PACK_279 (จ่ายเงินแล้ว) ที่ไม่ได้จ่ายเงินจริง**
-- `test@gmail.com` / `tester@gmail.com` เป็นโดเมนจริงที่คนอื่นอาจเป็นเจ้าของ ไม่ควรค้างในโปรดักชัน
+- ประเด็น "โดเมนจริงที่คนอื่นอาจเป็นเจ้าของค้างในโปรดักชัน" (`test@gmail.com` / `tester@gmail.com`) **ปิดแล้ว**
 
-**หมายเหตุ**: `qa@wisenancial.test` เป็นบัญชี QA ที่ยังใช้ทดสอบอยู่ (มีบันทึกรหัสไว้) ถ้าจะลบต้องรู้ตัวว่าจะเสียบัญชีทดสอบไปด้วย
+**ยังเหลือ**: `qa@wisenancial.test` เป็น `PACK_279` โดยไม่ได้จ่ายเงินจริง — ตั้งใจให้เป็นแบบนั้นเพื่อทดสอบ paid tier ต้องลบหรือ downgrade ก่อนเปิดใช้งานจริง (ผูกกับข้อ B เรื่องนิยาม paid tier)
 
 ### A8. Share card (chart + QR) "verify ผ่านแล้วรอ commit" — ✅ commit แล้ว
 
@@ -257,7 +281,8 @@ C2 กับ C3 รวมเป็น commit เดียวเพราะแ�
 
 ### บล็อกการเปิดใช้งานมากที่สุดตอนนี้
 
-3. **ล้างบัญชีทดสอบ + ตัดสินใจเรื่อง tier** (A7, B) — ตาราง `users` มี 4 แถวและ **ทั้ง 4 เป็นบัญชีทดสอบ** สองในนั้นเป็น PACK_279 ที่ไม่ได้จ่ายเงินจริง ควรล้างพร้อมกับตอบว่า "หน้าไหนเป็นของ paid tier" (`WorkspaceNavLink.paid` ที่ยังไม่มีลิงก์ไหนใช้) — สองเรื่องนี้คือเรื่องเดียวกัน จะทดสอบ tier ให้ถูกไม่ได้ถ้ายังไม่รู้ว่า tier กั้นอะไร
+3. **ตัดสินใจเรื่อง tier** (B) — ~~ล้างบัญชีทดสอบ (A7)~~ **ทำแล้ว 2026-08-28**: `test@gmail.com` / `tester@gmail.com` ถูกลบออกจาก Supabase จริง (87 แถวใน transaction เดียว) ตาราง `users` เหลือ 2 แถวคือบัญชี QA ที่ตั้งใจเก็บไว้
+   ที่ยังค้างคือครึ่งหลังของข้อนี้ — ต้องตอบว่า **"หน้าไหนเป็นของ paid tier"** (`WorkspaceNavLink.paid` ที่ยังไม่มีลิงก์ไหนใช้) และตัดสินใจว่า `qa@wisenancial.test` ที่เป็น PACK_279 โดยไม่ได้จ่ายเงินจริงจะเอาอย่างไรตอนเปิดใช้งาน (ลบ / downgrade / คงไว้เป็นบัญชีภายใน) จะทดสอบ tier ให้ถูกไม่ได้ถ้ายังไม่รู้ว่า tier กั้นอะไร
 
 หลังปิดชุด hardening นี้แล้ว **ข้อ 3 คือของที่เหลืออยู่ชิ้นเดียวที่กระทบผู้ใช้จริงโดยตรง** ข้อที่เหลือด้านล่างเป็นเรื่องคุณภาพของกระบวนการ ไม่ใช่สิ่งที่ผู้ใช้เจอ
 
