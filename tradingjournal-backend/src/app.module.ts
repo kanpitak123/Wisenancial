@@ -27,6 +27,7 @@ import { StocksModule } from './stocks/stocks.module';
 import { MarketInsightsModule } from './market-insights/market-insights.module';
 import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { BrokersModule } from './brokers/brokers.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     CoachModule,
     StocksModule,
     MarketInsightsModule,
+    BrokersModule,
   ],
   controllers: [AppController],
   providers: [

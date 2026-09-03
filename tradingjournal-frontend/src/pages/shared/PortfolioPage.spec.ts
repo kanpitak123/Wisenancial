@@ -4,8 +4,10 @@ import { QLayout, QPageContainer } from 'quasar';
 import { h } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePortfolioStore } from 'stores/PortfolioStore';
+import { useBrokerConnectionStore } from 'stores/BrokerConnectionStore';
 import PortfolioPage from './PortfolioPage.vue';
-import type { PortfolioQuota, PortfolioType } from 'src/types/portfolio.types';
+import type { Portfolio, PortfolioQuota, PortfolioType } from 'src/types/portfolio.types';
+import type { BrokerConnection } from 'src/types/broker-connection.types';
 
 // หน้านี้ไม่ได้เทส data-fetching — ตัด service ออกให้ mount ได้โดยไม่แตะ axios
 vi.mock('src/services/portfolio.service', () => ({
@@ -20,12 +22,70 @@ vi.mock('src/services/portfolio.service', () => ({
   getPortfolioErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
+const brokerList = vi.fn().mockResolvedValue([]);
+vi.mock('src/services/broker-connection.service', () => ({
+  brokerConnectionService: {
+    list: (...args: unknown[]) => brokerList(...args),
+    create: vi.fn(),
+    revoke: vi.fn(),
+    rotateKey: vi.fn(),
+    remove: vi.fn(),
+  },
+  getBrokerConnectionErrorMessage: (_error: unknown, fallback: string) => fallback,
+}));
+
 // useWorkspace ดึง router เข้ามา ซึ่งเทสนี้ไม่ได้ติดตั้ง
 vi.mock('src/composables/useWorkspace', () => ({
   useWorkspace: () => ({
     meta: { value: { label: 'Stock', icon: 'trending_up', color: 'teal-5' } },
   }),
 }));
+
+// broker badge navigate ผ่าน useRouter().push() — เทสนี้ไม่ได้ติดตั้ง router จริง (แบบเดียวกับ
+// WatchlistPage.spec.ts)
+const push = vi.fn();
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+}));
+
+function portfolioFixture(overrides: Partial<Portfolio> = {}): Portfolio {
+  return {
+    id: 1,
+    user_id: 1,
+    name: 'Test Portfolio',
+    initial_balance: 10000,
+    current_balance: 10000,
+    portfolio_type: 'TRADER',
+    investor_cost_method: 'FIFO',
+    currency: 'USD',
+    icon: null,
+    color: null,
+    is_default: true,
+    created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function brokerConnectionFixture(overrides: Partial<BrokerConnection> = {}): BrokerConnection {
+  return {
+    id: 1,
+    user_id: 1,
+    portfolio_id: null,
+    broker_type: 'MT5',
+    external_account_id: null,
+    broker_server: null,
+    oauth_token_expires_at: null,
+    status: 'ACTIVE',
+    last_heartbeat_at: null,
+    last_sync_at: null,
+    last_snapshot_sequence: null,
+    created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-01T00:00:00Z',
+    deleted_at: null,
+    ...overrides,
+  };
+}
 
 function quota(max: number, trader: number, investor: number): PortfolioQuota {
   const used = trader + investor;
@@ -44,12 +104,12 @@ function quota(max: number, trader: number, investor: number): PortfolioQuota {
  * q-page ต้องอยู่ใต้ q-layout > q-page-container ไม่งั้น Quasar จะไม่ render อะไรเลย
  * ("QPage needs to be a deep child of QLayout")
  */
-async function mountPage(preset: PortfolioQuota | null) {
+async function mountPage(preset: PortfolioQuota | null, activeType: PortfolioType = 'INVESTOR') {
   const store = usePortfolioStore();
 
   store.hasLoadedAll = true;
   store.quota = preset;
-  store.activeType = 'INVESTOR' as PortfolioType;
+  store.activeType = activeType;
 
   // ใช้ render function ไม่ใช่ template string — vitest ใช้ Vue รุ่น runtime-only
   // ที่ compile template ตอนรันไม่ได้ และ q-* ก็ไม่ได้ถูก register แบบ global
@@ -166,5 +226,87 @@ describe('PortfolioPage — แถบโควต้า', () => {
     expect(byTest(wrapper, 'quota-label').text()).toContain('ใช้ไป 1/2 พอร์ต');
     expect(byTest(wrapper, 'create-portfolio-btn').attributes('disabled')).toBeUndefined();
     expect(byTest(wrapper, 'upgrade-btn').exists()).toBe(false);
+  });
+});
+
+describe('PortfolioPage — broker connection badge (MT5)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    vi.clearAllMocks();
+    brokerList.mockResolvedValue([]);
+  });
+
+  it('ไม่แสดงป้าย broker บนพอร์ตประเภท INVESTOR (MT5 ผูกได้แค่ Forex/TRADER)', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 1, portfolio_type: 'INVESTOR' })];
+
+    const { wrapper } = await mountPage(quota(3, 0, 1), 'INVESTOR');
+
+    expect(byTest(wrapper, 'broker-badge-1').exists()).toBe(false);
+  });
+
+  it('แสดงป้ายแบบยังไม่เชื่อมต่อ (muted) บนพอร์ต TRADER ที่ไม่มี connection ผูกอยู่', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 1, portfolio_type: 'TRADER' })];
+    useBrokerConnectionStore().connections = [];
+
+    const { wrapper } = await mountPage(quota(3, 1, 0), 'TRADER');
+
+    const badge = byTest(wrapper, 'broker-badge-1');
+    expect(badge.exists()).toBe(true);
+    expect(badge.classes()).not.toContain('broker-badge--connected');
+  });
+
+  it('แสดงป้ายแบบเชื่อมต่อแล้วเมื่อมี connection ผูกกับ portfolio นี้อยู่', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 1, portfolio_type: 'TRADER' })];
+    useBrokerConnectionStore().connections = [brokerConnectionFixture({ id: 9, portfolio_id: 1 })];
+
+    const { wrapper } = await mountPage(quota(3, 1, 0), 'TRADER');
+
+    const badge = byTest(wrapper, 'broker-badge-1');
+    expect(badge.exists()).toBe(true);
+    expect(badge.classes()).toContain('broker-badge--connected');
+  });
+
+  it('ไม่ถือว่าเชื่อมต่อถ้า connection ที่ผูกอยู่ถูก REVOKED ไปแล้ว', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 1, portfolio_type: 'TRADER' })];
+    useBrokerConnectionStore().connections = [
+      brokerConnectionFixture({ id: 9, portfolio_id: 1, status: 'REVOKED' }),
+    ];
+
+    const { wrapper } = await mountPage(quota(3, 1, 0), 'TRADER');
+
+    expect(byTest(wrapper, 'broker-badge-1').classes()).not.toContain('broker-badge--connected');
+  });
+
+  it('กดป้ายแล้วพาไป /BrokerConnections พร้อม query portfolio_id ของพอร์ตนั้น โดยไม่ trigger selectPort', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 42, portfolio_type: 'TRADER' })];
+    useBrokerConnectionStore().connections = [];
+
+    const { wrapper } = await mountPage(quota(3, 1, 0), 'TRADER');
+    const notifySpyBefore = store.activePortfolioId;
+
+    await byTest(wrapper, 'broker-badge-42').trigger('click');
+
+    expect(push).toHaveBeenCalledWith({
+      path: '/BrokerConnections',
+      query: { portfolio_id: '42' },
+    });
+    // @click.stop บนป้ายต้องกัน event ไม่ให้ไหลไปโดน @click ของการ์ด (selectPort)
+    expect(store.activePortfolioId).toBe(notifySpyBefore);
+  });
+
+  it('ไม่ยิง loadConnections() ซ้ำถ้า broker connections โหลดมาแล้ว (มี connections อยู่ใน state ก่อน mount)', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 1, portfolio_type: 'TRADER' })];
+    useBrokerConnectionStore().connections = [brokerConnectionFixture({ id: 9, portfolio_id: 1 })];
+
+    await mountPage(quota(3, 1, 0), 'TRADER');
+
+    expect(brokerList).not.toHaveBeenCalled();
   });
 });

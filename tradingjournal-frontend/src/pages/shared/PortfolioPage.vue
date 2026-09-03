@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useQuasar } from 'quasar';
+import { useRouter } from 'vue-router';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import { ref } from 'vue';
 import { usePortfolioStore } from 'stores/PortfolioStore';
+import { useBrokerConnectionStore } from 'stores/BrokerConnectionStore';
 import { useWorkspace } from 'src/composables/useWorkspace';
 import { UPGRADE_ROUTE } from 'src/constants/portfolio.constants';
+import {
+  BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM,
+  BROKER_CONNECTIONS_ROUTE,
+} from 'src/constants/broker-connection.constants';
+import mt5Logo from 'assets/metatrader5-logo.svg';
 import type { Portfolio } from 'src/types/portfolio.types';
 
 const $q = useQuasar();
+const router = useRouter();
 const store = usePortfolioStore();
+const brokerStore = useBrokerConnectionStore();
 
 // หน้านี้เป็น shared — แสดงเฉพาะพอร์ตของโหมดที่ active อยู่ (Forex = TRADER, Stock = INVESTOR)
 const { meta: workspaceMeta } = useWorkspace();
@@ -23,7 +32,32 @@ onMounted(async () => {
     // เข้าหน้านี้ตอนพอร์ตโหลดไว้แล้ว loadPortfolios() จะ early-return เลยยังไม่มีโควต้า
     await store.loadQuota();
   }
+
+  // เงียบๆ พอ — ป้าย broker เป็นแค่ทางลัด ไม่ใช่ข้อมูลหลักของหน้านี้ โหลดไม่สำเร็จก็แค่โชว์
+  // เป็น "ยังไม่เชื่อมต่อ" ไปก่อน ไม่ต้อง notify ผู้ใช้ซ้ำกับ error ของพอร์ตหลัก
+  if (brokerStore.connections.length === 0) {
+    await brokerStore.loadConnections().catch(() => null);
+  }
 });
+
+// ── Broker connection badge (MT5 เท่านั้นตอนนี้ — ผูกได้แค่พอร์ต Forex/TRADER, ดู
+// BrokerConnectionsPage.vue's portfolioOptions) ─────────────────────────────────
+const MT5_LOGO = mt5Logo;
+
+function brokerConnectionForPortfolio(portfolioId: number) {
+  return (
+    brokerStore.connections.find(
+      (c) => c.portfolio_id === portfolioId && c.status !== 'REVOKED',
+    ) ?? null
+  );
+}
+
+function goToBrokerConnections(portfolioId: number) {
+  void router.push({
+    path: BROKER_CONNECTIONS_ROUTE,
+    query: { [BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM]: String(portfolioId) },
+  });
+}
 
 // ── โควต้า ─────────────────────────────────────────────────────────────────────
 // โควต้าเป็นก้อนเดียวรวมทั้งสองโหมด — นับ Stock + Forex เข้าด้วยกัน
@@ -292,6 +326,20 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
                 <q-badge v-if="store.activePortfolioId === port.id" class="active-badge q-mr-xs">
                   <q-icon name="check_circle" size="10px" class="q-mr-xs" />Active
                 </q-badge>
+                <div
+                  v-if="port.portfolio_type === 'TRADER'"
+                  class="broker-badge"
+                  :class="{ 'broker-badge--connected': brokerConnectionForPortfolio(port.id) }"
+                  :data-test="`broker-badge-${port.id}`"
+                  @click.stop="goToBrokerConnections(port.id)"
+                >
+                  <img :src="MT5_LOGO" alt="MetaTrader 5" class="broker-badge-logo" />
+                  <q-tooltip>
+                    {{
+                      brokerConnectionForPortfolio(port.id) ? 'เชื่อมต่อแล้ว' : 'เชื่อมต่อ Broker'
+                    }}
+                  </q-tooltip>
+                </div>
                 <q-btn
                   flat
                   round
@@ -725,6 +773,48 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
   background: rgba(74, 222, 128, 0.15) !important;
   color: #4ade80 !important;
   border-color: rgba(74, 222, 128, 0.3);
+}
+
+/* ป้ายลัดไปหน้า Broker Connections — โลโก้ MT5 ตัวจริง (src/assets/metatrader5-logo.svg)
+   จางๆ + grayscale ตอนยังไม่เชื่อมต่อ, เต็มสี + ขอบเขียวตอนเชื่อมต่อแล้ว (โทนเดียวกับ
+   .active-badge ด้านบน) แสดงเฉพาะพอร์ต Forex/TRADER เท่านั้น (ดู MT5 = forex broker,
+   portfolioOptions ของ BrokerConnectionsPage.vue ผูกได้แค่ TRADER portfolio) */
+.broker-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  background: var(--bg-card-soft);
+  transition:
+    opacity 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
+}
+.broker-badge:hover {
+  transform: scale(1.08);
+}
+.broker-badge-logo {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.broker-badge--connected {
+  border-color: rgba(33, 186, 69, 0.45);
+  background: rgba(33, 186, 69, 0.1);
+}
+.broker-badge--connected .broker-badge-logo {
+  filter: none;
+  opacity: 1;
+}
+.body--dark .broker-badge--connected {
+  border-color: rgba(74, 222, 128, 0.4);
+  background: rgba(74, 222, 128, 0.12);
 }
 
 /* การ์ดเส้นประ "สร้างพอร์ตใหม่" ท้ายกริดตามแบบ — ใช้ .port-card ร่วมกันเพื่อให้

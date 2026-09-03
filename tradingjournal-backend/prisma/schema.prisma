@@ -162,6 +162,7 @@ model users {
   dividends             dividends[]
   ai_usage_logs         ai_usage_logs[]
   refresh_tokens        refresh_tokens[]
+  broker_connections    broker_connections[]
 }
 
 model plans {
@@ -243,16 +244,17 @@ model portfolios {
   created_at           DateTime?     @default(now()) @db.Timestamp(6)
   updated_at           DateTime?     @default(now()) @db.Timestamp(6)
 
-  users           users?            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  goals           goals[]
-  trades          trades[]
-  trade_imports   trade_imports[]
-  stock_purchases stock_purchases[]
-  stock_sales     stock_sales[]
-  records         records[]
-  dividends       dividends[]
-  posts           posts[]
-  share_logs      share_logs[]
+  users              users?               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goals              goals[]
+  trades             trades[]
+  trade_imports      trade_imports[]
+  stock_purchases    stock_purchases[]
+  stock_sales        stock_sales[]
+  records            records[]
+  dividends          dividends[]
+  posts              posts[]
+  share_logs         share_logs[]
+  broker_connections broker_connections[]
 
   @@index([user_id, portfolio_type])
 }
@@ -276,6 +278,14 @@ model goals {
 // 🚀 Trading Core
 // ==========================================
 
+enum TradeSource {
+  MANUAL
+  IMPORT
+  MT4_SYNC
+  MT5_SYNC
+  WEBULL_SYNC
+}
+
 model trade_imports {
   id             Int       @id @default(autoincrement())
   portfolio_id   Int?
@@ -291,15 +301,16 @@ model trade_imports {
 }
 
 model trades {
-  id           Int  @id @default(autoincrement())
-  user_id      Int? // 🟢 เพิ่มเพื่อให้ผูกกับสิทธิ์ของ User โดยตรง ค้นหาไม้ได้รวดเร็ว
-  portfolio_id Int?
-  import_id    Int?
+  id                   Int  @id @default(autoincrement())
+  user_id              Int? // 🟢 เพิ่มเพื่อให้ผูกกับสิทธิ์ของ User โดยตรง ค้นหาไม้ได้รวดเร็ว
+  portfolio_id         Int?
+  import_id            Int?
+  broker_connection_id Int? // Phase 3 — ผูกกับ broker_connections ที่ sync ไม้นี้เข้ามา (null = manual/import)
 
-  broker     String? @db.VarChar(50)
-  account_id String? @db.VarChar(50)
-  ticket_id  String? @db.VarChar(100)
-  source     String? @default("manual") @db.VarChar(30) // "manual" หรือ "import"
+  broker     String?      @db.VarChar(50)
+  account_id String?      @db.VarChar(50)
+  ticket_id  String?      @db.VarChar(100) // manual/import: broker's order ticket; MT5: POSITION_TICKET (ดู mt5-sync.service.ts)
+  source     TradeSource? @default(MANUAL)
 
   pair        String   @db.VarChar(30) // คู่เงินหรือสินทรัพย์ เช่น 'XAU/USD', 'BTC/USDT'
   trade_type  String   @db.VarChar(15) // 'BUY' หรือ 'SELL'
@@ -336,16 +347,18 @@ model trades {
   created_at DateTime? @default(now()) @db.Timestamp(6)
   updated_at DateTime? @default(now()) @db.Timestamp(6)
 
-  users         users?              @relation(fields: [user_id], references: [id], onDelete: Cascade) // 🟢 ความสัมพันธ์ตรงกับตาราง Users
-  portfolios    portfolios?         @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  trade_imports trade_imports?      @relation(fields: [import_id], references: [id], onDelete: Cascade)
-  screenshots   trade_screenshots[]
+  users              users?              @relation(fields: [user_id], references: [id], onDelete: Cascade) // 🟢 ความสัมพันธ์ตรงกับตาราง Users
+  portfolios         portfolios?         @relation(fields: [portfolio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  trade_imports      trade_imports?      @relation(fields: [import_id], references: [id], onDelete: Cascade)
+  broker_connections broker_connections? @relation(fields: [broker_connection_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  screenshots        trade_screenshots[]
 
   // 💡 เปลี่ยนจาก @@unique มาเป็น @@index ปกติ เพื่อป้องกันข้อผิดพลาดกรณีคีย์ไม้เอง (Manual) แล้วฟิลด์ ticket_id ว่างเปล่า
   @@index([user_id])
   @@index([portfolio_id])
   @@index([ticket_id])
   @@index([closed_at])
+  @@index([broker_connection_id])
 }
 
 model trade_screenshots {
@@ -356,6 +369,77 @@ model trade_screenshots {
   created_at DateTime? @default(now()) @db.Timestamp(6)
 
   trades trades @relation(fields: [trade_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 🔌 Broker Sync — connection management only (Phase 2)
+//   MT4/MT5/Webull/Dime adapters ยังไม่ implement จริง ดู src/brokers/
+//   Phase 3+ จะเพิ่ม trading_positions/trading_orders/trading_deals/market_candles
+//   แล้ว map เข้า trades/records เดิมผ่าน upsertImportedClosedTrade()-style ที่มีอยู่แล้ว
+//   (ไม่สร้าง trading_deals staging table ใน Phase 2 — ดูเหตุผลใน Phase 2 final report)
+// ==========================================
+
+enum BrokerType {
+  MT4
+  MT5
+  WEBULL
+  DIME
+}
+
+enum BrokerConnectionStatus {
+  ACTIVE
+  INACTIVE
+  REVOKED
+  ERROR
+  DISCONNECTED
+}
+
+model broker_connections {
+  id           Int  @id @default(autoincrement())
+  user_id      Int
+  portfolio_id Int?
+
+  broker_type BrokerType
+
+  // ตัวระบุบัญชีฝั่ง broker (เช่น MT login number, Webull account id) — ไม่ใช่ secret
+  external_account_id String? @db.VarChar(50)
+  broker_server       String? @db.VarChar(100)
+
+  // Push-based (MT4/MT5) — เก็บแค่ hash เหมือน refresh_tokens.token_hash (SHA-256 hex 64 ตัว)
+  // ไม่เคยเก็บ plaintext ใน DB เลย ดู BrokerApiKeyService
+  api_key_hash String? @unique @db.VarChar(64)
+
+  // Pull-based (Webull ในอนาคต) — เตรียมคอลัมน์ไว้เฉยๆ ยังไม่มี encryption service หรือ
+  // endpoint ไหนเขียนค่าใน Phase 2 (OAuth flow จริงเป็นงานของ Phase 7)
+  oauth_access_token_encrypted  String?   @db.Text
+  oauth_refresh_token_encrypted String?   @db.Text
+  oauth_token_expires_at        DateTime? @db.Timestamp(6)
+
+  status BrokerConnectionStatus @default(ACTIVE)
+
+  last_heartbeat_at DateTime? @db.Timestamp(6)
+  last_sync_at      DateTime? @db.Timestamp(6)
+
+  // Phase 3 pre-EA hardening — monotonic per-connection guard against stale/
+  // out-of-order FULL positions snapshots (see mt5-sync.service.ts
+  // applyPositionsSnapshot). null = no FULL snapshot accepted yet for this
+  // connection. Not a table of its own — one connection has exactly one "latest
+  // accepted sequence", so a column here is sufficient (Phase 3 hardening review §2).
+  last_snapshot_sequence Int?
+
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  // soft delete — เก็บประวัติ connection ไว้ audit แม้ user ยกเลิกแล้ว (เหมือน chat_messages.deleted_at)
+  deleted_at DateTime? @db.Timestamp(6)
+
+  users      users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  portfolios portfolios? @relation(fields: [portfolio_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  trades     trades[]
+
+  @@index([user_id])
+  @@index([portfolio_id])
+  @@index([status])
+  @@index([broker_type, external_account_id])
 }
 
 // ==========================================

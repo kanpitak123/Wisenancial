@@ -6,11 +6,19 @@ import { ValidationPipe } from '@nestjs/common'; // 👈 เพิ่ม Import 
 import { NestExpressApplication } from '@nestjs/platform-express'; // 👈 1. Import ตัวนี้
 import { join } from 'path';
 import { assertCorsOriginsValid } from './config/cors-origins.util';
+import { MT5_INGEST_ROUTE_PATH, createMt5IngestBodyParser } from './brokers/ingestion/mt5-ingest-body-limit';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+
+  // ต้องแขวนก่อน Nest's own global body-parser (ซึ่งถูก register ตอน app.listen()/init()
+  // ทีหลังเสมอ) — express middleware ทำงานตามลำดับที่ .use() ถูกเรียก ตัวนี้ยิงก่อนจึง
+  // parse body ของ route นี้ด้วย limit ที่กว้างกว่าไปเลย แล้ว global parser ที่ตามมาจะเห็น
+  // request เสร็จสิ้นแล้ว (onFinished) และข้ามไปเฉยๆ ไม่ parse ซ้ำ — ดู
+  // mt5-ingest-body-limit.ts สำหรับเหตุผลที่มาของตัวเลข limit
+  app.use(MT5_INGEST_ROUTE_PATH, createMt5IngestBodyParser());
   // refresh token อยู่ใน httpOnly cookie เบราว์เซอร์จะแนบมาให้ก็ต่อเมื่อ credentials
   // เปิดอยู่เท่านั้น และสเปก CORS ห้ามใช้ credentials คู่กับ origin '*' (ซึ่งคือค่าที่
   // enableCors() เปล่าๆ ให้มาแต่เดิม) จึงต้องระบุ origin ให้ชัด

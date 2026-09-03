@@ -8,7 +8,10 @@ import {
   Prisma,
   RecordSource,
   RecordType,
+  TradeSource,
+  trades,
 } from '@prisma/client';
+import type { BrokerDeal, BrokerPosition } from '../brokers/interfaces/broker-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordsService } from '../records/records.service';
 import { CloseTradeDto } from './dto/close-trade.dto';
@@ -17,6 +20,19 @@ import { UpdateTradeDto } from './dto/update-trade.dto';
 import { PnlBreakdown, PnlCalculatorService } from './pnl-calculator.service';
 
 type TradeResult = 'WIN' | 'LOSS' | 'BREAKEVEN';
+
+/** เก็บใน trades.raw_data.deals[] — audit log ระดับ deal เดี่ยวๆ ของ position หนึ่งตัว (ดู Phase 3 design review §4/§7) */
+interface Mt5DealLogEntry {
+  dealTicket: string;
+  orderTicket: string | null;
+  entryType: string;
+  volume: number;
+  price: number;
+  commission: number;
+  swap: number;
+  profit: number;
+  executedAt: string;
+}
 
 @Injectable()
 export class TradesService {
@@ -52,7 +68,7 @@ export class TradesService {
       data: {
         user_id: userId,
         portfolio_id: portfolioId,
-        source: 'manual',
+        source: TradeSource.MANUAL,
         pair: this.normalizePair(data.pair),
         trade_type: data.trade_type,
         volume: this.decimalOrNull(data.volume),
@@ -87,7 +103,7 @@ export class TradesService {
         data: {
           user_id: userId,
           portfolio_id: portfolioId,
-          source: 'manual',
+          source: TradeSource.MANUAL,
           pair: this.normalizePair(data.pair),
           trade_type: data.trade_type,
           volume: this.decimalOrNull(data.volume),
@@ -170,7 +186,7 @@ export class TradesService {
       broker: input.broker,
       account_id: input.accountId,
       ticket_id: input.ticketId,
-      source: 'import',
+      source: TradeSource.IMPORT,
       pair: this.normalizePair(input.pair),
       trade_type: input.tradeType,
       volume: input.volume,
@@ -200,6 +216,281 @@ export class TradesService {
     );
 
     return trade;
+  }
+
+  // ==========================================================================
+  // MT5 sync (Phase 3) — เรียกจาก Mt5SyncService เท่านั้น (ผ่าน tx เดียวกับที่
+  // Mt5SyncService เปิด) ไม่มี ownership check แบบ JWT (userId/portfolioId มาจาก
+  // broker_connections ที่ยืนยันตัวตนผ่าน BrokerApiKeyGuard แล้ว ไม่ใช่จาก client เอง)
+  //
+  // ticket_id ของแถวที่ผ่าน method กลุ่มนี้ = MT5 POSITION_TICKET เสมอ (ไม่ใช่ DEAL_TICKET)
+  // เพราะ trades จำลองวงจรชีวิตของ "position" (open -> partial close* -> close) หนึ่งแถว
+  // ต่อหนึ่ง position ไม่ใช่หนึ่งแถวต่อหนึ่ง execution — ดู Phase 3 design review §4
+  // ==========================================================================
+
+  /**
+   * Upsert แถว trades จาก MT5 positions-snapshot (FULL) หนึ่งตำแหน่ง — อัปเดตเฉพาะ field
+   * ที่เป็น "สถานะปัจจุบันของ position" (sl/tp/current_price/volume/swap) เท่านั้น
+   * ห้ามแตะ pnl/result_status/closed_at ที่นี่เด็ดขาด — นั่นเป็นหน้าที่ของ applyMt5Deal()
+   * (deal จริง) และ closeMt5PositionsByAbsence() (ปิดเพราะหายไปจาก snapshot) เท่านั้น
+   * เพื่อไม่ให้ path การอัปเดต metadata กับ path การบันทึกเงินสดปนกัน
+   */
+  async upsertMt5Position(
+    tx: Prisma.TransactionClient,
+    input: {
+      connectionId: number;
+      portfolioId: number;
+      userId: number;
+      position: BrokerPosition;
+    },
+  ): Promise<trades> {
+    const existing = await tx.trades.findFirst({
+      where: {
+        broker_connection_id: input.connectionId,
+        ticket_id: input.position.externalPositionId,
+      },
+    });
+
+    const raw = existing ? this.jsonObject(existing.raw_data) : {};
+
+    const sharedData = {
+      pair: input.position.symbol,
+      trade_type: this.mt5DirectionToTradeSide(input.position.direction),
+      volume: new Prisma.Decimal(input.position.volume),
+      open_price: new Prisma.Decimal(input.position.openPrice),
+      close_price: this.decimalOrNull(input.position.currentPrice ?? undefined),
+      stop_loss: this.decimalOrNull(input.position.stopLoss ?? undefined),
+      take_profit: this.decimalOrNull(input.position.takeProfit ?? undefined),
+      swap: new Prisma.Decimal(input.position.swap ?? 0),
+      opened_at: input.position.openedAt,
+    };
+
+    if (existing) {
+      return tx.trades.update({ where: { id: existing.id }, data: sharedData });
+    }
+
+    return tx.trades.create({
+      data: {
+        user_id: input.userId,
+        portfolio_id: input.portfolioId,
+        broker_connection_id: input.connectionId,
+        broker: 'MT5',
+        ticket_id: input.position.externalPositionId,
+        source: TradeSource.MT5_SYNC,
+        result_status: 'OPEN',
+        raw_data: this.toJson(raw),
+        ...sharedData,
+      },
+    });
+  }
+
+  /**
+   * ปิด trades ทุกแถวที่ยัง OPEN ของ connection นี้ แต่ ticket_id ไม่อยู่ใน FULL snapshot
+   * ล่าสุด (closing-by-absence) — เรียกได้เฉพาะเมื่อ snapshot ผ่านการยืนยันแล้วว่าเป็น FULL
+   * และเป็นของ connection ที่ authenticate แล้วเท่านั้น (caller คือ Mt5SyncService ตรวจ
+   * เงื่อนไขนี้ก่อนเรียกเสมอ — ดู Phase 3 design review §16 "closing-by-absence")
+   *
+   * pnl ที่ปิดด้วยวิธีนี้คือ realized P&L สะสมล่าสุดที่มีอยู่แล้วบนแถว (จาก deal ที่เคย
+   * ประมวลผลมาก่อนหน้านี้) — ถ้า deal ปิดจริงมาถึงทีหลัง (ไม่ว่าก่อนหรือหลัง snapshot นี้)
+   * applyMt5Deal() จะอัปเดต pnl/records ทับแถวที่ปิดไปแล้วนี้ได้อีกตามปกติ (self-heal)
+   */
+  async closeMt5PositionsByAbsence(
+    tx: Prisma.TransactionClient,
+    connectionId: number,
+    openPositionTickets: ReadonlySet<string>,
+  ): Promise<number[]> {
+    const staleOpenTrades = await tx.trades.findMany({
+      where: {
+        broker_connection_id: connectionId,
+        result_status: 'OPEN',
+      },
+      select: { id: true, ticket_id: true, pnl: true },
+    });
+
+    const toClose = staleOpenTrades.filter(
+      (t) => t.ticket_id !== null && !openPositionTickets.has(t.ticket_id),
+    );
+
+    for (const trade of toClose) {
+      const pnl = Number(trade.pnl ?? 0);
+      await tx.trades.update({
+        where: { id: trade.id },
+        data: {
+          result_status: this.resultStatus(pnl),
+          closed_at: new Date(),
+        },
+      });
+    }
+
+    return toClose.map((t) => t.id);
+  }
+
+  /**
+   * ประมวลผล MT5 deal เดี่ยวๆ — dedupe ด้วย dealTicket ผ่าน raw_data.deals[], คำนวณ
+   * commission/swap/realized-pnl สะสม "ใหม่ทั้งหมดจาก array" ทุกครั้ง (ไม่ใช่ increment ทีละ
+   * ค่า) เพื่อให้ replay payload เดิมซ้ำ หรือ deal มาไม่เรียงลำดับ ก็ยังได้ผลลัพธ์สุดท้าย
+   * เหมือนเดิมเป๊ะ — ดู Phase 3 design review §4 "Idempotency design"
+   *
+   * ไม่แตะ result_status/closed_at ที่นี่ — การปิด position เป็นหน้าที่ของ
+   * closeMt5PositionsByAbsence() เท่านั้น (กัน logic การตรวจจับ "ปิดแล้วหรือยัง" กระจาย
+   * อยู่สองที่ที่อาจขัดกันเอง)
+   */
+  async applyMt5Deal(
+    tx: Prisma.TransactionClient,
+    input: {
+      connectionId: number;
+      portfolioId: number;
+      userId: number;
+      deal: BrokerDeal;
+    },
+  ): Promise<{ trade: trades; applied: boolean }> {
+    let existing = await tx.trades.findFirst({
+      where: {
+        broker_connection_id: input.connectionId,
+        ticket_id: input.deal.externalPositionId,
+      },
+    });
+
+    if (!existing) {
+      // Deal มาถึงก่อน position snapshot แรก (เช่น EA เพิ่งเปิดไม้ กด WebRequest จาก
+      // OnTimer ก่อนรอบ snapshot ถัดไป, หรือ position ปิดไปแล้วตั้งแต่ก่อน RECONCILE
+      // bootstrap รอบแรกจะมาถึง เลยไม่มีทางโผล่ใน positionsSnapshot ให้ upsertMt5Position
+      // เติม field ให้เลย) — สร้างแถว OPEN ขั้นต่ำไว้ก่อน แล้วให้ snapshot รอบถัดไป (ถ้ามี)
+      // มาเติม field ที่เหลือ (sl/tp/current_price ฯลฯ) ให้ครบ
+      //
+      // open_price ใช้ราคาของ deal แรกที่เห็นไปพลางก่อน (ถูกเป๊ะถ้าเป็น deal ขาเข้า IN/
+      // INOUT ซึ่งเป็นกรณีปกติ — ราคานั้นคือ entry price จริง) แทนที่จะปล่อย NULL ไว้:
+      // ถ้า snapshot ตามมาทีหลัง sharedData ใน upsertMt5Position จะเขียนทับด้วยค่าที่ถูกต้อง
+      // เป๊ะจาก positionTicket นั้นอยู่แล้ว แต่ position ที่ปิดไปแล้วก่อนจะมี snapshot ใดๆ
+      // เห็นมัน (backlog บนสุดของ RECONCILE ครั้งแรก) จะไม่มี snapshot ตามมาเติมให้อีกเลย —
+      // ปล่อย NULL ไว้แปลว่า entry price หายไปถาวร ทั้งที่ deal.price ให้ค่าที่ถูกต้องอยู่แล้ว
+      existing = await tx.trades.create({
+        data: {
+          user_id: input.userId,
+          portfolio_id: input.portfolioId,
+          broker_connection_id: input.connectionId,
+          broker: 'MT5',
+          ticket_id: input.deal.externalPositionId,
+          source: TradeSource.MT5_SYNC,
+          pair: input.deal.symbol,
+          trade_type: TradeSide.BUY, // ยังไม่รู้ direction จริงจน snapshot มาถึง — แก้ทับได้เสมอ
+          open_price: new Prisma.Decimal(input.deal.price),
+          result_status: 'OPEN',
+          raw_data: this.toJson({}),
+        },
+      });
+    }
+
+    const raw = this.jsonObject(existing.raw_data);
+    const deals: Mt5DealLogEntry[] = Array.isArray(raw.deals) ? (raw.deals as Mt5DealLogEntry[]) : [];
+
+    const alreadyRecorded = deals.some((d) => d.dealTicket === input.deal.externalDealId);
+    if (alreadyRecorded) {
+      return { trade: existing, applied: false };
+    }
+
+    const nextDeals: Mt5DealLogEntry[] = [
+      ...deals,
+      {
+        dealTicket: input.deal.externalDealId,
+        orderTicket: input.deal.externalOrderId ?? null,
+        entryType: input.deal.entryType ?? 'IN',
+        volume: input.deal.volume,
+        price: input.deal.price,
+        commission: input.deal.commission ?? 0,
+        swap: input.deal.swap ?? 0,
+        profit: input.deal.profit,
+        executedAt: input.deal.executedAt.toISOString(),
+      },
+    ];
+
+    const totals = this.summarizeMt5Deals(nextDeals);
+
+    const updated = await tx.trades.update({
+      where: { id: existing.id },
+      data: {
+        commission: new Prisma.Decimal(totals.commission),
+        swap: new Prisma.Decimal(totals.swap),
+        volume: new Prisma.Decimal(totals.remainingVolume),
+        ...(totals.hasRealizedDeal ? { pnl: new Prisma.Decimal(totals.realizedPnl) } : {}),
+        raw_data: this.toJson({ ...raw, deals: nextDeals }),
+      },
+    });
+
+    if (totals.hasRealizedDeal) {
+      await this.recordsService.replaceSystem(
+        {
+          portfolioId: input.portfolioId,
+          type: RecordType.TRADE_PNL,
+          source: RecordSource.TRADE,
+          sourceId: updated.id,
+          signedAmount: totals.realizedPnl,
+          description: `MT5 ${updated.pair} #${updated.ticket_id}`,
+          occurredAt: input.deal.executedAt,
+        },
+        tx,
+      );
+    }
+
+    return { trade: updated, applied: true };
+  }
+
+  /**
+   * รวมยอด commission/swap สะสม, realized pnl สะสม (เฉพาะ OUT/INOUT/OUT_BY) และ volume คงเหลือ จาก deal log ทั้งหมด — คำนวณใหม่จาก array เสมอ ไม่ increment ทีละค่า
+   *
+   * Phase 3 hardening review §4 (hedging / OUT_BY) — OUT_BY is what MT5 emits when a
+   * hedging-mode account closes a position against an *opposite* position on the same
+   * symbol instead of against the market; MT5 reports it as its own deal, scoped to a
+   * single position_ticket, with `profit` already computed by the broker for that one
+   * leg. We deliberately do NOT attempt to invent full hedging-account semantics here —
+   * we don't try to find/pair the opposing position's matching deal, net the two legs
+   * against each other, or reconcile them into one combined trade. Each OUT_BY deal is
+   * accounted exactly like an OUT deal: realized into *this* position's row only, using
+   * the profit/commission/swap MT5 already reported for it. That's sufficient and safe
+   * because MT5 has already done the actual netting math broker-side by the time this
+   * deal reaches us — we're just recording its result, not computing it. The one thing
+   * we do NOT support is reconstructing "which position closed against which" after the
+   * fact; that information is not derived, only what's on raw_data.deals[].entryType is
+   * kept (verbatim, from mt5-normalizer.ts) for any future auditing/UI that wants it.
+   */
+  private summarizeMt5Deals(deals: Mt5DealLogEntry[]): {
+    commission: number;
+    swap: number;
+    realizedPnl: number;
+    hasRealizedDeal: boolean;
+    remainingVolume: number;
+  } {
+    const REALIZING_TYPES = new Set(['OUT', 'INOUT', 'OUT_BY']);
+    let commission = 0;
+    let swap = 0;
+    let realizedPnl = 0;
+    let hasRealizedDeal = false;
+    let inVolume = 0;
+    let outVolume = 0;
+
+    for (const deal of deals) {
+      commission += deal.commission;
+      swap += deal.swap;
+      if (REALIZING_TYPES.has(deal.entryType)) {
+        realizedPnl += deal.profit;
+        hasRealizedDeal = true;
+        outVolume += deal.volume;
+      } else {
+        inVolume += deal.volume;
+      }
+    }
+
+    return {
+      commission,
+      swap,
+      realizedPnl,
+      hasRealizedDeal,
+      remainingVolume: Math.max(0, inVolume - outVolume),
+    };
+  }
+
+  private mt5DirectionToTradeSide(direction: 'LONG' | 'SHORT'): TradeSide {
+    return direction === 'LONG' ? TradeSide.BUY : TradeSide.SELL;
   }
 
   async updateOpenTrade(id: number, userId: number, data: UpdateTradeDto) {

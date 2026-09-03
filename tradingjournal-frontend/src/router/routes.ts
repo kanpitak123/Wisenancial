@@ -57,6 +57,10 @@ const routes: RouteRecordRaw[] = [
       //   payments.service.ts -> ${FRONTEND_URL}/Upgrade?success=true|canceled=true
       { path: 'AiCredits', component: () => import('pages/shared/AiCreditsPage.vue') },
       { path: 'Upgrade', component: () => import('pages/shared/UpgradePage.vue') },
+      {
+        path: 'BrokerConnections',
+        component: () => import('pages/shared/BrokerConnectionsPage.vue'),
+      },
 
       // ---------- Forex เท่านั้น ----------
       {

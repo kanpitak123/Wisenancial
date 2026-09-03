@@ -66,7 +66,8 @@ async function buildApp(): Promise<INestApplication> {
 
 /**
  * ยิงผ่าน guard ตรง ๆ แทนการเปิดพอร์ตจริง — supertest ไม่ได้ติดตั้งในโปรเจกต์นี้
- * (ดู test/app.e2e-spec.ts ที่ compile ไม่ผ่านด้วยเหตุผลเดียวกัน)
+ * (ของเดิม test/app.e2e-spec.ts เคยพึ่ง supertest แบบนี้แล้ว compile ไม่ผ่าน ไม่มี npm
+ * script ไหนเรียกใช้จริงด้วย จึงลบทิ้งไปแล้วแทนที่จะติดตั้ง dependency ใหม่)
  */
 async function callLogin(
   app: INestApplication,
