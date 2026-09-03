@@ -1,6 +1,9 @@
 export type TradeSide = 'BUY' | 'SELL';
 
-export type TradeSource = 'manual' | 'import';
+// ต้องตรงกับ TradeSource enum ฝั่ง backend (schema.prisma) เป๊ะ — ค่าจริงที่ API คืนมาคือ
+// ตัวใหญ่ทั้งหมด ('MT5_SYNC' ไม่ใช่ 'mt5_sync') ตั้งแต่ migration
+// 20260902180000_formalize_trade_source_and_broker_link เป็นต้นมา
+export type TradeSource = 'MANUAL' | 'IMPORT' | 'MT4_SYNC' | 'MT5_SYNC' | 'WEBULL_SYNC';
 
 export type TradeResult = 'OPEN' | 'WIN' | 'LOSS' | 'BREAKEVEN';
 

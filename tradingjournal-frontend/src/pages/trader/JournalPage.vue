@@ -1,25 +1,36 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue';
 import { useQuasar } from 'quasar';
+import { useRouter } from 'vue-router';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import { useJournalStore } from 'stores/JournalStore';
 import { useRecordStore } from 'stores/RecordStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
 import { useGlobalFilterStore } from 'stores/GlobalFilterStore';
+import { isBrokerSyncedTrade } from 'src/constants/trade.constants';
+import {
+  BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM,
+  BROKER_CONNECTIONS_ROUTE,
+} from 'src/constants/broker-connection.constants';
+import mt5Logo from 'assets/metatrader5-logo.svg';
 import type { Trade } from 'src/types/trade.types';
 
 const $q = useQuasar();
+const router = useRouter();
 const store = useJournalStore();
 const recordStore = useRecordStore();
 const portStore = usePortfolioStore();
 const filterStore = useGlobalFilterStore();
+
+const MT5_LOGO = mt5Logo;
 
 // ==========================================
 // Dialog State
 // ==========================================
 const showTradeDialog = ref(false);
 const showBalanceDialog = ref(false);
-const showImportDialog = ref(false); // เพิ่มสำหรับ Dialog นำเข้าข้อมูล
+const showImportDialog = ref(false); // Dialog นำเข้าข้อมูลจากไฟล์ CSV (ของเดิม)
+const showEditDialog = ref(false); // Dialog แก้ไข/บันทึกไม้ที่มีอยู่แล้ว (manual หรือ sync มาจาก broker)
 
 const { safeLoad } = useSafeLoad();
 
@@ -121,6 +132,17 @@ const importForm = ref({
   accountId: '',
   file: null as File | null,
 });
+
+const editForm = ref({
+  strategy: null as string | null,
+  trend: null as string | null,
+  emotion: null as string | null,
+  entry_reason: null as string | null,
+  note: null as string | null,
+  stop_loss: null as number | null,
+  take_profit: null as number | null,
+});
+const editingTrade = ref<Trade | null>(null);
 
 // ==========================================
 // Utils & Actions
@@ -265,6 +287,70 @@ const submitImport = async () => {
   }
 };
 
+// พาไปหน้า Broker Connections เพื่อตั้งค่า live MT5 sync — คนละ flow กับ "Import from CSV"
+// ด้านบน (นำเข้าไฟล์ statement มือ) ให้ portfolio_id ปัจจุบันไปด้วยถ้ามี เพื่อ
+// pre-select/scroll ไปหา connection ของพอร์ตนี้ทันที (ดู BrokerConnectionsPage.vue)
+const goToSyncMt5 = () => {
+  const portfolioId = portStore.activePortfolioId;
+
+  void router.push({
+    path: BROKER_CONNECTIONS_ROUTE,
+    ...(portfolioId !== null
+      ? { query: { [BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM]: String(portfolioId) } }
+      : {}),
+  });
+};
+
+// ==========================================
+// Edit / Annotate Trade
+// ==========================================
+// field การเงิน/ตัวตนของไม้ (pair, side, lots, ราคา, เวลา) เป็น readonly เสมอในฟอร์มนี้ —
+// สำหรับไม้ manual ก็เช่นกัน (ฟอร์มนี้มีไว้เพิ่ม/แก้บันทึกเท่านั้น ไม่ใช่แก้ตัวเลขย้อนหลัง)
+// isBrokerSyncedTrade() ใช้แค่โชว์แบนเนอร์บอกที่มาให้ผู้ใช้เข้าใจว่าทำไมแก้ตัวเลขไม่ได้
+const editingTradeIsSynced = computed(() =>
+  editingTrade.value ? isBrokerSyncedTrade(editingTrade.value) : false,
+);
+
+const openEditDialog = (trade: Trade) => {
+  editingTrade.value = trade;
+  editForm.value = {
+    strategy: trade.strategy,
+    trend: trade.trend,
+    emotion: trade.emotion,
+    entry_reason: trade.entry_reason,
+    note: trade.note,
+    stop_loss: trade.stop_loss === null ? null : Number(trade.stop_loss),
+    take_profit: trade.take_profit === null ? null : Number(trade.take_profit),
+  };
+  showEditDialog.value = true;
+};
+
+const submitEditTrade = async () => {
+  if (!editingTrade.value) return;
+
+  try {
+    await store.updateOpenTrade(editingTrade.value.id, {
+      ...(editForm.value.strategy ? { strategy: editForm.value.strategy } : {}),
+      ...(editForm.value.trend ? { trend: editForm.value.trend } : {}),
+      ...(editForm.value.emotion ? { emotion: editForm.value.emotion } : {}),
+      ...(editForm.value.entry_reason ? { entry_reason: editForm.value.entry_reason } : {}),
+      ...(editForm.value.note ? { note: editForm.value.note } : {}),
+      ...(editForm.value.stop_loss !== null ? { stop_loss: editForm.value.stop_loss } : {}),
+      ...(editForm.value.take_profit !== null ? { take_profit: editForm.value.take_profit } : {}),
+    });
+
+    $q.notify({ type: 'positive', message: 'Trade updated successfully', position: 'top' });
+    showEditDialog.value = false;
+  } catch {
+    $q.notify({
+      type: 'negative',
+      message: store.error ?? 'ไม่สามารถบันทึกได้',
+      position: 'top',
+      timeout: 4000,
+    });
+  }
+};
+
 const deleteDialog = ref(false);
 const tradeToDelete = ref<Trade | null>(null);
 
@@ -331,10 +417,20 @@ const filteredTrades = computed(() => {
         <q-btn
           unelevated
           icon="upload_file"
-          label="Import Broker"
+          label="Import from CSV"
           class="btn-outline-modern text-weight-semibold"
+          data-test="import-csv-btn"
           @click="showImportDialog = true"
         />
+        <q-btn
+          unelevated
+          class="btn-outline-modern text-weight-semibold mt5-sync-btn"
+          data-test="sync-mt5-btn"
+          @click="goToSyncMt5"
+        >
+          <img :src="MT5_LOGO" alt="MetaTrader 5" class="mt5-btn-logo q-mr-sm" />
+          Sync MT5
+        </q-btn>
         <q-btn
           unelevated
           icon="add"
@@ -419,7 +515,11 @@ const filteredTrades = computed(() => {
 
     <div v-else class="row q-col-gutter-sm">
       <div v-for="trade in filteredTrades" :key="trade.id" class="col-12">
-        <q-card class="dashboard-card list-card q-pa-sm q-pa-md-md">
+        <q-card
+          class="dashboard-card list-card q-pa-sm q-pa-md-md cursor-pointer"
+          :data-test="`trade-row-${trade.id}`"
+          @click="openEditDialog(trade)"
+        >
           <div class="row items-center no-wrap q-gutter-sm">
             <div
               class="date-box bg-card-soft text-center rounded-borders q-pa-sm"
@@ -495,9 +595,20 @@ const filteredTrades = computed(() => {
                 flat
                 round
                 color="grey-5"
+                icon="edit"
+                size="sm"
+                :data-test="`edit-trade-btn-${trade.id}`"
+                @click.stop="openEditDialog(trade)"
+              >
+                <q-tooltip>Edit</q-tooltip>
+              </q-btn>
+              <q-btn
+                flat
+                round
+                color="grey-5"
                 icon="delete_outline"
                 size="sm"
-                @click="confirmDelete(trade)"
+                @click.stop="confirmDelete(trade)"
               >
                 <q-tooltip class="bg-negative">Delete</q-tooltip>
               </q-btn>
@@ -751,6 +862,189 @@ const filteredTrades = computed(() => {
       </q-card>
     </q-dialog>
 
+    <q-dialog v-model="showEditDialog" persistent>
+      <q-card class="dialog-card popup-card q-pa-sm" style="width: 640px; max-width: 95vw">
+        <q-card-section class="row items-center justify-between header-divider q-pb-md">
+          <div class="text-h6 text-weight-bold text-main flex items-center">
+            <q-icon name="edit_note" class="q-mr-sm text-primary" size="sm" />
+            Edit Trade
+          </div>
+          <q-btn icon="close" flat round dense v-close-popup class="text-muted" />
+        </q-card-section>
+
+        <q-card-section v-if="editingTrade" class="q-pt-md">
+          <div v-if="editingTradeIsSynced" class="synced-banner q-mb-md" data-test="synced-banner">
+            <img :src="MT5_LOGO" alt="MetaTrader 5" class="synced-banner-logo" />
+            <span
+              >ข้อมูลนี้ sync มาจาก MT5 อัตโนมัติ — แก้ไขได้เฉพาะบันทึกด้านล่าง ตัวเลขจาก broker
+              (ราคา/ปริมาณ/เวลา) แก้ไม่ได้ กันไม่ให้ไม่ตรงกับรอบ sync ถัดไป</span
+            >
+          </div>
+
+          <!-- ข้อมูลจากไม้จริง — readonly เสมอในฟอร์มนี้ (ทั้งไม้ manual และ sync) ฟอร์มนี้มีไว้
+               แก้บันทึก/risk annotation เท่านั้น ไม่ใช่แก้ตัวเลขย้อนหลัง -->
+          <div class="trade-summary q-mb-md" data-test="trade-summary">
+            <div class="summary-item">
+              <div class="summary-label">Pair</div>
+              <div class="summary-value">{{ editingTrade.pair }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Side</div>
+              <div
+                class="summary-value"
+                :class="editingTrade.trade_type === 'BUY' ? 'text-positive' : 'text-negative'"
+              >
+                {{ editingTrade.trade_type }}
+              </div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Lots</div>
+              <div class="summary-value">{{ editingTrade.volume ?? '—' }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Open Price</div>
+              <div class="summary-value">{{ editingTrade.open_price ?? '—' }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Close Price</div>
+              <div class="summary-value">{{ editingTrade.close_price ?? '—' }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">PnL</div>
+              <div
+                class="summary-value"
+                :class="Number(editingTrade.pnl ?? 0) >= 0 ? 'text-positive' : 'text-negative'"
+              >
+                {{ editingTrade.pnl !== null ? `$${Number(editingTrade.pnl).toFixed(2)}` : '—' }}
+              </div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Opened</div>
+              <div class="summary-value">{{ formatDate(editingTrade.opened_at ?? '') || '—' }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Closed</div>
+              <div class="summary-value">{{ formatDate(editingTrade.closed_at ?? '') || '—' }}</div>
+            </div>
+          </div>
+
+          <div class="row q-col-gutter-md">
+            <div class="col-12 col-sm-6 col-md-3">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Stop Loss</div>
+              <q-input
+                class="rounded-input"
+                outlined
+                dense
+                v-model.number="editForm.stop_loss"
+                type="number"
+                step="any"
+                placeholder="e.g. 2300"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Take Profit</div>
+              <q-input
+                class="rounded-input"
+                outlined
+                dense
+                v-model.number="editForm.take_profit"
+                type="number"
+                step="any"
+                placeholder="e.g. 2450"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+
+            <div class="col-12 col-sm-6 col-md-3 q-mt-sm">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Strategy</div>
+              <q-select
+                class="rounded-input"
+                outlined
+                dense
+                v-model="editForm.strategy"
+                :options="strategyOptions"
+                placeholder="Select"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+
+            <div class="col-12 col-sm-6 col-md-3 q-mt-sm">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Trend</div>
+              <q-select
+                class="rounded-input"
+                outlined
+                dense
+                v-model="editForm.trend"
+                :options="trendOptions"
+                placeholder="Select"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+
+            <div class="col-12 col-sm-6 col-md-3 q-mt-sm">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Emotion</div>
+              <q-select
+                class="rounded-input"
+                outlined
+                dense
+                v-model="editForm.emotion"
+                :options="emotionOptions"
+                placeholder="Select"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+
+            <div class="col-12 col-sm-6 col-md-3 q-mt-sm">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Entry Reason</div>
+              <q-select
+                class="rounded-input"
+                outlined
+                dense
+                v-model="editForm.entry_reason"
+                :options="entryReasonOptions"
+                placeholder="Select"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+
+            <div class="col-12 q-mt-sm">
+              <div class="text-caption text-muted text-weight-bold q-mb-xs">Note</div>
+              <q-input
+                class="rounded-input"
+                outlined
+                dense
+                v-model="editForm.note"
+                type="textarea"
+                rows="3"
+                placeholder="Enter notes..."
+                data-test="edit-note-input"
+                :dark="$q.dark.isActive"
+              />
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md q-pt-sm">
+          <q-btn
+            flat
+            label="Cancel"
+            v-close-popup
+            class="btn-ghost-modern q-px-md text-weight-medium"
+          />
+          <q-btn
+            unelevated
+            label="Save Changes"
+            icon="save"
+            class="btn-primary-modern text-white text-weight-bold q-px-xl"
+            data-test="save-edit-btn"
+            :loading="store.isSubmitting"
+            @click="submitEditTrade"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <q-dialog v-model="showBalanceDialog" persistent>
       <q-card class="dialog-card popup-card q-pa-sm" style="width: 500px; max-width: 95vw">
         <q-card-section class="row items-center justify-between header-divider q-pb-md">
@@ -813,7 +1107,7 @@ const filteredTrades = computed(() => {
         <q-card-section class="row items-center justify-between header-divider q-pb-md">
           <div class="text-h6 text-weight-bold text-main flex items-center">
             <q-icon name="upload_file" class="q-mr-sm text-primary" size="sm" />
-            Import from Broker
+            Import from CSV
           </div>
           <q-btn icon="close" flat round dense v-close-popup class="text-muted" />
         </q-card-section>
@@ -1221,6 +1515,66 @@ const filteredTrades = computed(() => {
   background: var(--tag-reason-bg);
   color: var(--tag-reason-color);
   border-color: var(--tag-reason-border);
+}
+
+/* ==========================================================
+   Sync MT5 button + Edit dialog broker-synced UI
+========================================================== */
+.mt5-btn-logo {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.synced-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  font-size: 12.5px;
+  color: var(--text-main);
+}
+.body--dark .synced-banner {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+.synced-banner-logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.trade-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+}
+.summary-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.summary-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  font-family: 'JetBrains Mono', monospace;
+}
+@media (max-width: 599px) {
+  .trade-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* Danger button for delete dialog */

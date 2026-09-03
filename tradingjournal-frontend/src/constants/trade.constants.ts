@@ -1,6 +1,18 @@
-import type { TradeResult, TradeSide } from '../types/trade.types';
+import type { Trade, TradeResult, TradeSide, TradeSource } from '../types/trade.types';
 
 export const TRADES_API_PATH = '/trades';
+
+const BROKER_SYNC_SOURCES: readonly TradeSource[] = ['MT4_SYNC', 'MT5_SYNC', 'WEBULL_SYNC'];
+
+/**
+ * true สำหรับไม้ที่ EA/broker sync เข้ามาเอง (MT4/MT5/Webull) — field ที่เป็น "ความจริงของ
+ * broker" (pair/trade_type/volume/open_price/close_price/timestamps) ต้อง readonly ใน UI
+ * เสมอ ไม่ว่าไม้จะยัง OPEN หรือปิดไปแล้ว กันไม่ให้แก้มือแล้ว desync จากรอบ sync ถัดไป — ดู
+ * TradesService.updateOpenTrade() ฝั่ง backend ที่บังคับกฎเดียวกันนี้อีกชั้นหนึ่ง
+ */
+export function isBrokerSyncedTrade(trade: Pick<Trade, 'source'>): boolean {
+  return BROKER_SYNC_SOURCES.includes(trade.source);
+}
 
 export const TRADE_SIDES: readonly TradeSide[] = ['BUY', 'SELL'];
 

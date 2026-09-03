@@ -493,10 +493,35 @@ export class TradesService {
     return direction === 'LONG' ? TradeSide.BUY : TradeSide.SELL;
   }
 
+  /**
+   * แก้ไม้ — แยกเป็นสองชั้นตามชนิด field ไม่ใช่บล็อกทั้งก้อนตาม result_status เหมือนเดิม:
+   *   - field "ความจริงทางการเงิน/ตัวตนของไม้ที่กระทบ pnl/records" (pair/trade_type/volume/
+   *     open_price/commission/swap/opened_at/contract_size) แก้ได้เฉพาะตอนยัง OPEN เท่านั้น
+   *     (พฤติกรรมเดิม) — ปิดไปแล้วแปลว่า pnl/records คำนวณจากค่านี้ไปแล้ว แก้ย้อนหลังจะทำให้
+   *     เลขไม่ตรงกัน และสำหรับไม้ที่ sync มาจาก broker (MT4_SYNC/MT5_SYNC/WEBULL_SYNC) field
+   *     กลุ่มนี้ไม่ควรแก้เองเลยไม่ว่าสถานะไหน — ฝั่ง frontend (isBrokerSyncedTrade())
+   *     ไม่ส่ง field กลุ่มนี้มาให้อยู่แล้วสำหรับไม้ sync แต่เช็คซ้ำที่นี่เผื่อ client อื่น
+   *   - field "บันทึกประจำวัน/risk annotation" (strategy/trend/emotion/entry_reason/note/
+   *     timeframe/stop_loss/take_profit) แก้ได้เสมอไม่ว่าไม้จะ OPEN/ปิดไปแล้ว/มาจาก manual
+   *     หรือ sync ก็ตาม — sl/tp อยู่กลุ่มนี้ไม่ใช่กลุ่มการเงินเพราะไม่ถูกใช้คำนวณ pnl เลย
+   *     (ดู pnl-calculator.service.ts — ใช้แค่ open/close price + volume + commission/swap)
+   *     เป็นแค่บันทึกความเสี่ยงที่ตั้งใจไว้ ผู้ใช้ควรแก้ย้อนหลังได้แม้ไม้ MT5 จะปิดไปแล้ว
+   */
   async updateOpenTrade(id: number, userId: number, data: UpdateTradeDto) {
     const trade = await this.findOwnedTrade(id, userId);
-    if (trade.result_status !== 'OPEN') {
-      throw new BadRequestException('แก้ไขได้เฉพาะออเดอร์ที่ยังเปิดอยู่');
+
+    const touchesFinancialField =
+      data.pair !== undefined ||
+      data.trade_type !== undefined ||
+      data.volume !== undefined ||
+      data.open_price !== undefined ||
+      data.commission !== undefined ||
+      data.swap !== undefined ||
+      data.opened_at !== undefined ||
+      data.contract_size !== undefined;
+
+    if (touchesFinancialField && trade.result_status !== 'OPEN') {
+      throw new BadRequestException('แก้ไขข้อมูลการเงิน/ตัวตนของไม้ได้เฉพาะออเดอร์ที่ยังเปิดอยู่ — ปิดไปแล้วแก้ได้เฉพาะบันทึก (strategy/trend/emotion/note/sl/tp ฯลฯ)');
     }
 
     const raw = this.jsonObject(trade.raw_data);
