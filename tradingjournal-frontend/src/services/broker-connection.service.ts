@@ -31,6 +31,11 @@ export const brokerConnectionService = {
     return response.data;
   },
 
+  async get(id: number): Promise<BrokerConnection> {
+    const response = await api.get<BrokerConnection>(`${BROKER_CONNECTIONS_API_PATH}/${id}`);
+    return response.data;
+  },
+
   async revoke(id: number): Promise<BrokerConnection> {
     const response = await api.post<BrokerConnection>(`${BROKER_CONNECTIONS_API_PATH}/${id}/revoke`);
     return response.data;

@@ -147,6 +147,12 @@ export class BrokerConnectionsService {
       data: {
         last_heartbeat_at: new Date(),
         status: BrokerConnectionStatus.ACTIVE,
+        // ทุก heartbeat ที่ผ่านมาถึงตรงนี้ได้ (ผ่าน guard + ingest's asserts ทั้งหมดแล้ว)
+        // พิสูจน์ว่า connection ใช้งานได้จริง ณ ตอนนี้ — ล้าง error เก่าทิ้งเสมอ ไม่ต้องรอ
+        // ให้ sync สำเร็จก่อน เพราะ heartbeat เปล่าก็เพียงพอจะพิสูจน์ "หายแล้ว" แล้ว
+        last_error_code: null,
+        last_error_message: null,
+        last_error_at: null,
       },
     });
 
@@ -166,10 +172,31 @@ export class BrokerConnectionsService {
         last_heartbeat_at: new Date(),
         last_sync_at: new Date(),
         status: BrokerConnectionStatus.ACTIVE,
+        last_error_code: null,
+        last_error_message: null,
+        last_error_at: null,
       },
     });
 
     return toPublicConnection(row);
+  }
+
+  /**
+   * Setup-wizard error surfacing — called from Mt5SyncService.ingest()'s catch-all when
+   * a request was rejected for a reason worth showing the user in plain language (see
+   * Mt5IngestErrorCode). Best-effort by design: called with `.catch(() => undefined)` at
+   * the call site so a failure to *record* the error never masks or replaces the
+   * original error response the EA/frontend actually needs to see.
+   */
+  async recordError(connectionId: number, code: string, message: string): Promise<void> {
+    await this.prisma.broker_connections.update({
+      where: { id: connectionId },
+      data: {
+        last_error_code: code,
+        last_error_message: message,
+        last_error_at: new Date(),
+      },
+    });
   }
 
   /**

@@ -21,6 +21,14 @@ export interface BrokerConnection {
   last_heartbeat_at: string | null;
   last_sync_at: string | null;
   last_snapshot_sequence: number | null;
+  /** ดู Mt5IngestErrorCode ฝั่ง backend (mt5-ingest-error-codes.ts) — ACCOUNT_MISMATCH /
+   * PORTFOLIO_NOT_BOUND / CONFIG_ERROR เท่านั้น ไม่ครอบคลุมทุก failure mode ที่เป็นไปได้
+   * (invalid API key / WebRequest ถูกปฏิเสธ ไม่มีทาง record ตรงนี้ได้ — ดู comment บน
+   * backend's broker_connections model) — null เสมอถ้ายังไม่เคย error หรือ error ล่าสุด
+   * ถูกล้างไปแล้วหลัง heartbeat/sync สำเร็จรอบถัดมา */
+  last_error_code: string | null;
+  last_error_message: string | null;
+  last_error_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

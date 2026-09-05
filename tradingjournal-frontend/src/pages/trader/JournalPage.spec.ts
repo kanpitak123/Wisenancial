@@ -51,6 +51,21 @@ vi.mock('src/services/records.service', () => ({
   getRecordsErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
+// ConnectMt5Wizard (opened by "Sync MT5") owns/loads BrokerConnectionStore state itself —
+// stub the service layer so mounting it here never hits the real network, same pattern
+// as BrokerConnectionsPage.spec.ts.
+vi.mock('src/services/broker-connection.service', () => ({
+  brokerConnectionService: {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    get: vi.fn(),
+    revoke: vi.fn(),
+    rotateKey: vi.fn(),
+    remove: vi.fn(),
+  },
+  getBrokerConnectionErrorMessage: (_error: unknown, fallback: string) => fallback,
+}));
+
 const push = vi.fn();
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
@@ -169,10 +184,26 @@ describe('JournalPage — Import CSV vs Sync MT5', () => {
     expect(wrapper.text()).not.toContain('Import Broker');
   });
 
-  it('กด "Sync MT5" พาไป /BrokerConnections พร้อม portfolio_id ของพอร์ตที่ active อยู่', async () => {
+  it('กด "Sync MT5" เปิด ConnectMt5Wizard แทนการเด้งไป /BrokerConnections ตรงๆ', async () => {
     const wrapper = await mountPage();
 
     await byTest(wrapper, 'sync-mt5-btn').trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(byBody('mt5-wizard').exists()).toBe(true);
+    expect(byBody('wizard-step-1').exists()).toBe(true);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('ลิงก์ "จัดการขั้นสูง" ในตัว wizard พาไป /BrokerConnections พร้อม portfolio_id ของพอร์ตที่ active อยู่', async () => {
+    const wrapper = await mountPage();
+
+    await byTest(wrapper, 'sync-mt5-btn').trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    await byBody('wizard-manage-link').trigger('click');
 
     expect(push).toHaveBeenCalledWith({
       path: '/BrokerConnections',

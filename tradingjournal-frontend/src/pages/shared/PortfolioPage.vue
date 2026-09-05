@@ -12,6 +12,7 @@ import {
   BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM,
   BROKER_CONNECTIONS_ROUTE,
 } from 'src/constants/broker-connection.constants';
+import ConnectMt5Wizard from 'src/components/broker/ConnectMt5Wizard.vue';
 import mt5Logo from 'assets/metatrader5-logo.svg';
 import type { Portfolio } from 'src/types/portfolio.types';
 
@@ -57,6 +58,22 @@ function goToBrokerConnections(portfolioId: number) {
     path: BROKER_CONNECTIONS_ROUTE,
     query: { [BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM]: String(portfolioId) },
   });
+}
+
+// ป้ายกดแล้วเปิด ConnectMt5Wizard แทนการเด้งไป /BrokerConnections ตรงๆ (ของเดิม) — ยังคง
+// เก็บ goToBrokerConnections() ไว้ให้ wizard's "จัดการขั้นสูง" เรียกต่อ ไม่ได้ลบทิ้ง
+const showMt5Wizard = ref(false);
+const mt5WizardPortfolioId = ref<number | null>(null);
+
+function openMt5Wizard(portfolioId: number) {
+  mt5WizardPortfolioId.value = portfolioId;
+  showMt5Wizard.value = true;
+}
+
+function handleWizardManage() {
+  if (mt5WizardPortfolioId.value !== null) {
+    goToBrokerConnections(mt5WizardPortfolioId.value);
+  }
 }
 
 // ── โควต้า ─────────────────────────────────────────────────────────────────────
@@ -331,7 +348,7 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
                   class="broker-badge"
                   :class="{ 'broker-badge--connected': brokerConnectionForPortfolio(port.id) }"
                   :data-test="`broker-badge-${port.id}`"
-                  @click.stop="goToBrokerConnections(port.id)"
+                  @click.stop="openMt5Wizard(port.id)"
                 >
                   <img :src="MT5_LOGO" alt="MetaTrader 5" class="broker-badge-logo" />
                   <q-tooltip>
@@ -591,6 +608,12 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <ConnectMt5Wizard
+      v-model="showMt5Wizard"
+      :portfolio-id="mt5WizardPortfolioId"
+      @manage="handleWizardManage"
+    />
   </q-page>
 </template>
 

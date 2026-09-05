@@ -420,6 +420,21 @@ model broker_connections {
   last_heartbeat_at DateTime? @db.Timestamp(6)
   last_sync_at      DateTime? @db.Timestamp(6)
 
+  // Setup-wizard error surfacing — populated by Mt5SyncService.ingest() when a request
+  // is rejected for a reason worth showing the user (TOFU account mismatch, portfolio
+  // unbound, malformed payload), cleared again on the next successful heartbeat/sync.
+  // Before this, the only place these rejection reasons were visible at all was the
+  // EA's own on-chart Comment overlay — no user-facing surface existed on the backend
+  // side (see docs/mt5-ea-setup.md "Known limitations"). Deliberately NOT populated for
+  // invalid/unknown API keys (BrokerApiKeyGuard rejects those before any connection row
+  // is even identified, so there is nothing to attach the error to) or for MT5-side
+  // WebRequest whitelist rejections (that request never leaves the MT5 terminal, so the
+  // backend never observes it) — both remain informational/troubleshooting-copy only in
+  // the frontend wizard.
+  last_error_code    String?   @db.VarChar(50)
+  last_error_message String?   @db.Text
+  last_error_at      DateTime? @db.Timestamp(6)
+
   // Phase 3 pre-EA hardening — monotonic per-connection guard against stale/
   // out-of-order FULL positions snapshots (see mt5-sync.service.ts
   // applyPositionsSnapshot). null = no FULL snapshot accepted yet for this

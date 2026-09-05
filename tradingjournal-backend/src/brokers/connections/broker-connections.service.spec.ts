@@ -261,6 +261,57 @@ describe('BrokerConnectionsService', () => {
         }),
       );
     });
+
+    it('ล้าง last_error_code/message/at ทิ้งเสมอ — heartbeat ที่ผ่านมาถึงนี่ได้พิสูจน์ว่า connection ใช้งานได้แล้ว', async () => {
+      prismaMock.broker_connections.update.mockResolvedValue(connectionRow());
+
+      await service.recordHeartbeat(1);
+
+      expect(prismaMock.broker_connections.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            last_error_code: null,
+            last_error_message: null,
+            last_error_at: null,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('recordSync', () => {
+    it('ล้าง last_error_code/message/at ทิ้งเช่นเดียวกับ recordHeartbeat', async () => {
+      prismaMock.broker_connections.update.mockResolvedValue(connectionRow());
+
+      await service.recordSync(1);
+
+      expect(prismaMock.broker_connections.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            last_error_code: null,
+            last_error_message: null,
+            last_error_at: null,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('recordError', () => {
+    it('เขียน last_error_code/message/at ลงแถวที่ระบุ', async () => {
+      prismaMock.broker_connections.update.mockResolvedValue(connectionRow());
+
+      await service.recordError(1, 'ACCOUNT_MISMATCH', 'accountLogin ไม่ตรงกับที่ pin ไว้');
+
+      expect(prismaMock.broker_connections.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          last_error_code: 'ACCOUNT_MISMATCH',
+          last_error_message: 'accountLogin ไม่ตรงกับที่ pin ไว้',
+          last_error_at: expect.any(Date),
+        },
+      });
+    });
   });
 
   describe('sensitive-field redaction', () => {

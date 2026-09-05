@@ -1,4 +1,4 @@
-import { mount, type VueWrapper } from '@vue/test-utils';
+import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { QLayout, QPageContainer } from 'quasar';
 import { h } from 'vue';
@@ -27,6 +27,7 @@ vi.mock('src/services/broker-connection.service', () => ({
   brokerConnectionService: {
     list: (...args: unknown[]) => brokerList(...args),
     create: vi.fn(),
+    get: vi.fn(),
     revoke: vi.fn(),
     rotateKey: vi.fn(),
     remove: vi.fn(),
@@ -80,6 +81,9 @@ function brokerConnectionFixture(overrides: Partial<BrokerConnection> = {}): Bro
     last_heartbeat_at: null,
     last_sync_at: null,
     last_snapshot_sequence: null,
+    last_error_code: null,
+    last_error_message: null,
+    last_error_at: null,
     created_at: '2026-09-01T00:00:00Z',
     updated_at: '2026-09-01T00:00:00Z',
     deleted_at: null,
@@ -282,7 +286,7 @@ describe('PortfolioPage — broker connection badge (MT5)', () => {
     expect(byTest(wrapper, 'broker-badge-1').classes()).not.toContain('broker-badge--connected');
   });
 
-  it('กดป้ายแล้วพาไป /BrokerConnections พร้อม query portfolio_id ของพอร์ตนั้น โดยไม่ trigger selectPort', async () => {
+  it('กดป้ายแล้วเปิด ConnectMt5Wizard (แทนการเด้งไป /BrokerConnections ตรงๆ) โดยไม่ trigger selectPort', async () => {
     const store = usePortfolioStore();
     store.portfolios = [portfolioFixture({ id: 42, portfolio_type: 'TRADER' })];
     useBrokerConnectionStore().connections = [];
@@ -291,13 +295,32 @@ describe('PortfolioPage — broker connection badge (MT5)', () => {
     const notifySpyBefore = store.activePortfolioId;
 
     await byTest(wrapper, 'broker-badge-42').trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(new DOMWrapper(document.body.querySelector('[data-test="wizard-step-1"]')).exists()).toBe(true);
+    expect(push).not.toHaveBeenCalled();
+    // @click.stop บนป้ายต้องกัน event ไม่ให้ไหลไปโดน @click ของการ์ด (selectPort)
+    expect(store.activePortfolioId).toBe(notifySpyBefore);
+  });
+
+  it('ลิงก์ "จัดการขั้นสูง" ในตัว wizard พาไป /BrokerConnections พร้อม query portfolio_id ของพอร์ตนั้น', async () => {
+    const store = usePortfolioStore();
+    store.portfolios = [portfolioFixture({ id: 42, portfolio_type: 'TRADER' })];
+    useBrokerConnectionStore().connections = [];
+
+    const { wrapper } = await mountPage(quota(3, 1, 0), 'TRADER');
+
+    await byTest(wrapper, 'broker-badge-42').trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    await new DOMWrapper(document.body.querySelector('[data-test="wizard-manage-link"]')).trigger('click');
 
     expect(push).toHaveBeenCalledWith({
       path: '/BrokerConnections',
       query: { portfolio_id: '42' },
     });
-    // @click.stop บนป้ายต้องกัน event ไม่ให้ไหลไปโดน @click ของการ์ด (selectPort)
-    expect(store.activePortfolioId).toBe(notifySpyBefore);
   });
 
   it('ไม่ยิง loadConnections() ซ้ำถ้า broker connections โหลดมาแล้ว (มี connections อยู่ใน state ก่อน mount)', async () => {

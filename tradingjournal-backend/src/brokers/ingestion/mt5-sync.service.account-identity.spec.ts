@@ -84,6 +84,7 @@ function createConnectionsMock() {
       };
     }),
     recordSync: jest.fn(async () => ({})),
+    recordError: jest.fn(async () => undefined),
     pinOrVerifyMt5Identity: jest.fn(async (id: number, accountLogin: string, accountServer: string) => {
       const row = pinnedRows[id] ?? { external_account_id: null, broker_server: null };
       const loginOk = row.external_account_id === null || row.external_account_id === accountLogin;
@@ -250,6 +251,10 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
       await expect(
         service.ingest(pinned, envelope({ accountLogin: 99999999, accountServer: 'Broker-Live-01' })),
       ).rejects.toThrow(BadRequestException);
+
+      // Setup-wizard error surfacing — the frontend polls last_error_code to show a
+      // specific reason instead of an indefinite spinner (see mt5-ingest-error-codes.ts).
+      expect(connectionsMock.recordError).toHaveBeenCalledWith(7, 'ACCOUNT_MISMATCH', expect.any(String));
     });
 
     it('4. accountServer (broker_server) mismatch against an already-pinned connection is rejected', async () => {

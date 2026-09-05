@@ -47,6 +47,7 @@ const connectionsMock = {
   recordHeartbeat: jest.fn(async () => ({})),
   recordSync: jest.fn(async () => ({})),
   pinOrVerifyMt5Identity: jest.fn(async () => true),
+  recordError: jest.fn(async () => undefined),
 };
 
 const syncGatewayMock = {
@@ -207,6 +208,24 @@ describe('Mt5SyncService', () => {
           envelope({ eventType, payload: payloadByType[eventType] }),
         ),
       ).rejects.toThrow(ForbiddenException);
+
+      expect(connectionsMock.recordError).toHaveBeenCalledWith(7, 'PORTFOLIO_NOT_BOUND', expect.any(String));
+    });
+  });
+
+  describe('setup-wizard error surfacing (last_error_code)', () => {
+    it('records CONFIG_ERROR for a generic rejected request (unsupported protocol version)', async () => {
+      await expect(
+        service.ingest(connection(), envelope({ protocolVersion: 999 })),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(connectionsMock.recordError).toHaveBeenCalledWith(7, 'CONFIG_ERROR', expect.any(String));
+    });
+
+    it('does not record anything for a successful ingest', async () => {
+      await service.ingest(connection(), envelope({ eventType: Mt5EventType.HEARTBEAT }));
+
+      expect(connectionsMock.recordError).not.toHaveBeenCalled();
     });
   });
 

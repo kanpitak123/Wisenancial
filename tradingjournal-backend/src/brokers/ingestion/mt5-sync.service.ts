@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { BrokerType, Prisma, broker_connections } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { ValidationError, validate } from 'class-validator';
@@ -15,6 +15,11 @@ import {
   normalizePosition,
 } from '../adapters/mt5/mt5-normalizer';
 import { BrokerConnectionsService } from '../connections/broker-connections.service';
+import {
+  Mt5AccountMismatchException,
+  Mt5IngestErrorCode,
+  Mt5PortfolioNotBoundException,
+} from './mt5-ingest-error-codes';
 import {
   Mt5AccountSnapshotPayloadDto,
   Mt5DealDto,
@@ -57,6 +62,22 @@ export class Mt5SyncService {
   ) {}
 
   async ingest(connection: broker_connections, envelope: Mt5IngestEnvelopeDto): Promise<Mt5IngestResult> {
+    try {
+      return await this.ingestOrThrow(connection, envelope);
+    } catch (error) {
+      // Best-effort — a failure to *record* the error must never replace or mask the
+      // original rejection the EA/frontend actually needs to see (hence swallow, not
+      // rethrow, here). See BrokerConnectionsService.recordError() and
+      // Mt5IngestErrorCode's doc comment for which rejections this covers/excludes.
+      await this.recordIngestError(connection.id, error).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async ingestOrThrow(
+    connection: broker_connections,
+    envelope: Mt5IngestEnvelopeDto,
+  ): Promise<Mt5IngestResult> {
     this.assertPlatformMatches(connection, envelope);
     this.assertSupportedProtocolVersion(envelope);
     this.assertReasonableTimestamp(envelope);
@@ -315,10 +336,39 @@ export class Mt5SyncService {
 
   private assertPortfolioBound(connection: broker_connections): void {
     if (connection.portfolio_id === null) {
-      throw new ForbiddenException(
+      throw new Mt5PortfolioNotBoundException(
         'Connection นี้ยังไม่ผูก portfolio — bind portfolio ก่อนถึงจะ sync ข้อมูลเทรดจริงได้ (ดู POST /brokers/connections)',
       );
     }
+  }
+
+  /**
+   * Maps a rejected ingest() call onto broker_connections.last_error_code/message so the
+   * frontend setup wizard has something concrete to show instead of an indefinite
+   * spinner. Only records for the specific, known-meaningful codes below — an
+   * unrecognized exception (a genuine 500, or anything not explicitly mapped) is left
+   * unrecorded rather than guessed at, since a wrong/misleading last_error would be worse
+   * than none at all.
+   */
+  private async recordIngestError(connectionId: number, error: unknown): Promise<void> {
+    const code = this.classifyIngestError(error);
+    if (code === null) return;
+
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await this.connections.recordError(connectionId, code, message);
+  }
+
+  private classifyIngestError(error: unknown): Mt5IngestErrorCode | null {
+    if (error instanceof Mt5AccountMismatchException) return Mt5IngestErrorCode.ACCOUNT_MISMATCH;
+    if (error instanceof Mt5PortfolioNotBoundException) return Mt5IngestErrorCode.PORTFOLIO_NOT_BOUND;
+    // Generic bucket for every other rejected-but-expected request (bad payload,
+    // unsupported protocol version, clock skew, platform mismatch) — all thrown as a
+    // plain BadRequestException elsewhere in this file. Checked last, and only matches
+    // BadRequestException itself/subclasses that AREN'T already one of the specific
+    // cases above (both specific exceptions extend BadRequestException too, but the
+    // instanceof checks above already returned for those).
+    if (error instanceof BadRequestException) return Mt5IngestErrorCode.CONFIG_ERROR;
+    return null;
   }
 
   /**
@@ -350,7 +400,7 @@ export class Mt5SyncService {
     const serverMismatch = pinnedAccountServer !== null && pinnedAccountServer !== accountServer;
 
     if (loginMismatch || serverMismatch) {
-      throw new BadRequestException(this.accountIdentityMismatchMessage());
+      throw new Mt5AccountMismatchException(this.accountIdentityMismatchMessage());
     }
 
     const alreadyFullyPinned = pinnedAccountLogin !== null && pinnedAccountServer !== null;
@@ -362,7 +412,7 @@ export class Mt5SyncService {
     if (!consistent) {
       // เกิดจากแพ้ race ของ concurrent first-use (อีก request คู่แข่งชนะไปแล้วด้วยค่าที่ต่างกัน)
       // หรือ state เปลี่ยนไปแล้วระหว่าง read กับ write — ทั้งสองกรณีปฏิเสธเหมือนกัน ไม่เดา
-      throw new BadRequestException(this.accountIdentityMismatchMessage());
+      throw new Mt5AccountMismatchException(this.accountIdentityMismatchMessage());
     }
   }
 

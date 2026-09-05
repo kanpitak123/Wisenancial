@@ -12,6 +12,7 @@ import {
   BROKER_CONNECTIONS_PORTFOLIO_QUERY_PARAM,
   BROKER_CONNECTIONS_ROUTE,
 } from 'src/constants/broker-connection.constants';
+import ConnectMt5Wizard from 'src/components/broker/ConnectMt5Wizard.vue';
 import mt5Logo from 'assets/metatrader5-logo.svg';
 import type { Trade } from 'src/types/trade.types';
 
@@ -31,6 +32,7 @@ const showTradeDialog = ref(false);
 const showBalanceDialog = ref(false);
 const showImportDialog = ref(false); // Dialog นำเข้าข้อมูลจากไฟล์ CSV (ของเดิม)
 const showEditDialog = ref(false); // Dialog แก้ไข/บันทึกไม้ที่มีอยู่แล้ว (manual หรือ sync มาจาก broker)
+const showMt5Wizard = ref(false); // ConnectMt5Wizard — ทางเข้าใหม่แทนการเด้งไป /BrokerConnections ตรงๆ
 
 const { safeLoad } = useSafeLoad();
 
@@ -287,10 +289,15 @@ const submitImport = async () => {
   }
 };
 
-// พาไปหน้า Broker Connections เพื่อตั้งค่า live MT5 sync — คนละ flow กับ "Import from CSV"
-// ด้านบน (นำเข้าไฟล์ statement มือ) ให้ portfolio_id ปัจจุบันไปด้วยถ้ามี เพื่อ
-// pre-select/scroll ไปหา connection ของพอร์ตนี้ทันที (ดู BrokerConnectionsPage.vue)
+// เปิด ConnectMt5Wizard แทนที่จะเด้งไป /BrokerConnections ตรงๆ (ของเดิม) — คนละ flow กับ
+// "Import from CSV" ด้านบน (นำเข้าไฟล์ statement มือ) ส่ง portfolio ปัจจุบันเข้าไปเป็น context
+// ให้ wizard ล่วงหน้าถ้ามี /BrokerConnections ยังอยู่เป็นหน้า "จัดการขั้นสูง" — เข้าถึงได้จาก
+// ลิงก์ในตัว wizard เอง (ดู goToBrokerConnectionsAdvanced)
 const goToSyncMt5 = () => {
+  showMt5Wizard.value = true;
+};
+
+const goToBrokerConnectionsAdvanced = () => {
   const portfolioId = portStore.activePortfolioId;
 
   void router.push({
@@ -1211,6 +1218,12 @@ const filteredTrades = computed(() => {
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <ConnectMt5Wizard
+      v-model="showMt5Wizard"
+      :portfolio-id="portStore.activePortfolioId"
+      @manage="goToBrokerConnectionsAdvanced"
+    />
   </q-page>
 </template>
 
