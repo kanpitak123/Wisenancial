@@ -84,6 +84,15 @@ const isRotating = ref(false);
 const waitingSinceMs = ref<number | null>(null);
 const ticker = ref(0); // bumped every second while step 5 is waiting, just to force elapsed-time re-renders
 
+// การ 401 เดี่ยวๆ ระหว่าง poll ไม่ใช่เรื่องแปลก — axios interceptor (src/boot/axios.ts)
+// ดักรีเฟรช token แล้ว retry request เดิมให้เงียบๆ อยู่แล้วในทุก request ที่ผ่าน `api`
+// รวมถึง brokerConnectionService.get() นี้ด้วย ตัวนับนี้จับเฉพาะกรณีที่ refreshStatus()
+// ยัง reject ซ้ำๆ ต่อเนื่อง (แปลว่า refresh เองก็ล้มเหลวจริง ไม่ใช่แค่ token หมดอายุปกติ)
+// เพื่อไม่ให้ wizard วน spinner "กำลังรอ..." ไปเรื่อยๆ อย่างเงียบๆ ทั้งที่ session หลุดจริงแล้ว
+const CONSECUTIVE_FAILURES_BEFORE_SESSION_EXPIRED = 3;
+const consecutivePollFailures = ref(0);
+const sessionExpiredDuringPoll = ref(false);
+
 // step1 ไม่มีอะไรให้เลือกจริง (MT5 คือ broker เดียวที่ใช้ได้วันนี้ — ดู
 // BROKER_TYPE_OPTIONS/BrokerConnectionsPage.vue) แต่ portfolio เลือกได้ — และในตัว wizard
 // นี้ตั้งใจ "บังคับ" เลือกก่อนสร้างเสมอ (ต่างจากหน้า advanced ที่ปล่อยข้ามได้) เพราะ backend
@@ -144,14 +153,23 @@ async function refreshStatus(): Promise<void> {
   if (!connection.value) return;
   try {
     connection.value = await brokerConnectionService.get(connection.value.id);
+    consecutivePollFailures.value = 0;
   } catch {
-    // transient network blip — the next poll tick (or the user's manual retry) will try again
+    // ปกติจะไม่มาถึง catch นี้เลยตอน 401 ธรรมดา เพราะ axios interceptor รีเฟรช+retry
+    // ให้เงียบๆ ไปแล้ว — ที่มาถึงนี่ได้คือ network blip จริงๆ หรือ refresh เองก็ล้มเหลว
+    consecutivePollFailures.value++;
+    if (consecutivePollFailures.value >= CONSECUTIVE_FAILURES_BEFORE_SESSION_EXPIRED) {
+      sessionExpiredDuringPoll.value = true;
+      stopPolling();
+    }
   }
 }
 
 function startPolling(): void {
   stopPolling();
   waitingSinceMs.value = Date.now();
+  consecutivePollFailures.value = 0;
+  sessionExpiredDuringPoll.value = false;
   pollHandle = setInterval(() => void refreshStatus(), POLL_INTERVAL_MS);
   tickHandle = setInterval(() => {
     ticker.value++;
@@ -162,6 +180,11 @@ async function handleCheckNow(): Promise<void> {
   isCheckingNow.value = true;
   try {
     await refreshStatus();
+    // ถ้าเพิ่งฟื้นจากสถานะ "session expired" (เช่น ผู้ใช้ login ใหม่ในแท็บอื่นแล้วกลับมา
+    // กดปุ่มนี้) และ polling ถูกหยุดไปก่อนหน้านี้ ให้ตั้ง polling รอบใหม่ต่อเลย
+    if (!sessionExpiredDuringPoll.value && pollHandle === null && currentStep.value === 5) {
+      startPolling();
+    }
   } finally {
     isCheckingNow.value = false;
   }
@@ -174,6 +197,7 @@ const elapsedWaitingSeconds = computed(() => {
 });
 
 type ConnectionDisplayState =
+  | 'session_expired'
   | 'invalid_key'
   | 'error'
   | 'connected'
@@ -181,6 +205,9 @@ type ConnectionDisplayState =
   | 'waiting';
 
 const displayState = computed<ConnectionDisplayState>(() => {
+  // เช็คก่อนสถานะอื่นทั้งหมด — ถ้า session หลุดจริง ข้อมูล connection ที่ค้างอยู่ในมือ
+  // ไม่ควรถูกใช้บอกอะไรอีกต่อไป (อาจเก่าไปแล้ว)
+  if (sessionExpiredDuringPoll.value) return 'session_expired';
   const c = connection.value;
   if (!c) return 'waiting';
   if (c.status === 'REVOKED') return 'invalid_key';
@@ -229,6 +256,10 @@ async function handleCreate(): Promise<void> {
     const result = await store.createConnection('MT5', selectedPortfolioId.value ?? undefined);
     connection.value = result.connection;
     apiKey.value = result.apiKey;
+    // The wizard renders `apiKey` (this local ref) for its own one-time reveal, never
+    // store.revealedApiKey — clear the store's copy immediately so it can't leak into
+    // /BrokerConnections (a different view reading the same shared store) later.
+    store.clearRevealedKey();
     currentStep.value = 2;
   } catch (error) {
     // Conflict (409) = portfolio นี้มี connection ที่ยังไม่ REVOKED ผูกอยู่แล้ว — แทนที่จะ
@@ -270,6 +301,7 @@ async function handleGenerateNewKey(): Promise<void> {
     const result = await store.rotateKey(connection.value.id);
     connection.value = result.connection;
     apiKey.value = result.apiKey;
+    store.clearRevealedKey(); // same reason as handleCreate() — wizard shows `apiKey`, not the store's copy
     currentStep.value = 4; // กลับไปหน้าที่ต้องเอา key ใหม่ไปวางใน EA
     $q.notify({ type: 'positive', message: 'ออก API key ใหม่แล้ว — เอาไปวางใน EA ได้เลย', position: 'top', timeout: 3000 });
   } catch (error) {
@@ -286,6 +318,11 @@ async function handleGenerateNewKey(): Promise<void> {
 
 function handleManage(): void {
   isOpen.value = false;
+  // Defense-in-depth: handleCreate()/handleGenerateNewKey() already clear this the
+  // instant they capture the key into `apiKey`, but clear again here so navigating to
+  // /BrokerConnections can never inherit a stale reveal from this store, regardless of
+  // how it got set.
+  store.clearRevealedKey();
   emit('manage');
 }
 
@@ -314,6 +351,7 @@ watch(
   async (open) => {
     if (!open) {
       stopPolling();
+      store.clearRevealedKey();
       return;
     }
 
@@ -544,7 +582,15 @@ onBeforeUnmount(() => {
 
           <!-- Step 5: Live connection check -->
           <div v-else-if="currentStep === 5" data-test="wizard-step-5">
-            <div v-if="displayState === 'connected'" class="wizard-status wizard-status--success" data-test="wizard-connected-banner">
+            <div v-if="displayState === 'session_expired'" class="wizard-status wizard-status--error" data-test="wizard-session-expired-banner">
+              <q-icon name="lock_clock" color="negative" size="28px" />
+              <div>
+                <div class="text-weight-bolder">เซสชันหมดอายุ</div>
+                <div class="text-body2">กรุณาเข้าสู่ระบบใหม่แล้วกลับมาเช็คสถานะการเชื่อมต่ออีกครั้ง</div>
+              </div>
+            </div>
+
+            <div v-else-if="displayState === 'connected'" class="wizard-status wizard-status--success" data-test="wizard-connected-banner">
               <q-icon name="check_circle" color="positive" size="28px" />
               <div>
                 <div class="text-weight-bolder">เชื่อมต่อสำเร็จ!</div>
