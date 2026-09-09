@@ -86,13 +86,21 @@ describe('PriceChart', () => {
     createChart.mockReturnValue(chartApi);
   });
 
-  it('เปิด pan/zoom ไว้ (เลื่อนดูกราฟย้อนหลังได้)', () => {
+  it('เปิด pan/zoom ไว้ (เลื่อนดูกราฟย้อนหลังได้) แต่ปิด mouseWheel โดยเฉพาะ', () => {
     mountChart();
 
     const options = createChart.mock.calls[0]?.[1] as Record<string, unknown>;
 
     expect(options.handleScroll).toBe(true);
-    expect(options.handleScale).toBe(true);
+    // handleScale ต้องเป็น object ที่ปิด mouseWheel ไว้ตรงๆ ไม่ใช่ `true` เฉยๆ — ค่า default
+    // ของไลบรารีเปิด mouseWheel มาด้วย ซึ่งชนกับการเลื่อนหน้าเว็บปกติผ่านตัวกราฟ (กราฟฝังอยู่
+    // ในหน้าที่ scroll ได้ ไม่ใช่ panel ตรึงความสูง) ทำให้ซูมลอย/สะสมทุกครั้งที่ผู้ใช้เลื่อน
+    // เมาส์วีลผ่านกราฟ — นี่คือ regression test กันไม่ให้กลับไปเป็น `true` อีก
+    expect(options.handleScale).toEqual({
+      mouseWheel: false,
+      pinch: true,
+      axisPressedMouseMove: true,
+    });
   });
 
   it('candlestick -> สร้าง CandlestickSeries พร้อมข้อมูล OHLC ครบ', () => {

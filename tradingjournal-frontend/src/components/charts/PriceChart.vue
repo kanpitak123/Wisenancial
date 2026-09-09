@@ -222,8 +222,18 @@ function buildChart() {
     crosshair: { mode: CrosshairMode.Magnet },
     // pan/zoom เป็นค่าเริ่มต้นของไลบรารีอยู่แล้ว ระบุไว้ให้ชัดว่าตั้งใจเปิด
     // เพื่อให้เลื่อนดูกราฟย้อนหลังได้ (ของเดิมบน ApexCharts เลื่อนไม่ได้)
+    //
+    // handleScale.mouseWheel ปิดไว้โดยเฉพาะ (ต่างจากค่า default ของไลบรารี) — ยืนยันแล้วว่า
+    // เป็นสาเหตุของบั๊ก "ซูมเลื่อนไปเรื่อยๆ เวลาโต้ตอบซ้ำๆ": กราฟฝังอยู่ในหน้าที่เลื่อน
+    // (scroll) ได้ตามปกติ ไม่ใช่ panel ที่ตรึงความสูงไว้ ดังนั้น wheel event เดียวกันที่ผู้ใช้
+    // ใช้เลื่อนหน้าเว็บผ่านตัวกราฟ จะถูกไลบรารีตีความเป็นคำสั่งซูมไปพร้อมกันด้วย (ค่า default
+    // handleScale: true เปิด mouseWheel ไว้) สองพฤติกรรมนี้ไม่ได้หักล้างกันพอดี ซูมจึงลอย/สะสม
+    // ไปเรื่อยๆ ทุกครั้งที่ผู้ใช้เลื่อนเมาส์วีลผ่านกราฟ — reproduce และยืนยันสาเหตุ+วิธีแก้ผ่าน
+    // instrumentation จริงบน timeScale().subscribeVisibleLogicalRangeChange() แล้ว (ปิด
+    // mouseWheel อย่างเดียว, ลาก pinch/axisPressedMouseMove ไว้ตามเดิม, ทดสอบ scroll วน 8+
+    // รอบ ไม่มี drift เลย ส่วนลาก-แพนแนวนอนยังทำงานปกติทุกอย่าง)
     handleScroll: true,
-    handleScale: true,
+    handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
   });
 
   createMainSeries();
