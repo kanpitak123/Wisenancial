@@ -24,6 +24,27 @@ import MainLayout from './MainLayout.vue';
 const portfolioGetAll = vi.fn();
 const tradeGetByPortfolio = vi.fn();
 
+/**
+ * §5 QA fix: switchTo() ตอนนี้ throw ถ้าโหมดปลายทางไม่มีพอร์ตเลย (ดู useWorkspace.ts) —
+ * เทสด้านล่างที่เดินผ่าน switchTo('INVESTOR') จริงๆ เลยต้องมีพอร์ต Stock อย่างน้อยหนึ่งพอร์ต
+ * ให้ portfolioGetAll คืนมา ไม่งั้นจะเจอ throw ใหม่นี้ทั้งที่ไม่ใช่สิ่งที่เทสตัวนั้นตั้งใจตรวจ
+ */
+const investorPortfolio = {
+  id: 2,
+  user_id: 1,
+  name: 'Stock Main',
+  portfolio_type: 'INVESTOR',
+  initial_balance: 1000,
+  current_balance: 1000,
+  investor_cost_method: 'FIFO',
+  currency: 'USD',
+  icon: null,
+  color: null,
+  is_default: true,
+  created_at: null,
+  updated_at: null,
+};
+
 vi.mock('src/services/user.service', () => ({
   userService: {
     getMe: vi.fn().mockResolvedValue({
@@ -239,10 +260,36 @@ describe('MainLayout — เมนู (bottom nav) ตามโหมด', () =>
       const wrapper = await mountLayout();
       const workspace = mountWorkspaceApi();
 
+      portfolioGetAll.mockResolvedValue([investorPortfolio]);
       await workspace.switchTo('INVESTOR');
       await nextTick();
 
       expect(menuTitles(wrapper)).toContain('Stock Record');
+    });
+
+    // §5 QA fix — เดิม switchTo ไปโหมดที่ไม่มีพอร์ตเลยสำเร็จเงียบๆ (ensureActivePortfolio
+    // แค่เคลียร์ activePortfolioIds ไม่ throw) ผู้ใช้กดปุ่มแล้วไม่มีอะไรอธิบายว่าทำไม
+    it('สลับไปโหมดที่ไม่มีพอร์ตเลย -> throw ข้อความชัดเจน ไม่ใช่เงียบๆ', async () => {
+      const workspace = mountWorkspaceApi();
+
+      portfolioGetAll.mockResolvedValue([]);
+
+      await expect(workspace.switchTo('INVESTOR')).rejects.toThrow(
+        'กรุณาสร้างหรือเลือกพอร์ตลงทุนก่อน',
+      );
+    });
+
+    it('สลับไปโหมดที่ไม่มีพอร์ตเลย -> เมนู/activeType ยังเปลี่ยนไปโหมดใหม่ (ผู้ใช้กดสร้างพอร์ตต่อได้)', async () => {
+      const wrapper = await mountLayout();
+      const workspace = mountWorkspaceApi();
+
+      portfolioGetAll.mockResolvedValue([]);
+
+      await workspace.switchTo('INVESTOR').catch(() => null);
+      await nextTick();
+
+      expect(usePortfolioStore().activeType).toBe('INVESTOR');
+      expect(menuTitles(wrapper)).toContain('Stock Terminal');
     });
 
     it('โหลดพอร์ตล้มเหลว -> ยัง throw แต่เมนูเปลี่ยนแล้ว (setActiveType อยู่ก่อน await)', async () => {
@@ -265,6 +312,7 @@ describe('MainLayout — เมนู (bottom nav) ตามโหมด', () =>
       const investorStore = useInvestorStore();
 
       investorStore.loading = true;
+      portfolioGetAll.mockResolvedValue([investorPortfolio]);
 
       const result = await workspace.switchTo('INVESTOR');
       await nextTick();
@@ -293,7 +341,7 @@ describe('MainLayout — เมนู (bottom nav) ตามโหมด', () =>
 
       expect(portfolioGetAll.mock.calls.length).toBe(callsBefore);
 
-      release([]);
+      release([investorPortfolio]);
       await Promise.all([first, second]);
 
       expect(usePortfolioStore().activeType).toBe('INVESTOR');
@@ -332,7 +380,7 @@ describe('MainLayout — เมนู (bottom nav) ตามโหมด', () =>
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       // ผู้ใช้กดสลับระหว่างที่ boot ยังไม่เสร็จ
-      portfolioGetAll.mockResolvedValue([]);
+      portfolioGetAll.mockResolvedValue([investorPortfolio]);
       await workspace.switchTo('INVESTOR');
 
       expect(journal.trades, 'หลังสลับ ควรว่าง').toHaveLength(0);

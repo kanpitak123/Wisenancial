@@ -112,6 +112,17 @@ export function useWorkspace() {
 
       await initializeWorkspace(type);
 
+      // ยังไม่มีพอร์ตของโหมดนี้เลย — เดิมเงียบไปเฉยๆ (ensureActivePortfolio แค่เคลียร์
+      // activePortfolioIds ไม่ throw) ผู้ใช้เลยไม่รู้ว่าเกิดอะไรขึ้น ข้อความสองอันนี้มีอยู่แล้ว
+      // ใน WORKSPACE_MESSAGES แต่ไม่เคยถูกเรียกใช้ที่ไหนเลย
+      if (portfolioStore.getByType(type).length === 0) {
+        throw new Error(
+          type === 'TRADER'
+            ? WORKSPACE_MESSAGES.traderPortfolioRequired
+            : WORKSPACE_MESSAGES.investorPortfolioRequired,
+        );
+      }
+
       // อยู่หน้าที่โหมดใหม่เข้าไม่ได้ -> เด้งกลับ Dashboard ซึ่งใช้ได้ทั้งสองโหมด
       if (!canAccess(route.meta.workspace, type)) {
         await router.push(WORKSPACE_HOME_ROUTE);
