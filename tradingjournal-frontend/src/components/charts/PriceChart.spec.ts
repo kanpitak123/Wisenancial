@@ -20,7 +20,22 @@ const chartApi = {
   applyOptions: vi.fn(),
 };
 
-const timeScaleApi = { fitContent: vi.fn(), applyOptions: vi.fn() };
+const timeScaleApi = {
+  fitContent: vi.fn(),
+  applyOptions: vi.fn(),
+  getVisibleLogicalRange: vi.fn(),
+  setVisibleLogicalRange: vi.fn(),
+  subscribeVisibleLogicalRangeChange: vi.fn(),
+  unsubscribeVisibleLogicalRangeChange: vi.fn(),
+};
+
+/** จำลอง lightweight-charts ยิง event range เปลี่ยน — ดึง handler ตัวที่ buildChart() subscribe ไว้มาเรียกตรงๆ */
+function triggerLogicalRangeChange(range: { from: number; to: number } | null) {
+  const handler = timeScaleApi.subscribeVisibleLogicalRangeChange.mock.calls[0]?.[0] as
+    | ((range: { from: number; to: number } | null) => void)
+    | undefined;
+  handler?.(range);
+}
 const createChart = vi.fn();
 
 function makeSeries() {
@@ -232,5 +247,118 @@ describe('PriceChart', () => {
     mountChart().unmount();
 
     expect(chartApi.remove).toHaveBeenCalled();
+  });
+
+  it('ถอด component -> unsubscribe จาก visible logical range change ด้วย', () => {
+    mountChart().unmount();
+
+    expect(timeScaleApi.unsubscribeVisibleLogicalRangeChange).toHaveBeenCalledWith(
+      timeScaleApi.subscribeVisibleLogicalRangeChange.mock.calls[0]?.[0],
+    );
+  });
+});
+
+describe('PriceChart — lazy-load ประวัติเก่ากว่าตอนเลื่อนกราฟถึงขอบ (§1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createdSeries = [];
+    chartApi.addSeries.mockImplementation(() => {
+      const series = makeSeries();
+      createdSeries.push(series);
+      return series;
+    });
+    chartApi.timeScale.mockReturnValue(timeScaleApi);
+    createChart.mockReturnValue(chartApi);
+    timeScaleApi.getVisibleLogicalRange.mockReturnValue(null);
+  });
+
+  it('ขอบซ้ายใกล้แท่งแรกที่โหลดไว้ -> emit needOlderHistory หลัง debounce (ไม่ใช่ทันที)', async () => {
+    const wrapper = mountChart();
+
+    triggerLogicalRangeChange({ from: 2, to: 50 });
+    expect(wrapper.emitted('needOlderHistory')).toBeUndefined();
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(wrapper.emitted('needOlderHistory')).toHaveLength(1);
+  });
+
+  it('ขอบซ้ายยังห่างจากแท่งแรกมาก -> ไม่ emit', async () => {
+    const wrapper = mountChart();
+
+    triggerLogicalRangeChange({ from: 50, to: 100 });
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(wrapper.emitted('needOlderHistory')).toBeUndefined();
+  });
+
+  it('range เป็น null -> ไม่ emit และไม่ throw', async () => {
+    const wrapper = mountChart();
+
+    expect(() => triggerLogicalRangeChange(null)).not.toThrow();
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(wrapper.emitted('needOlderHistory')).toBeUndefined();
+  });
+
+  it('event ยิงถี่ระหว่างลาก (เช่น 50+ ครั้ง) -> debounce ยุบเหลือ emit แค่ครั้งเดียว', async () => {
+    const wrapper = mountChart();
+
+    for (let i = 0; i < 50; i++) {
+      triggerLogicalRangeChange({ from: 5, to: 60 });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(wrapper.emitted('needOlderHistory')).toHaveLength(1);
+  });
+
+  it('ถอด component ระหว่างรอ debounce -> ไม่ emit ทีหลัง', async () => {
+    const wrapper = mountChart();
+
+    triggerLogicalRangeChange({ from: 2, to: 50 });
+    wrapper.unmount();
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(wrapper.emitted('needOlderHistory')).toBeUndefined();
+  });
+
+  it('โหลดประวัติเก่ากว่ามาต่อหน้า (prepend) -> setData แล้วรักษาตำแหน่งที่เลื่อน/ซูมไว้ ไม่เรียก fitContent()', async () => {
+    const wrapper = mountChart();
+
+    timeScaleApi.getVisibleLogicalRange.mockReturnValue({ from: 0, to: 1 });
+    timeScaleApi.fitContent.mockClear();
+
+    const olderBar = { time: 1_786_579_200, open: 95, high: 99, low: 94, close: 97 };
+
+    await wrapper.setProps({ bars: [olderBar, ...bars] });
+
+    expect(mainSeries().setData).toHaveBeenLastCalledWith([
+      { time: 1_786_579_200, open: 95, high: 99, low: 94, close: 97 },
+      { time: 1_786_665_600, open: 100, high: 105, low: 98, close: 102 },
+      { time: 1_786_752_000, open: 102, high: 110, low: 101, close: 108 },
+    ]);
+    // เพิ่มมา 1 แท่ง -> ช่วงที่มองเห็นต้องขยับตาม (shift = 1) ไม่ใช่ fitContent() ทับ
+    expect(timeScaleApi.setVisibleLogicalRange).toHaveBeenCalledWith({ from: 1, to: 2 });
+    expect(timeScaleApi.fitContent).not.toHaveBeenCalled();
+  });
+
+  it('เปลี่ยนหุ้น/ชุดข้อมูลทั้งหมด (ไม่ใช่ prepend) -> ยัง fitContent() เหมือนเดิม', async () => {
+    const wrapper = mountChart();
+
+    timeScaleApi.fitContent.mockClear();
+
+    const newSymbolBars = [{ time: 1_800_000_000, open: 10, high: 12, low: 9, close: 11 }];
+
+    await wrapper.setProps({ bars: newSymbolBars });
+
+    expect(mainSeries().setData).toHaveBeenLastCalledWith([
+      { time: 1_800_000_000, open: 10, high: 12, low: 9, close: 11 },
+    ]);
+    expect(timeScaleApi.fitContent).toHaveBeenCalled();
+    expect(timeScaleApi.setVisibleLogicalRange).not.toHaveBeenCalled();
   });
 });

@@ -21,14 +21,16 @@ import {
   type IPriceLine,
   type ISeriesApi,
   type LineData,
+  type LogicalRange,
   type SeriesType,
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type {
-  CandlestickPoint,
-  OverlaySpec,
-  PriceLineSpec,
+import {
+  isPrependUpdate,
+  type CandlestickPoint,
+  type OverlaySpec,
+  type PriceLineSpec,
 } from 'src/utils/price-chart';
 
 const props = withDefaults(
@@ -48,6 +50,13 @@ const props = withDefaults(
     intraday: false,
   },
 );
+
+/**
+ * ยิงตอนผู้ใช้เลื่อนกราฟใกล้ขอบซ้าย (ใกล้แท่งแรกที่โหลดไว้) — บอกผู้เรียกว่าถึงเวลาโหลด
+ * ประวัติเก่ากว่าเพิ่ม ผู้เรียกเป็นคนตัดสินใจว่าจะยิง/ไม่ยิง (เช่นกำลังโหลดอยู่แล้ว หรือ
+ * รู้อยู่แล้วว่าหมดประวัติแล้ว) — ที่นี่แค่ debounce การยิงเอง ไม่ทำอะไรมากกว่านั้น
+ */
+const emit = defineEmits<{ needOlderHistory: [] }>();
 
 const $q = useQuasar();
 
@@ -220,9 +229,37 @@ function buildChart() {
   createMainSeries();
   applyOverlays();
   chart.value.timeScale().fitContent();
+  chart.value.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
+}
+
+/**
+ * ใกล้ขอบซ้ายของแท่งที่โหลดไว้ (from ~ 0, ติดลบได้ถ้าเลื่อนเลยขอบไปแล้ว) -> ขอประวัติ
+ * เก่ากว่าเพิ่ม — debounce ไว้เพราะ event นี้ยิงถี่มากระหว่างลาก (นับได้ 50+ ครั้งต่อการลาก
+ * หนึ่งครั้งจากการทดสอบจริง) ไม่งั้นจะยิง request ซ้อนกันรัวๆ กลางที่ผู้ใช้กำลังลากอยู่
+ *
+ * ผู้เรียก (StockAnalysisPage) เป็นคนตัดสินใจว่าจะยิง fetch จริงมั้ย (เช่นกำลังโหลดอยู่แล้ว
+ * หรือรู้อยู่แล้วว่าหมดประวัติแล้ว) — ที่นี่แค่ debounce การยิง event เอง
+ */
+const HISTORY_EDGE_THRESHOLD_BARS = 10;
+const HISTORY_EDGE_DEBOUNCE_MS = 150;
+let historyEdgeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function handleVisibleLogicalRangeChange(range: LogicalRange | null) {
+  if (!range || range.from > HISTORY_EDGE_THRESHOLD_BARS) return;
+
+  if (historyEdgeTimer !== null) clearTimeout(historyEdgeTimer);
+  historyEdgeTimer = setTimeout(() => {
+    historyEdgeTimer = null;
+    emit('needOlderHistory');
+  }, HISTORY_EDGE_DEBOUNCE_MS);
 }
 
 function destroyChart() {
+  if (historyEdgeTimer !== null) {
+    clearTimeout(historyEdgeTimer);
+    historyEdgeTimer = null;
+  }
+  chart.value?.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
   chart.value?.remove();
   chart.value = null;
   mainSeries.value = null;
@@ -262,8 +299,32 @@ watch(() => props.displayType, createMainSeries);
 
 watch(
   () => props.bars,
-  (bars) => {
-    mainSeries.value?.setData(toSeriesData(bars));
+  (bars, oldBars) => {
+    const series = mainSeries.value;
+
+    if (!series) return;
+
+    // โหลดประวัติเก่ากว่าเพิ่มตอนผู้ใช้เลื่อนกราฟถึงขอบ (lazy-load) — ต้องรักษาตำแหน่งที่
+    // เลื่อน/ซูมค้างไว้ เหมือนที่ applyLiveBar() ทำกับราคาสด ไม่ใช่แค่ setData() แล้ว
+    // fitContent() ทับตำแหน่งเดิมทิ้ง (setData() เลื่อน/ซูมกลับไปที่ค่าเริ่มต้นเองเสมอ)
+    if (oldBars && isPrependUpdate(oldBars, bars)) {
+      const range = chart.value?.timeScale().getVisibleLogicalRange();
+      const shift = bars.length - oldBars.length;
+
+      series.setData(toSeriesData(bars));
+
+      if (range) {
+        chart.value?.timeScale().setVisibleLogicalRange({
+          from: range.from + shift,
+          to: range.to + shift,
+        });
+      }
+
+      return;
+    }
+
+    // เปลี่ยนหุ้น/timeframe หรือชุดข้อมูลใหม่ทั้งหมด — fitContent() ทับเป็นพฤติกรรมที่ถูก
+    series.setData(toSeriesData(bars));
     chart.value?.timeScale().fitContent();
   },
 );

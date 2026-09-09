@@ -52,7 +52,14 @@ vi.mock('lightweight-charts', () => {
       addSeries: vi.fn(() => series()),
       removeSeries: vi.fn(),
       remove: vi.fn(),
-      timeScale: vi.fn(() => ({ fitContent: vi.fn(), applyOptions: vi.fn() })),
+      timeScale: vi.fn(() => ({
+        fitContent: vi.fn(),
+        applyOptions: vi.fn(),
+        getVisibleLogicalRange: vi.fn(),
+        setVisibleLogicalRange: vi.fn(),
+        subscribeVisibleLogicalRangeChange: vi.fn(),
+        unsubscribeVisibleLogicalRangeChange: vi.fn(),
+      })),
     })),
     CandlestickSeries: { type: 'Candlestick' },
     LineSeries: { type: 'Line' },
@@ -73,6 +80,7 @@ vi.mock('src/services/stocks.service', () => ({
 }));
 
 const StockTerminalPage = (await import('./StockTerminalPage.vue')).default;
+const PriceChart = (await import('components/charts/PriceChart.vue')).default;
 
 function historicalBars(count: number) {
   return Array.from({ length: count }, (_, index) => ({
@@ -82,6 +90,18 @@ function historicalBars(count: number) {
     low: 98 + index,
     close: 102 + index,
     volume: 1_000_000 + index,
+  }));
+}
+
+/** §1: หน้าประวัติเก่ากว่า — วันที่อยู่ใน "ธันวาคม 2025" ก่อนหน้าแท่งแรกของ historicalBars() เสมอ */
+function olderHistoricalBars(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    date: new Date(Date.UTC(2025, 11, index + 1)).toISOString(),
+    open: 90 + index,
+    high: 95 + index,
+    low: 88 + index,
+    close: 92 + index,
+    volume: 900_000 + index,
   }));
 }
 
@@ -134,8 +154,18 @@ function analysisPayload(symbol: string) {
 /** คำขอ /stocks/analysis/* ที่ถูกกักไว้ ให้เทสสั่งปล่อยเองตามลำดับที่ต้องการ */
 let deferredAnalysis: { symbol: string; release: () => void }[] = [];
 
+/** §1: /stocks/historical/:symbol/:timeframe — lazy-load ประวัติเก่ากว่าตอนเลื่อนกราฟถึงขอบ
+ * แต่ละเทสสั่ง mockResolvedValueOnce/mockImplementationOnce ทับได้ตามลำดับที่ต้องการ */
+const historicalGet = vi.fn<
+  (url: string, config?: { params?: Record<string, unknown> }) => Promise<{ data: unknown }>
+>().mockResolvedValue({ data: [] });
+
 function mockApi({ defer }: { defer: boolean }) {
-  get.mockImplementation((url: string) => {
+  get.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+    if (url.startsWith('/stocks/historical/')) {
+      return historicalGet(url, config);
+    }
+
     if (url.startsWith('/stocks/analysis/')) {
       const symbol = url.split('/').pop()!.split('?')[0]!;
 
@@ -329,6 +359,131 @@ describe('StockAnalysisPage — โหลดทับของเดิม', () 
 
     expect(wrapper.find('.terminal-skeleton').exists()).toBe(false);
     expect(chartExists(wrapper)).toBe(true);
+  });
+});
+
+/**
+ * §1 (qa-bug-report-2026-09-09.md, ฉบับแก้หลังทดสอบจริง) — ของเดิมไม่มีทางเลื่อนกราฟ
+ * ย้อนหลังเกิน range ที่ timeframe บอกไว้ได้เลย (ไม่มี edge-detection + ไม่มี endpoint
+ * ที่ขอ "ก่อนหน้าจุดที่มีอยู่แล้ว" ได้) ไม่ใช่บั๊ก pan/zoom ของตัวไลบรารีเอง — เดินสาย
+ * PriceChart's needOlderHistory -> StockAnalysisPage.onNeedOlderHistory -> merge เข้า chartBars
+ */
+describe('StockAnalysisPage — lazy-load ประวัติเก่ากว่าตอนเลื่อนกราฟถึงขอบ (§1)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = '';
+    localStorage.clear();
+    deferredAnalysis = [];
+    routeParams.value = { symbol: 'AAPL' };
+    popularUs = US_ROWS;
+    popularTh = TH_ROWS;
+    vi.clearAllMocks();
+    historicalGet.mockReset().mockResolvedValue({ data: [] });
+  });
+
+  async function mountLoaded() {
+    mockApi({ defer: false });
+    const wrapper = mountTerminal();
+    await settle();
+    return wrapper;
+  }
+
+  it('เลื่อนกราฟถึงขอบ -> ยิง /stocks/historical พร้อม before ตรงกับแท่งแรกที่มี แล้วรวมเข้ากราฟ', async () => {
+    const wrapper = await mountLoaded();
+
+    const priceChart = wrapper.findComponent(PriceChart);
+    expect((priceChart.props('bars') as unknown[]).length).toBe(30);
+
+    historicalGet.mockResolvedValueOnce({ data: olderHistoricalBars(15) });
+
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+
+    expect(historicalGet).toHaveBeenCalledTimes(1);
+    const [url, config] = historicalGet.mock.calls[0]!;
+    expect(url).toBe('/stocks/historical/AAPL/1D');
+    expect(config?.params).toMatchObject({ interval: '1d', range: '1mo' });
+    expect(config?.params?.before).toBe(new Date(Date.UTC(2026, 0, 1)).toISOString());
+
+    const barsAfter = wrapper.findComponent(PriceChart).props('bars') as unknown[];
+    expect(barsAfter).toHaveLength(45);
+  });
+
+  it('response ว่าง (หมดประวัติแล้ว) -> เลื่อนถึงขอบอีกครั้งในช่วงเดียวกันไม่ยิงซ้ำ', async () => {
+    const wrapper = await mountLoaded();
+    const priceChart = wrapper.findComponent(PriceChart);
+
+    historicalGet.mockResolvedValueOnce({ data: [] });
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+
+    expect(historicalGet).toHaveBeenCalledTimes(1);
+
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+
+    // เจอขอบเขตประวัติแล้ว (เช่นวัน IPO) -> ไม่ยิงซ้ำอีกสำหรับหุ้น/timeframe เดิม
+    expect(historicalGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('กำลังโหลดอยู่ -> emit ซ้อนเข้ามาไม่ยิง request ซ้ำ', async () => {
+    const wrapper = await mountLoaded();
+    const priceChart = wrapper.findComponent(PriceChart);
+
+    let release: (value: { data: unknown[] }) => void = () => {};
+    historicalGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    priceChart.vm.$emit('needOlderHistory');
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+
+    expect(historicalGet).toHaveBeenCalledTimes(1);
+
+    release({ data: olderHistoricalBars(5) });
+    await settle();
+
+    expect(wrapper.findComponent(PriceChart).props('bars') as unknown[]).toHaveLength(35);
+  });
+
+  it('สลับ timeframe แล้วเลื่อนถึงขอบ -> คำขอใช้ interval/range ของ timeframe ใหม่ ไม่ใช่ของเดิม', async () => {
+    const wrapper = await mountLoaded();
+
+    // index 2 = 1W ตามลำดับ timeframes: 1H,1D,1W,1M,1Y,3Y,5Y
+    await wrapper.findAll('.timeframe-btn')[2]!.trigger('click');
+    await settle();
+
+    const priceChart = wrapper.findComponent(PriceChart);
+    historicalGet.mockResolvedValueOnce({ data: olderHistoricalBars(5) });
+
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+
+    const [, config] = historicalGet.mock.calls[0]!;
+    expect(config?.params).toMatchObject({ interval: '1wk', range: '3mo' });
+  });
+
+  it('เจอขอบเขตประวัติของ timeframe หนึ่งแล้ว สลับไป timeframe อื่น -> ยังขอเพิ่มได้ตามปกติ (ธง exhausted ไม่ติดมาข้าม)', async () => {
+    const wrapper = await mountLoaded();
+    let priceChart = wrapper.findComponent(PriceChart);
+
+    historicalGet.mockResolvedValueOnce({ data: [] });
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+    expect(historicalGet).toHaveBeenCalledTimes(1);
+
+    await wrapper.findAll('.timeframe-btn')[2]!.trigger('click'); // 1W
+    await settle();
+
+    priceChart = wrapper.findComponent(PriceChart);
+    historicalGet.mockResolvedValueOnce({ data: olderHistoricalBars(5) });
+    priceChart.vm.$emit('needOlderHistory');
+    await settle();
+
+    expect(historicalGet).toHaveBeenCalledTimes(2);
   });
 });
 

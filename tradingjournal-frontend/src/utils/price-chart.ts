@@ -212,3 +212,30 @@ export function toTradingDay(date: string | number | Date): number | null {
 
   return seconds === null ? null : Math.floor(seconds / 86_400);
 }
+
+/**
+ * เช็คว่าแท่งราคาชุดใหม่คือ "เอาแท่งที่เก่ากว่ามาต่อหน้าแท่งเดิม" (lazy-load ประวัติเพิ่ม
+ * ตอนผู้ใช้เลื่อนกราฟย้อนหลังถึงขอบที่โหลดไว้) ไม่ใช่ "เปลี่ยนชุดข้อมูลทั้งหมด" (เปลี่ยน
+ * หุ้น/timeframe หรือราคาสดข้ามวันเทรดใหม่)
+ *
+ * ต้องแยกสองกรณีนี้ออกจากกัน เพราะกรณีแรกต้องรักษาตำแหน่งที่ผู้ใช้เลื่อน/ซูมค้างไว้
+ * (เหมือนที่ mergeLivePrice ทำกับราคาสด) ส่วนกรณีหลัง fitContent() ทับเป็นพฤติกรรมที่ถูกแล้ว
+ *
+ * เช็คด้วยการเทียบ "หาง" ของชุดใหม่ (ความยาวเท่า oldBars) ต้องตรงกับ oldBars เป๊ะทุกตัว —
+ * เทียบแค่แท่งสุดท้ายแท่งเดียวไม่พอ เพราะแท่งรายวัน/สัปดาห์/เดือนของคนละหุ้นบังเอิญมีเวลา
+ * ปิดตรงกันได้ (เช่นแท่งของ "วันนี้")
+ */
+export function isPrependUpdate(
+  oldBars: CandlestickPoint[],
+  newBars: CandlestickPoint[],
+): boolean {
+  if (oldBars.length === 0 || newBars.length <= oldBars.length) return false;
+
+  const offset = newBars.length - oldBars.length;
+
+  for (let i = 0; i < oldBars.length; i++) {
+    if (newBars[offset + i]?.time !== oldBars[i]?.time) return false;
+  }
+
+  return true;
+}

@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isNewerTradingDay,
+  isPrependUpdate,
   mergeLivePrice,
   toCandlestickData,
   toChartTime,
@@ -183,5 +184,46 @@ describe('toTradingDay', () => {
     expect(toTradingDay('2026-08-17T00:00:00.000Z')).toBe(
       toTradingDay('2026-08-17T23:59:59.000Z'),
     );
+  });
+});
+
+describe('isPrependUpdate', () => {
+  const point = (time: number, close = 100): CandlestickPoint => ({
+    time,
+    open: close - 1,
+    high: close + 1,
+    low: close - 2,
+    close,
+  });
+
+  const oldBars = [point(3), point(4), point(5)];
+
+  it('แท่งเก่ากว่าถูกต่อไว้หน้า oldBars เป๊ะ (หางตรงกันทุกตัว) -> true', () => {
+    const newBars = [point(1), point(2), ...oldBars];
+
+    expect(isPrependUpdate(oldBars, newBars)).toBe(true);
+  });
+
+  it('ชุดข้อมูลใหม่ทั้งหมด (เปลี่ยนหุ้น/timeframe) แม้แท่งสุดท้ายเวลาตรงกันโดยบังเอิญ -> false', () => {
+    // แท่งสุดท้ายเวลาตรงกัน (เช่นแท่งของ "วันนี้" ของคนละหุ้น) แต่แท่งก่อนหน้าไม่ตรง —
+    // เทียบแค่ตัวสุดท้ายตัวเดียวจะพลาดเคสนี้
+    const newBars = [point(10), point(20), point(4), point(5)];
+
+    expect(isPrependUpdate(oldBars, newBars)).toBe(false);
+  });
+
+  it('ความยาวเท่ากันหรือสั้นกว่าเดิม -> false เสมอ (prepend ต้องยาวขึ้นเท่านั้น)', () => {
+    expect(isPrependUpdate(oldBars, oldBars)).toBe(false);
+    expect(isPrependUpdate(oldBars, oldBars.slice(1))).toBe(false);
+  });
+
+  it('oldBars ว่างเปล่า (เมาท์ครั้งแรก) -> false', () => {
+    expect(isPrependUpdate([], [point(1)])).toBe(false);
+  });
+
+  it('หางตรงกันแค่บางส่วน (แท่งกลางไม่ตรง) -> false', () => {
+    const newBars = [point(1), point(2), point(3), point(99), point(5)];
+
+    expect(isPrependUpdate(oldBars, newBars)).toBe(false);
   });
 });
