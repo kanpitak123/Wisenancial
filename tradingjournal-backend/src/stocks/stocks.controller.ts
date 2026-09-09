@@ -165,15 +165,35 @@ export class StocksController {
     }
   }
 
+  /**
+   * interval/range/before เป็น optional เสริมเหนือ :timeframe เดิม — ไม่ส่งมาเลยพฤติกรรม
+   * เหมือนเดิมทุกประการ (ผู้เรียกเดิมอย่าง MarketOverviewSection ไม่กระทบ) ผู้เรียกที่รู้
+   * interval/range ของตัวเองแน่ชัดอยู่แล้ว (Stock Terminal chart lazy-load ตอน pan ย้อนหลัง)
+   * ส่งมาระบุตรงๆ ได้เลย ไม่ต้องพึ่งการเดา interval/range จาก :timeframe ของฝั่ง backend
+   * ซึ่งอาจไม่ตรงกับตาราง timeframe ของฝั่ง frontend เป๊ะๆ
+   */
   @Get('historical/:symbol/:timeframe')
   async getHistoricalData(
     @Param('symbol') symbol: string,
     @Param('timeframe') timeframe: string,
+    @Query('interval') interval?: string,
+    @Query('range') range?: string,
+    @Query('before') before?: string,
   ) {
     try {
+      const beforeDate = before ? new Date(before) : undefined;
+
       return await this.marketDataService.getHistoricalData(
         symbol.toUpperCase(),
-        { timeframe },
+        {
+          timeframe,
+          interval: interval as YahooFinanceInterval | undefined,
+          range,
+          before:
+            beforeDate && !Number.isNaN(beforeDate.getTime())
+              ? beforeDate
+              : undefined,
+        },
       );
     } catch (error) {
       throw new Error(

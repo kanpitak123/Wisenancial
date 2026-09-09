@@ -345,6 +345,12 @@ interface AnalysisQueryOptions {
   timeframe?: string;
   interval?: YahooFinanceInterval;
   range?: string;
+  /**
+   * เพจก่อนหน้า (lazy-load ตอนผู้ใช้เลื่อนกราฟย้อนหลังเกินขอบเขตที่โหลดไว้แรก) —
+   * ยึดจุดนี้เป็น period2 แทน "ตอนนี้" ไม่งั้นทุกครั้งที่ขอเพิ่มจะได้ช่วงเวลาเดิมซ้ำ
+   * ดู getHistoricalData()
+   */
+  before?: Date;
 }
 
 @Injectable()
@@ -862,18 +868,21 @@ export class MarketDataService {
     options: AnalysisQueryOptions = {},
   ): Promise<HistoricalDataPoint[]> {
     try {
-      const { timeframe, interval, range } = options;
+      const { timeframe, interval, range, before } = options;
       const normalizedTimeframe = (timeframe || '1M').toUpperCase();
       const resolvedInterval: YahooFinanceInterval =
         interval ?? this.getIntervalForTimeframe(normalizedTimeframe);
       let result: any;
 
       const rangeDays = this.getDaysFromRange(range);
-      const period2 = new Date();
-      const period1 = new Date();
+      // ปกติ period2 คือ "ตอนนี้" — แต่ตอนโหลดประวัติเก่ากว่าเพิ่ม (pan กราฟย้อนหลังเกิน
+      // ขอบที่โหลดไว้แรก) ต้องยึด `before` แทน ไม่งั้น period1/period2 จะได้ช่วงเวลาเดิม
+      // ซ้ำทุกครั้งที่ผู้ใช้เลื่อนต่อ
+      const period2 = before ?? new Date();
+      const period1 = new Date(period2);
       const windowDays =
         rangeDays ?? this.getRobustTimeframeDays(normalizedTimeframe);
-      period1.setDate(period2.getDate() - windowDays);
+      period1.setDate(period1.getDate() - windowDays);
 
       result = await yahooFinance.chart(symbol, {
         period1,
@@ -882,6 +891,10 @@ export class MarketDataService {
       });
 
       if (!result || !result.quotes || result.quotes.length === 0) {
+        // ขอ "ก่อนหน้า before" แล้วไม่มีอะไรเลย = เจอขอบเขตข้อมูลเก่าสุดแล้ว (เช่นวัน IPO
+        // หรือขอบเขตประวัติของผู้ให้ข้อมูล) — ไม่ใช่ error ผู้เรียก (lazy-load ตอน pan
+        // กราฟ) ต้องแยกแยะออกจาก fetch ที่ล้มจริง เพื่อหยุดขอเพิ่มแทนที่จะวนซ้ำไม่จบ
+        if (before) return [];
         throw new Error(`No historical data found for ${symbol}`);
       }
 
