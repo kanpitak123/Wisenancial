@@ -405,6 +405,7 @@ export class GamificationService {
       where: { id: userId },
       select: {
         points_balance: true,
+        longest_streak: true,
       },
     });
 
@@ -412,11 +413,23 @@ export class GamificationService {
       return null;
     }
 
+    // ต้องนับด้วยลำดับเดียวกับ getLeaderboard() เป๊ะ (points_balance desc,
+    // longest_streak desc, id asc) ไม่งั้นคนที่คะแนนเท่ากันหมด (เช่นบัญชีใหม่ 0 แต้ม)
+    // จะได้ #1 กันทุกคน ทั้งที่ตำแหน่งจริงในลิสต์ต่างกันตาม longest_streak/id ที่ตัดสินอยู่
     const ahead = await this.prisma.users.count({
       where: {
-        points_balance: {
-          gt: user.points_balance,
-        },
+        OR: [
+          { points_balance: { gt: user.points_balance } },
+          {
+            points_balance: user.points_balance,
+            longest_streak: { gt: user.longest_streak },
+          },
+          {
+            points_balance: user.points_balance,
+            longest_streak: user.longest_streak,
+            id: { lt: userId },
+          },
+        ],
       },
     });
 
