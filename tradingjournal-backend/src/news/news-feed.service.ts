@@ -156,7 +156,11 @@ export class NewsFeedService {
         scope: 'TRADER',
         kind: 'ECONOMIC_EVENT',
         title: row.title,
-        summary: row.content ?? '',
+        // ปฏิทินเศรษฐกิจไม่มี "บทความต้นฉบับ" ให้เก็บใน content (ดู news-sync.service.ts
+        // upsert — ไม่เคยเซ็ต content ตอน ingest) ตัว AI summary ที่ enrichTraderNews()
+        // สร้างไว้จึงเป็นคำอธิบายที่ถูกต้องกว่าเสมอ — ใช้ content เฉพาะถ้ามันมีค่าจริงๆ
+        // (กัน field ไว้เผื่ออนาคตมีทาง ingest อื่นที่เซ็ต content จริง)
+        summary: row.content || row.ai_summary || '',
         source: row.source,
         url: row.url,
         importance: row.importance,

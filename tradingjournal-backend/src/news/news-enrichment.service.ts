@@ -28,7 +28,6 @@ export class NewsEnrichmentService {
     const updated = await this.prisma.news.update({
       where: { id },
       data: {
-        content: context,
         importance:
           (analysis.importance as NewsImportance) ?? NewsImportance.MEDIUM,
         sentiment:
