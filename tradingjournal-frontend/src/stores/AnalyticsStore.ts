@@ -31,6 +31,20 @@ import type {
 } from '../types/analytics.types';
 import type { PortfolioRecord } from '../types/records.types';
 
+/**
+ * §3 QA bug: trader-analytics.service.ts / investor-analytics.service.ts ทั้งคู่ส่ง
+ * PerformancePoint.date มาเป็น ISO-8601 string ดิบเสมอ (JSON ไม่มี Date type — Date
+ * object ฝั่ง backend serialize เป็น toISOString() อยู่ดี) จุดนี้ไม่เคยถูก format เป็น
+ * ข้อความอ่านง่ายเลยไม่ว่าจะกี่จุด แค่พอร์ตมีประวัติหลายจุด แกน X ที่มีป้ายเยอะๆ
+ * บังราคาทับกันจนไม่มีใครสังเกต — พอร์ตใหม่ (ไม่มีประวัติ) เหลือจุดเดียวคือจุด "START"
+ * ป้ายดิบตัวเดียวนั้นเลยเห็นชัดเจนเต็มแกน
+ */
+function formatChartDateLabel(dateStr: string): string {
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+  return parsed.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+}
+
 export const useAnalyticsStore = defineStore('analytics', {
   state: () => ({
     portfolioId: null as number | null,
@@ -83,7 +97,7 @@ export const useAnalyticsStore = defineStore('analytics', {
       state.overview && 'recent_activity' in state.overview ? state.overview.recent_activity : [],
 
     chartData: (state) => ({
-      categories: state.performance.map((point) => String(point.date)),
+      categories: state.performance.map((point) => formatChartDateLabel(point.date)),
       series: [
         {
           // ฝั่ง INVESTOR ไม่ใช่ cash ledger แล้ว — backend คืน total equity
