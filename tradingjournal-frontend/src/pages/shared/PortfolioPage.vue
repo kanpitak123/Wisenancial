@@ -479,6 +479,7 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
             v-model="portForm.name"
             placeholder="e.g., Crypto Scalping"
             autofocus
+            data-test="create-portfolio-name-input"
             :dark="$q.dark.isActive"
             class="rounded-input q-mb-md"
           />
@@ -495,17 +496,27 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
             type="number"
             min="0"
             placeholder="0.00"
+            data-test="create-portfolio-balance-input"
             :dark="$q.dark.isActive"
             class="rounded-input"
           />
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-lg q-pt-sm">
-          <q-btn flat label="Cancel" v-close-popup class="btn-ghost-modern text-weight-medium" />
+          <q-btn
+            flat
+            label="Cancel"
+            :disable="store.isSubmitting"
+            v-close-popup
+            class="btn-ghost-modern text-weight-medium"
+          />
           <q-btn
             unelevated
             label="Create Portfolio"
             icon="add"
+            data-test="submit-create-portfolio-btn"
+            :loading="store.isSubmitting"
+            :disable="store.isSubmitting"
             class="btn-primary-modern text-white text-weight-bold"
             @click="submitCreatePortfolio"
           />

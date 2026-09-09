@@ -10,12 +10,13 @@ import type { Portfolio, PortfolioQuota, PortfolioType } from 'src/types/portfol
 import type { BrokerConnection } from 'src/types/broker-connection.types';
 
 // หน้านี้ไม่ได้เทส data-fetching — ตัด service ออกให้ mount ได้โดยไม่แตะ axios
+const portfolioCreate = vi.fn();
 vi.mock('src/services/portfolio.service', () => ({
   portfolioService: {
     getAll: vi.fn().mockResolvedValue([]),
     getOne: vi.fn(),
     getQuota: vi.fn().mockResolvedValue(null),
-    create: vi.fn(),
+    create: (...args: unknown[]) => portfolioCreate(...args),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -331,5 +332,54 @@ describe('PortfolioPage — broker connection badge (MT5)', () => {
     await mountPage(quota(3, 1, 0), 'TRADER');
 
     expect(brokerList).not.toHaveBeenCalled();
+  });
+});
+
+describe('PortfolioPage — ปุ่ม Create Portfolio ระหว่างรอ request (§6)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it('กำลังส่ง request อยู่ -> ปุ่มถูก disable/loading และกดซ้ำไม่ยิง create ซ้ำ', async () => {
+    const { wrapper, store } = await mountPage(quota(3, 0, 0));
+
+    await byTest(wrapper, 'create-portfolio-btn').trigger('click');
+    await wrapper.vm.$nextTick();
+
+    await new DOMWrapper(
+      document.body.querySelector('[data-test="create-portfolio-name-input"]'),
+    ).setValue('Crypto Scalping');
+    await new DOMWrapper(
+      document.body.querySelector('[data-test="create-portfolio-balance-input"]'),
+    ).setValue('1000');
+
+    let release: (value: Portfolio) => void = () => {};
+    portfolioCreate.mockReturnValue(
+      new Promise<Portfolio>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const submitBtn = () =>
+      new DOMWrapper(document.body.querySelector('[data-test="submit-create-portfolio-btn"]'));
+
+    await submitBtn().trigger('click');
+    await wrapper.vm.$nextTick();
+
+    expect(submitBtn().attributes('disabled'), 'ปุ่มต้อง disable ระหว่างรอ').toBeDefined();
+    expect(store.isSubmitting).toBe(true);
+
+    // กดซ้ำระหว่างที่ยังค้าง — ไม่ควรยิง create() รอบสอง
+    await submitBtn().trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(portfolioCreate, 'ต้องยิงแค่ครั้งเดียวแม้กดซ้ำ').toHaveBeenCalledTimes(1);
+
+    release(portfolioFixture({ id: 2, name: 'Crypto Scalping', initial_balance: 1000 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(store.isSubmitting).toBe(false);
   });
 });
