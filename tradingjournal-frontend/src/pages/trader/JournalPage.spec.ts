@@ -317,3 +317,58 @@ describe('JournalPage — edit / annotate a trade', () => {
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'negative' }));
   });
 });
+
+describe('JournalPage — q-select dropdown ใน Trade dialog เปิดได้ (regression, §2)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    vi.clearAllMocks();
+    getByPortfolio.mockResolvedValue([]);
+  });
+
+  /**
+   * Root cause: Quasar's QMenu position-engine measures the popup's rendered
+   * height right after it opens; when it reads 0 (which happens for a field
+   * with no pre-selected value, like Pair here, because QSelect populates its
+   * virtual-scrolled option list through a debounced async path) it retries a
+   * few times over ~50ms and then gives up for good — nothing else in Quasar
+   * automatically retries again until its own 300ms-later timer, which this
+   * fix backs up with an earlier 60ms nudge via updateMenuPosition(). This test
+   * asserts that nudge actually fires an *additional* updateMenuPosition() call
+   * within that window — not just whatever Quasar's own next-tick call already
+   * produced — so it fails if the @popup-show wiring is ever removed.
+   */
+  it('เปิด dropdown Pair (ไม่มีค่าเริ่มต้น) แล้ว updateMenuPosition ถูกเรียกซ้ำใน ~60ms ผ่าน @popup-show', async () => {
+    const wrapper = await mountPage();
+
+    const newTradeBtn = wrapper.findAll('button').find((b) => b.text().includes('New Trade'));
+    expect(newTradeBtn).toBeTruthy();
+    await newTradeBtn!.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    // placeholder ไม่ได้ประกาศเป็น prop จริงของ QSelect (ไปโผล่ผ่าน fallthrough attrs
+    // แทน) เลยอ่านผ่าน .props() ไม่ได้ — ใช้ options[0] แยกฟิลด์แทน เพราะ pairOptions
+    // ตัวแรกคือ group header { label: 'Crypto', disable: true } ซึ่งไม่ซ้ำกับฟิลด์อื่น
+    const pairSelect = wrapper.findAllComponents({ name: 'QSelect' }).find((s) => {
+      const opts = s.props('options') as Array<{ label?: string }> | undefined;
+      return Array.isArray(opts) && opts[0]?.label === 'Crypto';
+    });
+    expect(pairSelect).toBeTruthy();
+
+    const selectVm = pairSelect!.vm as unknown as {
+      showPopup: () => void;
+      updateMenuPosition: () => void;
+    };
+    const updateSpy = vi.spyOn(selectVm, 'updateMenuPosition');
+
+    selectVm.showPopup();
+    await wrapper.vm.$nextTick();
+    const callsRightAfterOpen = updateSpy.mock.calls.length;
+
+    // ยังไม่ถึง 300ms ที่ Quasar เรียกซ้ำเองตามปกติ — ถ้าไม่มี @popup-show nudge
+    // ของ fix นี้ ช่วงนี้จะไม่มีการเรียกซ้ำเพิ่มเลย
+    await new Promise((resolve) => setTimeout(resolve, 90));
+
+    expect(updateSpy.mock.calls.length).toBeGreaterThan(callsRightAfterOpen);
+  });
+});

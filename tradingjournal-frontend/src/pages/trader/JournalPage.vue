@@ -97,6 +97,26 @@ const emotionOptions = ['confident', 'normal', 'fear', 'greed', 'revenge', 'bore
 const entryReasonOptions = ['Support', 'Resistance', 'MA Cross', 'RSI', 'Pattern'];
 const brokerOptions = [{ label: 'Exness', value: 'EXNESS' }]; // ตัวเลือกโบรกเกอร์
 
+// Quasar's QMenu position-engine measures the popup's rendered height right after
+// it opens, to place itself. QSelect always renders its option list through
+// virtual-scroll, and when a field has no pre-selected value yet — every select
+// wired up below can start out `null` (see tradeForm/editForm), unlike e.g. Type,
+// which defaults to 'BUY' — that list populates through a debounced async path,
+// so the popup can still measure 0 height at that instant. When that happens the
+// position engine gives up for good (nothing else ever retries it on its own),
+// leaving the dropdown open but permanently invisible. Nudge the position calc
+// again shortly after, once the option list has had time to actually render.
+const selectRefs: Record<string, { updateMenuPosition?: () => void } | null> = {};
+function setSelectRef(key: string) {
+  return (el: unknown) => {
+    selectRefs[key] = el as { updateMenuPosition?: () => void } | null;
+  };
+}
+function refreshMenuPosition(key: string) {
+  setTimeout(() => selectRefs[key]?.updateMenuPosition?.(), 60);
+  setTimeout(() => selectRefs[key]?.updateMenuPosition?.(), 320);
+}
+
 // ==========================================
 // Forms
 // ==========================================
@@ -676,6 +696,8 @@ const filteredTrades = computed(() => {
                 map-options
                 placeholder="Select Pair"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('pair')"
+                @popup-show="refreshMenuPosition('pair')"
               />
             </div>
 
@@ -793,6 +815,8 @@ const filteredTrades = computed(() => {
                 :options="strategyOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('strategy')"
+                @popup-show="refreshMenuPosition('strategy')"
               />
             </div>
 
@@ -806,6 +830,8 @@ const filteredTrades = computed(() => {
                 :options="trendOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('trend')"
+                @popup-show="refreshMenuPosition('trend')"
               />
             </div>
 
@@ -819,6 +845,8 @@ const filteredTrades = computed(() => {
                 :options="emotionOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('emotion')"
+                @popup-show="refreshMenuPosition('emotion')"
               />
             </div>
 
@@ -832,6 +860,8 @@ const filteredTrades = computed(() => {
                 :options="entryReasonOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('entryReason')"
+                @popup-show="refreshMenuPosition('entryReason')"
               />
             </div>
 
@@ -973,6 +1003,8 @@ const filteredTrades = computed(() => {
                 :options="strategyOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('editStrategy')"
+                @popup-show="refreshMenuPosition('editStrategy')"
               />
             </div>
 
@@ -986,6 +1018,8 @@ const filteredTrades = computed(() => {
                 :options="trendOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('editTrend')"
+                @popup-show="refreshMenuPosition('editTrend')"
               />
             </div>
 
@@ -999,6 +1033,8 @@ const filteredTrades = computed(() => {
                 :options="emotionOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('editEmotion')"
+                @popup-show="refreshMenuPosition('editEmotion')"
               />
             </div>
 
@@ -1012,6 +1048,8 @@ const filteredTrades = computed(() => {
                 :options="entryReasonOptions"
                 placeholder="Select"
                 :dark="$q.dark.isActive"
+                :ref="setSelectRef('editEntryReason')"
+                @popup-show="refreshMenuPosition('editEntryReason')"
               />
             </div>
 
