@@ -187,11 +187,22 @@ const confirmDelete = (port: Portfolio) => {
   deleteDialog.value = true;
 };
 
-const submitDelete = () => {
-  if (portToDelete.value) {
-    void store.deletePortfolio(portToDelete.value.id);
+const submitDelete = async () => {
+  if (!portToDelete.value) {
+    return;
+  }
+
+  try {
+    await store.deletePortfolio(portToDelete.value.id);
     deleteDialog.value = false;
     $q.notify({ type: 'positive', message: 'Portfolio deleted successfully.', position: 'top' });
+  } catch {
+    deleteDialog.value = false;
+    $q.notify({
+      type: 'negative',
+      message: store.error ?? 'Failed to delete portfolio.',
+      position: 'top',
+    });
   }
 };
 

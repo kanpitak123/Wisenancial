@@ -378,29 +378,24 @@ export class PortfoliosService {
     }
   }
 
+  /**
+   * บล็อกการลบเฉพาะตอนพอร์ตยังมี "ของค้าง" ที่ยังไม่ปิด (ไม้ forex ที่ยังเปิดอยู่ /
+   * หุ้นที่ยังถืออยู่) — ประวัติที่ปิดแล้ว (closed trades, fully-sold lots, records,
+   * goals, trade_imports) ไม่นับเป็นตัวบล็อก เพราะ FK เป็น onDelete: Cascade อยู่แล้ว
+   * (ลบพอร์ตก็ลบประวัติไปด้วยตามปกติ) เดิมนับรวมทุก record ที่เคยมี ทำให้พอร์ตที่เคย
+   * เทรด/ลงทุนแล้วขายหมดแล้วลบไม่ได้อีกเลย — ล็อกโควต้าพอร์ตถาวรสำหรับ free tier
+   */
   private async hasPortfolioActivity(portfolioId: number) {
-    const counts = await this.prisma.$transaction([
+    const [openTrades, openStockLots] = await this.prisma.$transaction([
       this.prisma.trades.count({
-        where: { portfolio_id: portfolioId },
-      }),
-      this.prisma.trade_imports.count({
-        where: { portfolio_id: portfolioId },
-      }),
-      this.prisma.goals.count({
-        where: { portfolio_id: portfolioId },
+        where: { portfolio_id: portfolioId, result_status: 'OPEN' },
       }),
       this.prisma.stock_purchases.count({
-        where: { portfolio_id: portfolioId },
-      }),
-      this.prisma.records.count({
-        where: { portfolio_id: portfolioId },
-      }),
-      this.prisma.dividends.count({
-        where: { portfolio_id: portfolioId },
+        where: { portfolio_id: portfolioId, status: 'OPEN' },
       }),
     ]);
 
-    return counts.some((count) => count > 0);
+    return openTrades > 0 || openStockLots > 0;
   }
 
   private rethrowPrismaError(error: unknown): void {
