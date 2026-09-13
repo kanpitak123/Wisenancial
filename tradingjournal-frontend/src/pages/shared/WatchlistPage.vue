@@ -230,7 +230,8 @@ watch(
 );
 
 const manualItems = computed(() => {
-  const keyword = search.value.trim().toUpperCase();
+  // q-input มี clearable — กดปุ่มล้างแล้ว v-model ได้ null ไม่ใช่ '' (พฤติกรรมของ QInput)
+  const keyword = (search.value ?? '').trim().toUpperCase();
 
   if (!keyword) return currentItems.value;
 
