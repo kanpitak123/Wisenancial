@@ -158,6 +158,17 @@ const loadPortfolioData = async () => {
   const port = portStore.activePortfolio;
   if (!port) return;
 
+  // การ์ด "Portfolio Growth" ผูกกับ analyticsStore.chartData (เหมือนกราฟ Account
+  // Growth หน้า Analytics) แต่หน้านี้ไม่เคยสั่งโหลดเอง — ถ้า analyticsStore ยังไม่เคย
+  // initialize กับพอร์ตนี้ กราฟจะว่างเปล่าตลอด (ยกเว้นบังเอิญเปิดหน้า Analytics มาก่อน)
+  // ยิงแบบไม่ await — เป็นข้อมูลคนละการ์ดกับ goal/dividend ด้านล่าง ไม่ควรบล็อกกัน
+  if (analyticsStore.portfolioId !== port.id) {
+    void safeLoad(
+      () => analyticsStore.initialize(port.id, port.portfolio_type),
+      'โหลดกราฟ Portfolio Growth ไม่สำเร็จ',
+    );
+  }
+
   // โหมด Stock ไม่มีการ์ด Goal บนหน้านี้แล้ว (GoalsPage เป็นของ Forex อย่างเดียว)
   // เลยไม่ต้องยิง /goals ทิ้งเปล่าๆ — แต่ต้องมีปันผลไว้ให้แท็บประวัติกิจกรรมแทน
   if (isInvestor.value) {
