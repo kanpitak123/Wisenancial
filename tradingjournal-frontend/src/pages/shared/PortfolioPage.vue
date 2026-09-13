@@ -15,11 +15,38 @@ import {
 import ConnectMt5Wizard from 'src/components/broker/ConnectMt5Wizard.vue';
 import mt5Logo from 'assets/metatrader5-logo.svg';
 import type { Portfolio } from 'src/types/portfolio.types';
+import { investorPortfolioService } from 'src/services/investor-portfolio.service';
 
 const $q = useQuasar();
 const router = useRouter();
 const store = usePortfolioStore();
 const brokerStore = useBrokerConnectionStore();
+
+// พอร์ต INVESTOR: current_balance เป็นแค่เงินสด ไม่รวมมูลค่าหุ้นที่ถืออยู่ — ต้องดึง
+// portfolio_value (cash + market value ของ holdings) จาก investor dashboard เพื่อคำนวณ
+// Current/Net PnL ให้ตรงกับหน้า Dashboard ของพอร์ตเดียวกัน
+const investorPortfolioValues = ref<Record<number, number>>({});
+
+async function loadInvestorPortfolioValues() {
+  const investorPortfolios = store.portfolios.filter((p) => p.portfolio_type === 'INVESTOR');
+
+  await Promise.all(
+    investorPortfolios.map(async (port) => {
+      try {
+        const { data } = await investorPortfolioService.getDashboard(port.id);
+        investorPortfolioValues.value[port.id] = data.summary.portfolio_value;
+      } catch {
+        // เงียบๆ พอ — ถ้าโหลดไม่สำเร็จ ใช้ current_balance (cash) เป็น fallback ต่อไป
+      }
+    }),
+  );
+}
+
+function currentValue(port: Portfolio): number {
+  return port.portfolio_type === 'INVESTOR'
+    ? (investorPortfolioValues.value[port.id] ?? Number(port.current_balance))
+    : Number(port.current_balance);
+}
 
 // หน้านี้เป็น shared — แสดงเฉพาะพอร์ตของโหมดที่ active อยู่ (Forex = TRADER, Stock = INVESTOR)
 const { meta: workspaceMeta } = useWorkspace();
@@ -33,6 +60,8 @@ onMounted(async () => {
     // เข้าหน้านี้ตอนพอร์ตโหลดไว้แล้ว loadPortfolios() จะ early-return เลยยังไม่มีโควต้า
     await store.loadQuota();
   }
+
+  void loadInvestorPortfolioValues();
 
   // เงียบๆ พอ — ป้าย broker เป็นแค่ทางลัด ไม่ใช่ข้อมูลหลักของหน้านี้ โหลดไม่สำเร็จก็แค่โชว์
   // เป็น "ยังไม่เชื่อมต่อ" ไปก่อน ไม่ต้อง notify ผู้ใช้ซ้ำกับ error ของพอร์ตหลัก
@@ -223,7 +252,7 @@ const calculateGrowth = (current: number, initial: number) => {
   return (((current - initial) / initial) * 100).toFixed(2);
 };
 
-const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.initial_balance);
+const netPnl = (port: Portfolio) => currentValue(port) - Number(port.initial_balance);
 </script>
 
 <template>
@@ -410,7 +439,7 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
                 <div class="balance-label">Current</div>
                 <div class="balance-value text-main text-weight-bolder">
                   ${{
-                    Number(port.current_balance).toLocaleString(undefined, {
+                    currentValue(port).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                     })
                   }}
@@ -436,9 +465,7 @@ const netPnl = (port: Portfolio) => Number(port.current_balance) - Number(port.i
                   style="opacity: 0.75"
                 >
                   ({{ netPnl(port) >= 0 ? '+' : ''
-                  }}{{
-                    calculateGrowth(Number(port.current_balance), Number(port.initial_balance))
-                  }}%)
+                  }}{{ calculateGrowth(currentValue(port), Number(port.initial_balance)) }}%)
                 </span>
               </div>
             </div>
