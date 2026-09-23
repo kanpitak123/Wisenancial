@@ -31,3 +31,9 @@ yarn-error.log*
 
 # local .env files
 .env.local*
+
+# QA Playwright runtime artifacts (storageState has live JWTs, logs/screenshots may
+# contain real qa@ account data) — the qa/*.mjs scripts themselves are tracked
+qa/.auth/
+qa/logs/
+qa/screenshots/
