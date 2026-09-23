@@ -19,8 +19,9 @@ import { usePortfolioStore } from 'stores/PortfolioStore';
 import { buildHoldingsCsv, buildRealizedPnlCsv, downloadCsv } from 'src/utils/csv-export';
 import StockSymbolPicker from 'components/stocks/StockSymbolPicker.vue';
 import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
+import { investorPortfolioService } from 'src/services/investor-portfolio.service';
 import type { StockCatalogItem } from 'src/composables/useStockCatalog';
-import type { InvestorSale, StockPurchase } from 'src/types/investor-portfolio.types';
+import type { InvestorSale, SellPreviewResponse, StockPurchase } from 'src/types/investor-portfolio.types';
 
 const $q = useQuasar();
 const store = useInvestorPortfolioStore();
@@ -32,6 +33,17 @@ const recordTab = ref<'open' | 'closed'>('open');
 const activePortfolio = computed(() => portfolioStore.activeInvestorPortfolio);
 
 const portfolioCurrency = computed(() => activePortfolio.value?.currency ?? 'USD');
+
+/**
+ * `activePortfolio` เป็นแค่ "มีพอร์ตถูกเลือกอยู่ไหม" (จาก PortfolioStore) ซึ่งจริงจนก่อน
+ * InvestorPortfolioStore.load() ของพอร์ตนั้นจะโหลดเสร็จด้วยซ้ำ — เดิมปุ่ม "ซื้อหุ้น"/"ขาย" ผูกกับ
+ * activePortfolio ตัวเดียว ทำให้กดได้ก่อนข้อมูลจริงพร้อม แล้ว submit ก็ throw ทันทีจาก
+ * `store.portfolioId === null` guard (QA sweep 2026-09-23, MEDIUM #4) — ต้องเช็คว่า
+ * store.portfolioId ตรงกับพอร์ตที่เลือกอยู่จริงๆ ก่อน ไม่ใช่แค่มีพอร์ตถูกเลือก
+ */
+const dataReady = computed(
+  () => activePortfolio.value !== null && store.portfolioId === activePortfolio.value.id,
+);
 
 const load = async () => {
   const id = activePortfolio.value?.id;
@@ -432,18 +444,90 @@ const sellForm = ref({
 const openSellDialog = (purchase: StockPurchase) => {
   sellTarget.value = purchase;
   sellErrors.value = {};
+  sellPreview.value = null;
   sellForm.value = {
     shares_count: Number(purchase.remaining_shares),
     sold_price: Number(purchase.purchase_price),
     fees: 0,
-    cost_method: 'FIFO',
+    cost_method: activePortfolio.value?.investor_cost_method ?? 'FIFO',
     sold_date: todayInput(),
     notes: '',
   };
   sellDialog.value = true;
 };
 
-const maxSellShares = computed(() => Number(sellTarget.value?.remaining_shares ?? 0));
+/**
+ * ขายจริงตัดจากทุก lot ของสัญลักษณ์นี้ตาม cost method (ดู StockTransactionsService.sell()
+ * บน backend) ไม่ใช่แค่ lot แถวที่กด "ขาย" — คำนวณยอดถือรวมจาก lot ที่โหลดมาแล้วในเครื่อง
+ * (sync, ไม่ต้องรอ API) เพื่อให้ทั้ง caption และ validation ตรงกับสิ่งที่ backend จะยอมขายจริง
+ */
+const totalHeldForSymbol = computed(() => {
+  const symbol = sellTarget.value?.stock_symbol;
+
+  if (!symbol) return 0;
+
+  return store.openPurchases
+    .filter((row) => row.stock_symbol === symbol)
+    .reduce((sum, row) => sum + Number(row.remaining_shares), 0);
+});
+
+const lotsForSymbol = computed(() =>
+  store.openPurchases.filter((row) => row.stock_symbol === sellTarget.value?.stock_symbol).length,
+);
+
+const maxSellShares = computed(() => totalHeldForSymbol.value);
+
+// ── พรีวิว lot ที่จะถูกตัดจริง (ตัวเดียวกับ backend ใช้ตอนขายจริง) ────────────────
+const sellPreview = ref<SellPreviewResponse | null>(null);
+const sellPreviewLoading = ref(false);
+let sellPreviewRequestId = 0;
+
+const fetchSellPreview = async () => {
+  const symbol = sellTarget.value?.stock_symbol;
+  const shares = Number(sellForm.value.shares_count);
+
+  if (!symbol || !shares || shares <= 0 || activePortfolio.value === null) {
+    sellPreview.value = null;
+    return;
+  }
+
+  const requestId = ++sellPreviewRequestId;
+  sellPreviewLoading.value = true;
+
+  try {
+    const response = await investorPortfolioService.previewSell(activePortfolio.value.id, {
+      stock_symbol: symbol,
+      shares_count: shares,
+      cost_method: sellForm.value.cost_method,
+    });
+
+    // เผื่อผู้ใช้พิมพ์เปลี่ยนจำนวน/cost method ระหว่างรอ response — เอาแค่คำตอบล่าสุดจริงๆ
+    if (requestId === sellPreviewRequestId) {
+      sellPreview.value = response.data;
+    }
+  } catch {
+    // preview เป็นแค่ตัวช่วยแสดงผล ไม่ใช่ gate การ submit — ถ้าดึงไม่สำเร็จก็แค่ไม่โชว์ breakdown
+    if (requestId === sellPreviewRequestId) {
+      sellPreview.value = null;
+    }
+  } finally {
+    if (requestId === sellPreviewRequestId) {
+      sellPreviewLoading.value = false;
+    }
+  }
+};
+
+let sellPreviewDebounce: ReturnType<typeof setTimeout> | undefined;
+
+watch(
+  [() => sellForm.value.shares_count, () => sellForm.value.cost_method, sellDialog],
+  () => {
+    if (!sellDialog.value) return;
+
+    clearTimeout(sellPreviewDebounce);
+    sellPreviewDebounce = setTimeout(() => void fetchSellPreview(), 300);
+  },
+);
 
 const sellProceeds = computed(() => {
   const count = Number(sellForm.value.shares_count);
@@ -602,10 +686,11 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
           unelevated
           no-caps
           icon="add"
-          label="ซื้อหุ้น"
+          :label="dataReady ? 'ซื้อหุ้น' : 'กำลังโหลดข้อมูลพอร์ต...'"
           class="btn-primary-gradient text-white text-weight-bold"
           data-test="open-buy"
-          :disable="!activePortfolio"
+          :disable="!dataReady"
+          :loading="!!activePortfolio && !dataReady"
           @click="openBuyDialog"
         />
       </div>
@@ -1181,7 +1266,14 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
         <q-card-section class="q-gutter-sm">
           <div class="text-caption text-muted" data-test="sell-available">
             ถืออยู่ {{ shares(maxSellShares) }} หุ้น
+            <template v-if="lotsForSymbol > 1"> (รวม {{ lotsForSymbol }} lot)</template>
           </div>
+          <q-banner v-if="lotsForSymbol > 1" dense class="sell-multilot-banner" data-test="sell-multilot-notice">
+            <template v-slot:avatar><q-icon name="info" size="xs" /></template>
+            {{ sellTarget?.stock_symbol }} ที่ถืออยู่มีมากกว่า 1 lot — การขายนี้จะตัดหุ้นตามลำดับวิธีคิดต้นทุน
+            ({{ sellForm.cost_method }}) ข้ามทุก lot ของ {{ sellTarget?.stock_symbol }} ไม่ใช่แค่ lot ที่กด
+            "ขาย" นี้ ดู breakdown ด้านล่าง
+          </q-banner>
 
           <div class="row q-col-gutter-sm">
             <q-input
@@ -1240,6 +1332,34 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
             ได้รับสุทธิ {{ money(sellProceeds) }} {{ portfolioCurrency }}
           </div>
 
+          <div v-if="sellPreviewLoading" class="text-caption text-muted" data-test="sell-preview-loading">
+            กำลังคำนวณ lot ที่จะถูกตัด...
+          </div>
+          <div
+            v-else-if="sellPreview && sellPreview.allocations.length > 0"
+            class="sell-allocation-preview"
+            data-test="sell-preview"
+          >
+            <div class="text-caption text-weight-bold q-mb-xs">
+              จะตัดจาก {{ sellPreview.allocations.length }} lot ({{ sellPreview.cost_method }}):
+            </div>
+            <div
+              v-for="allocation in sellPreview.allocations"
+              :key="allocation.purchase_id"
+              class="row items-center justify-between text-caption sell-allocation-row"
+              :data-test="`sell-preview-lot-${allocation.purchase_id}`"
+            >
+              <span>Lot #{{ allocation.purchase_id }} ({{ formatDate(allocation.purchase_date) }})</span>
+              <span class="text-weight-bold">
+                {{ shares(allocation.shares) }} หุ้น
+                <template v-if="allocation.fully_closes_lot"> (ปิด lot)</template>
+              </span>
+            </div>
+            <div v-if="sellPreview.insufficient" class="text-negative text-caption q-mt-xs">
+              จำนวนที่ขอเกินกว่าที่มี — มีจริง {{ shares(sellPreview.available_shares) }} หุ้น
+            </div>
+          </div>
+
           <q-input v-model="sellForm.notes" outlined dense type="textarea" rows="2" label="โน้ต" />
         </q-card-section>
 
@@ -1252,6 +1372,7 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
             label="บันทึกการขาย"
             data-test="submit-sell"
             :loading="store.submitting"
+            :disable="!dataReady"
             @click="submitSell"
           />
         </q-card-actions>
@@ -1505,5 +1626,21 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
 
 .record-dialog {
   background: var(--bg-card);
+}
+
+.sell-multilot-banner {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.sell-allocation-preview {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.sell-allocation-row + .sell-allocation-row {
+  margin-top: 4px;
 }
 </style>

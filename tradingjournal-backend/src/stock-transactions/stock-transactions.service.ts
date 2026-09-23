@@ -3,6 +3,7 @@ import { PortfolioType, Prisma, RecordSource, RecordType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordsService } from '../records/records.service';
 import { BuyStockDto } from './dto/buy-stock.dto';
+import { PreviewSellStockDto } from './dto/preview-sell-stock.dto';
 import { SellStockDto } from './dto/sell-stock.dto';
 
 type Lot = {
@@ -228,6 +229,62 @@ export class StockTransactionsService {
           : Number(realized.div(costBasis).mul(100).toDecimalPlaces(2)),
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  /**
+   * แสดงล่วงหน้าว่าการขายจะไปตัด lot ไหนบ้างและเท่าไหร่ ก่อนกดยืนยันขายจริง —
+   * ใช้ allocateSequential/allocateAverage ตัวเดียวกับ sell() เป๊ะๆ (ไม่ reimplement)
+   * เพื่อไม่ให้ preview กับสิ่งที่ backend ตัดจริงมีโอกาส drift กัน
+   * read-only, ไม่ lock แถวใดๆ — sell() จริงจะ re-validate เต็มรูปแบบใน transaction ของตัวเองอีกที
+   * ดังนั้นต่อให้ preview เก่า (มีคนอื่นขายแทรกระหว่างนั้น) sell() จริงก็ยัง fail ด้วย error จริงตามปกติ
+   */
+  async previewSell(portfolioId: number, userId: number, dto: PreviewSellStockDto) {
+    const portfolio = await this.assertInvestorPortfolio(portfolioId, userId);
+    const symbol = dto.stock_symbol.trim().toUpperCase();
+    const sharesToSell = new Prisma.Decimal(dto.shares_count);
+    const method = dto.cost_method ?? portfolio.investor_cost_method ?? 'FIFO';
+    const orderBy = method === 'LIFO'
+      ? { purchase_date: 'desc' as const }
+      : { purchase_date: 'asc' as const };
+
+    const lots = await this.prisma.stock_purchases.findMany({
+      where: {
+        portfolio_id: portfolioId,
+        stock_symbol: symbol,
+        status: 'OPEN',
+        remaining_shares: { gt: 0 },
+      },
+      orderBy: [orderBy, { id: method === 'LIFO' ? 'desc' : 'asc' }],
+    }) as unknown as Lot[];
+
+    const available = lots.reduce(
+      (sum, lot) => sum.add(lot.remaining_shares),
+      new Prisma.Decimal(0),
+    );
+
+    const requested = Prisma.Decimal.min(sharesToSell, available);
+    const allocations = method === 'AVERAGE'
+      ? this.allocateAverage(lots, requested)
+      : this.allocateSequential(lots, requested);
+
+    return {
+      cost_method: method,
+      requested_shares: Number(sharesToSell),
+      available_shares: Number(available),
+      insufficient: available.lessThan(sharesToSell),
+      allocations: allocations.map((allocation) => {
+        const lot = lots.find((item) => item.id === allocation.purchase_id)!;
+        return {
+          purchase_id: allocation.purchase_id,
+          purchase_date: lot.purchase_date,
+          lot_remaining_shares: Number(lot.remaining_shares),
+          shares: Number(allocation.shares),
+          unit_cost: Number(allocation.unit_cost),
+          cost_basis: Number(allocation.cost_basis),
+          fully_closes_lot: allocation.shares.gte(lot.remaining_shares),
+        };
+      }),
+    };
   }
 
   async sales(portfolioId: number, userId: number) {

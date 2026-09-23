@@ -79,6 +79,29 @@ export interface SellStockInput {
   notes?: string;
 }
 
+export interface SellPreviewAllocation {
+  purchase_id: number;
+  purchase_date: string;
+  lot_remaining_shares: number;
+  shares: number;
+  unit_cost: number;
+  cost_basis: number;
+  fully_closes_lot: boolean;
+}
+
+/**
+ * ผลลัพธ์จาก GET /investor/portfolios/:id/stocks/sell-preview — คำนวณด้วย allocation logic
+ * ตัวเดียวกับที่ sell() จริงใช้ (allocateSequential/allocateAverage) จึงรับประกันได้ว่า lot ที่
+ * แสดงให้ผู้ใช้เห็นก่อนกดขาย ตรงกับ lot ที่ backend จะตัดจริงเป๊ะ — ไม่ใช่แค่ lot ที่ผู้ใช้กด "ขาย"
+ */
+export interface SellPreviewResponse {
+  cost_method: CostMethod;
+  requested_shares: number;
+  available_shares: number;
+  insufficient: boolean;
+  allocations: SellPreviewAllocation[];
+}
+
 export interface InvestorHolding {
   symbol: string;
   name?: string | null;

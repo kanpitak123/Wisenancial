@@ -1,10 +1,12 @@
 import { api } from 'src/boot/axios';
 import type {
   BuyStockInput,
+  CostMethod,
   InvestorActivity,
   InvestorDashboard,
   InvestorPerformancePoint,
   InvestorSale,
+  SellPreviewResponse,
   SellStockInput,
 } from 'src/types/investor-portfolio.types';
 
@@ -15,6 +17,15 @@ export const investorPortfolioService = {
 
   sell(portfolioId: number, payload: SellStockInput) {
     return api.post(`/investor/portfolios/${portfolioId}/stocks/sell`, payload);
+  },
+
+  previewSell(
+    portfolioId: number,
+    params: { stock_symbol: string; shares_count: number; cost_method?: CostMethod },
+  ) {
+    return api.get<SellPreviewResponse>(`/investor/portfolios/${portfolioId}/stocks/sell-preview`, {
+      params,
+    });
   },
 
   getSales(portfolioId: number) {

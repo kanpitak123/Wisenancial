@@ -99,7 +99,11 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
 
     async buy(payload: BuyStockInput) {
       if (this.portfolioId === null) {
-        throw new Error('ยังไม่ได้เลือก Investor portfolio');
+        // เกิดถ้าปุ่มซื้อถูกกดก่อน load() ของพอร์ตนี้เสร็จ (ปกติ UI ต้อง disable ปุ่มไว้ก่อนแล้ว —
+        // ดักซ้ำที่นี่เผื่อมี race path อื่นที่หลุดผ่านมา) ต้อง set this.error ไว้ด้วย ไม่งั้น toast
+        // ฝั่ง component จะ fallback ไปที่ข้อความ generic เพราะ error ไม่มีให้ getErrorMessage อ่าน
+        this.error = 'ข้อมูลพอร์ตยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่';
+        throw new Error(this.error);
       }
 
       this.submitting = true;
@@ -119,7 +123,8 @@ export const useInvestorPortfolioStore = defineStore('investor-portfolio', {
 
     async sell(payload: SellStockInput) {
       if (this.portfolioId === null) {
-        throw new Error('ยังไม่ได้เลือก Investor portfolio');
+        this.error = 'ข้อมูลพอร์ตยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่';
+        throw new Error(this.error);
       }
 
       this.submitting = true;
