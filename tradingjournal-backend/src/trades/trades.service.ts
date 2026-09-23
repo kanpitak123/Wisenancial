@@ -12,6 +12,7 @@ import {
   trades,
 } from '@prisma/client';
 import type { BrokerDeal, BrokerPosition } from '../brokers/interfaces/broker-types';
+import { TraderAnalyticsService } from '../analytics/trader-analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordsService } from '../records/records.service';
 import { CloseTradeDto } from './dto/close-trade.dto';
@@ -64,7 +65,7 @@ export class TradesService {
 
   async createOpenTrade(userId: number, portfolioId: number, data: CreateTradeDto) {
     await this.assertTraderPortfolio(portfolioId, userId);
-    return this.prisma.trades.create({
+    const created = await this.prisma.trades.create({
       data: {
         user_id: userId,
         portfolio_id: portfolioId,
@@ -92,13 +93,15 @@ export class TradesService {
         raw_data: this.toJson({ contract_size: data.contract_size ?? 1 }),
       },
     });
+    TraderAnalyticsService.invalidate(portfolioId, userId);
+    return created;
   }
 
   async createClosedTrade(userId: number, portfolioId: number, data: CreateTradeDto) {
     await this.assertTraderPortfolio(portfolioId, userId);
     const calculated = this.resolvePnl(data);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const trade = await tx.trades.create({
         data: {
           user_id: userId,
@@ -149,6 +152,8 @@ export class TradesService {
 
       return trade;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    TraderAnalyticsService.invalidate(portfolioId, userId);
+    return created;
   }
 
   async upsertImportedClosedTrade(
@@ -525,7 +530,7 @@ export class TradesService {
     }
 
     const raw = this.jsonObject(trade.raw_data);
-    return this.prisma.trades.update({
+    const updated = await this.prisma.trades.update({
       where: { id },
       data: {
         ...(data.pair !== undefined && { pair: this.normalizePair(data.pair) }),
@@ -552,6 +557,10 @@ export class TradesService {
         }),
       },
     });
+    if (trade.portfolio_id !== null) {
+      TraderAnalyticsService.invalidate(trade.portfolio_id, userId);
+    }
+    return updated;
   }
 
   async closeTrade(id: number, userId: number, data: CloseTradeDto) {
@@ -577,7 +586,7 @@ export class TradesService {
         })
       : { net_pnl: data.pnl, result_status: this.resultStatus(data.pnl) };
 
-    return this.prisma.$transaction(async (tx) => {
+    const closed = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.trades.update({
         where: { id },
         data: {
@@ -609,6 +618,8 @@ export class TradesService {
 
       return updated;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    TraderAnalyticsService.invalidate(portfolioId, userId);
+    return closed;
   }
 
   calculatePnl(data: {
@@ -623,12 +634,53 @@ export class TradesService {
     return this.pnlCalculator.calculate(data);
   }
 
+  /** ไม้ที่ sync มาจาก broker ต้องลบไม่ได้ผ่าน endpoint นี้ — ต้องยกเลิกผ่านการตัดการเชื่อมต่อ broker แทน
+   *  เพื่อไม่ให้ข้อมูลใน Wisenancial เพี้ยนไปจากสถานะจริงบน broker */
+  private static readonly USER_DELETABLE_SOURCES: TradeSource[] = [
+    TradeSource.MANUAL,
+    TradeSource.IMPORT,
+  ];
+
   async remove(id: number, userId: number) {
     const trade = await this.findOwnedTrade(id, userId);
+
     if (trade.result_status !== 'OPEN') {
-      throw new BadRequestException('ไม่สามารถลบออเดอร์ที่ปิดแล้ว เพราะมี Cash Record เชื่อมอยู่');
+      if (!trade.source || !TradesService.USER_DELETABLE_SOURCES.includes(trade.source)) {
+        throw new BadRequestException(
+          'ไม่สามารถลบไม้ที่ sync มาจาก broker ได้โดยตรง หากต้องการนำออก กรุณายกเลิกการเชื่อมต่อ broker แทน',
+        );
+      }
+
+      // ไม้ที่ปิดแล้ว (manual/CSV import) มี Cash Record (records, source=TRADE) ผูกอยู่จากตอนปิด/import —
+      // ต้อง reverse ก่อนลบ ไม่งั้นยอด Cash balance ของพอร์ตจะค้าง P&L ของไม้ที่ไม่มีอยู่แล้ว (ดู records.service.ts reverseSystem)
+      await this.prisma.$transaction(
+        async (tx) => {
+          if (trade.portfolio_id !== null) {
+            try {
+              await this.recordsService.reverseSystem(
+                trade.portfolio_id,
+                RecordSource.TRADE,
+                trade.id,
+                RecordType.TRADE_PNL,
+                `Deleted ${trade.pair}`,
+                tx,
+              );
+            } catch (err) {
+              // ไม่มี Active Record ผูกอยู่ (เช่น ข้อมูลเก่าก่อนมี Cash Record) — ไม่มีอะไรต้อง reverse, ลบไม้ได้ตามปกติ
+              if (!(err instanceof NotFoundException)) throw err;
+            }
+          }
+          await tx.trades.delete({ where: { id } });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } else {
+      await this.prisma.trades.delete({ where: { id } });
     }
-    await this.prisma.trades.delete({ where: { id } });
+
+    if (trade.portfolio_id !== null) {
+      TraderAnalyticsService.invalidate(trade.portfolio_id, userId);
+    }
     return { message: 'ลบรายการเทรดสำเร็จ', deleted_id: id };
   }
 

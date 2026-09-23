@@ -397,7 +397,12 @@ const submitDelete = () => {
     })
     .catch((err: unknown) => {
       console.error('Deletion failed:', err);
-      $q.notify({ type: 'negative', message: 'Deletion failed', position: 'top' });
+      $q.notify({
+        type: 'negative',
+        message: store.error ?? 'Deletion failed',
+        position: 'top',
+        timeout: 4000,
+      });
     });
 };
 
