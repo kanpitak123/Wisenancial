@@ -1,4 +1,4 @@
-import { mount, type VueWrapper } from '@vue/test-utils';
+import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { QLayout, QPageContainer } from 'quasar';
 import { h } from 'vue';
@@ -11,6 +11,7 @@ import type { Portfolio } from 'src/types/portfolio.types';
 
 const buy = vi.fn();
 const sell = vi.fn();
+const previewSell = vi.fn();
 const getSales = vi.fn();
 const getDashboard = vi.fn();
 const getTimeline = vi.fn();
@@ -30,6 +31,7 @@ vi.mock('src/services/investor-portfolio.service', () => ({
   investorPortfolioService: {
     buy: (...args: unknown[]) => buy(...args),
     sell: (...args: unknown[]) => sell(...args),
+    previewSell: (...args: unknown[]) => previewSell(...args),
     getSales: (...args: unknown[]) => getSales(...args),
     getDashboard: (...args: unknown[]) => getDashboard(...args),
     getTimeline: (...args: unknown[]) => getTimeline(...args),
@@ -101,7 +103,7 @@ function sale(overrides: Partial<InvestorSale> = {}): InvestorSale {
     id: 1,
     portfolio_id: 2,
     stock_symbol: 'AAPL',
-    shares_count: 5,
+    shares_sold: 5,
     sold_price: 210,
     cost_basis: 900,
     realized_pnl: 150,
@@ -129,6 +131,10 @@ const investorPortfolio = {
 
 const byTest = (wrapper: VueWrapper, name: string) => wrapper.find(`[data-test="${name}"]`);
 
+// q-dialog teleports its content to document.body, ทำให้ wrapper.find() ปกติหาไม่เจอ (ค้นแค่ใน
+// DOM ใต้ wrapper.element เอง) — ใช้แบบเดียวกับ JournalPage.spec.ts สำหรับ element ในฟอร์ม dialog
+const byBody = (name: string) => new DOMWrapper(document.body.querySelector(`[data-test="${name}"]`));
+
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function mountPage(options: { purchases?: StockPurchase[]; sales?: InvestorSale[] } = {}) {
@@ -137,6 +143,9 @@ async function mountPage(options: { purchases?: StockPurchase[]; sales?: Investo
   getDashboard.mockResolvedValue({ data: { summary: null, holdings: [], recent_activity: [] } });
   getTimeline.mockResolvedValue({ data: [] });
   getPerformance.mockResolvedValue({ data: [] });
+  previewSell.mockResolvedValue({
+    data: { cost_method: 'FIFO', requested_shares: 0, available_shares: 0, insufficient: false, allocations: [] },
+  });
 
   const portfolioStore = usePortfolioStore();
 
@@ -436,6 +445,66 @@ describe('StockRecordPage', () => {
     });
   });
 
+  // ── QA sweep 2026-09-23 MEDIUM #4: ปุ่มซื้อ/ขาย enable ก่อนข้อมูลพอร์ตโหลดเสร็จ ─────────────
+  describe('ปุ่มซื้อต้องรอ InvestorPortfolioStore โหลดเสร็จจริง ไม่ใช่แค่มีพอร์ตถูกเลือก', () => {
+    it('activePortfolio ถูกเลือกแล้วแต่ store.load() ยังไม่เสร็จ -> ปุ่ม "ซื้อหุ้น" ต้องยัง disable', async () => {
+      let resolveDashboard: (value: unknown) => void = () => {};
+
+      getPurchases.mockResolvedValue([purchase()]);
+      getSales.mockResolvedValue({ data: [] });
+      getDashboard.mockReturnValue(
+        new Promise((resolve) => {
+          resolveDashboard = resolve;
+        }),
+      );
+      getTimeline.mockResolvedValue({ data: [] });
+      getPerformance.mockResolvedValue({ data: [] });
+
+      const portfolioStore = usePortfolioStore();
+
+      portfolioStore.portfolios = [investorPortfolio];
+      portfolioStore.activeType = 'INVESTOR';
+      portfolioStore.activePortfolioIds.INVESTOR = 2;
+
+      const wrapper = mount(
+        { render: () => h(QLayout, () => [h(QPageContainer, () => [h(StockRecordPage)])]) },
+        { attachTo: document.body },
+      );
+
+      await flush();
+      await wrapper.vm.$nextTick();
+
+      // activePortfolio (PortfolioStore) มีค่าแล้ว แต่ InvestorPortfolioStore.load() ยังค้างรอ
+      // getDashboard อยู่ — ปุ่มต้อง disable ไม่ใช่แค่เช็คว่ามีพอร์ตถูกเลือก (บั๊กเดิม: ผูกกับ
+      // activePortfolio อย่างเดียว ทำให้กดได้ก่อนข้อมูลจริงพร้อม แล้ว submit throw ทันที)
+      expect(byTest(wrapper, 'open-buy').attributes('disabled')).toBeDefined();
+
+      resolveDashboard({ data: { summary: null, holdings: [], recent_activity: [] } });
+      await flush();
+      await wrapper.vm.$nextTick();
+
+      expect(byTest(wrapper, 'open-buy').attributes('disabled')).toBeUndefined();
+    });
+
+    it('ถ้า store.buy() ถูกเรียกก่อนพอร์ตโหลดเสร็จ (หลุดผ่าน UI guard มาได้) toast ต้องโชว์เหตุผลจริง ไม่ใช่ข้อความ generic', async () => {
+      const { wrapper, store } = await mountPage();
+      const vm = wrapper.findComponent(StockRecordPage).vm as unknown as { submitBuy: () => Promise<void> };
+
+      store.portfolioId = null; // จำลอง race: dialog เปิดค้างไว้ตอนพอร์ตยัง unload
+
+      Object.assign((vm as unknown as { buyForm: Record<string, unknown> }).buyForm, {
+        stock_symbol: 'AAPL',
+        purchase_price: 200,
+        shares_count: 10,
+      });
+
+      await vm.submitBuy();
+      await flush();
+
+      expect(store.error).toBe('ข้อมูลพอร์ตยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่');
+    });
+  });
+
   // ── flow ขาย ────────────────────────────────────────────────────────────────
   describe('บันทึกการขาย', () => {
     it('เปิดฟอร์มขายแล้วเติมจำนวนคงเหลือให้อัตโนมัติ', async () => {
@@ -503,6 +572,146 @@ describe('StockRecordPage', () => {
       expect(sell).not.toHaveBeenCalled();
       expect(vm.sellErrors.shares_count).toContain('5');
     });
+
+    // QA sweep 2026-09-23 MEDIUM #3: การขายจริงตัดข้ามทุก lot ของสัญลักษณ์ตาม cost method
+    // ไม่ใช่แค่ lot ที่กด "ขาย" — dialog ต้องแสดงยอดรวมข้ามทุก lot และ breakdown ที่ backend จะตัดจริง
+    it('มีหลาย lot ของสัญลักษณ์เดียวกัน -> "ถืออยู่" ต้องรวมทุก lot ไม่ใช่แค่ lot ที่กด และขายเกิน lot เดียวได้ถ้ารวมกันพอ', async () => {
+      const { wrapper } = await mountPage({
+        purchases: [
+          purchase({ id: 7, stock_symbol: 'PTT.BK', remaining_shares: 5 }),
+          purchase({ id: 8, stock_symbol: 'PTT.BK', remaining_shares: 20 }),
+        ],
+      });
+
+      await byTest(wrapper, 'sell-7').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.findComponent(StockRecordPage).vm as unknown as {
+        sellForm: Record<string, unknown>;
+        sellErrors: Record<string, string>;
+        maxSellShares: number;
+        submitSell: () => Promise<void>;
+      };
+
+      // lot #7 ที่กดมีแค่ 5 หุ้น แต่รวมกับ lot #8 อีก 20 หุ้น -> ถืออยู่จริง 25 หุ้นสำหรับสัญลักษณ์นี้
+      expect(vm.maxSellShares).toBe(25);
+      expect(byBody('sell-available').text()).toContain('25');
+      expect(byBody('sell-available').text()).toContain('2 lot');
+      expect(document.body.querySelector('[data-test="sell-multilot-notice"]')).not.toBeNull();
+
+      sell.mockResolvedValue({ data: { success: true } });
+      Object.assign(vm.sellForm, { shares_count: 18, sold_price: 40 });
+
+      await vm.submitSell();
+      await flush();
+
+      // 18 > lot #7 คนเดียว (5) แต่ <= รวมทั้งหมด (25) -> ต้องขายผ่าน ไม่ error
+      expect(vm.sellErrors.shares_count).toBeFalsy();
+      expect(sell).toHaveBeenCalledTimes(1);
+    });
+
+    it('lot เดียวสำหรับสัญลักษณ์นี้ -> ไม่แสดง multilot notice และ "ถืออยู่" เท่ากับ lot นั้นเป๊ะ (พฤติกรรมเดิมไม่เปลี่ยน)', async () => {
+      const { wrapper } = await mountPage({
+        purchases: [purchase({ id: 7, stock_symbol: 'PTT.BK', remaining_shares: 5 })],
+      });
+
+      await byTest(wrapper, 'sell-7').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(byBody('sell-available').text()).toContain('5');
+      expect(byBody('sell-available').text()).not.toContain('lot');
+      expect(document.body.querySelector('[data-test="sell-multilot-notice"]')).toBeNull();
+    });
+
+    it('เปลี่ยนจำนวนหุ้นที่จะขาย -> เรียก previewSell และโชว์ breakdown lot ตรงกับที่ backend จะตัดจริง (ตัวเดียวกับ allocateSequential ที่ sell() จริงใช้)', async () => {
+      const { wrapper } = await mountPage({
+        purchases: [
+          purchase({ id: 7, stock_symbol: 'PTT.BK', remaining_shares: 5, purchase_date: '2026-01-01T00:00:00.000Z' }),
+          purchase({ id: 8, stock_symbol: 'PTT.BK', remaining_shares: 20, purchase_date: '2026-02-01T00:00:00.000Z' }),
+        ],
+      });
+
+      previewSell.mockResolvedValue({
+        data: {
+          cost_method: 'FIFO',
+          requested_shares: 18,
+          available_shares: 25,
+          insufficient: false,
+          allocations: [
+            {
+              purchase_id: 7,
+              purchase_date: '2026-01-01T00:00:00.000Z',
+              lot_remaining_shares: 5,
+              shares: 5,
+              unit_cost: 12,
+              cost_basis: 60,
+              fully_closes_lot: true,
+            },
+            {
+              purchase_id: 8,
+              purchase_date: '2026-02-01T00:00:00.000Z',
+              lot_remaining_shares: 20,
+              shares: 13,
+              unit_cost: 12,
+              cost_basis: 156,
+              fully_closes_lot: false,
+            },
+          ],
+        },
+      });
+
+      await byTest(wrapper, 'sell-7').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.findComponent(StockRecordPage).vm as unknown as {
+        sellForm: Record<string, unknown>;
+      };
+      vm.sellForm.shares_count = 18;
+
+      // fetchSellPreview debounce ที่ 300ms — รอให้ timer ยิงแล้ว flush promise ของ previewSell เอง
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await flush();
+      await wrapper.vm.$nextTick();
+
+      expect(previewSell).toHaveBeenCalledWith(
+        2,
+        expect.objectContaining({ stock_symbol: 'PTT.BK', shares_count: 18 }),
+      );
+      expect(document.body.querySelector('[data-test="sell-preview"]')).not.toBeNull();
+      expect(byBody('sell-preview-lot-7').text()).toContain('5');
+      expect(byBody('sell-preview-lot-7').text()).toContain('ปิด lot');
+      expect(byBody('sell-preview-lot-8').text()).toContain('13');
+      expect(byBody('sell-preview-lot-8').text()).not.toContain('ปิด lot');
+    });
+
+    it('previewSell ล้มเหลว -> ไม่โชว์ breakdown แต่การขายยัง submit ได้ตามปกติ (preview เป็นแค่ตัวช่วยแสดงผล ไม่ gate การขาย)', async () => {
+      const { wrapper } = await mountPage({
+        purchases: [purchase({ id: 7, stock_symbol: 'PTT.BK', remaining_shares: 5 })],
+      });
+
+      previewSell.mockRejectedValue(new Error('network error'));
+      sell.mockResolvedValue({ data: { success: true } });
+
+      await byTest(wrapper, 'sell-7').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.findComponent(StockRecordPage).vm as unknown as {
+        sellForm: Record<string, unknown>;
+        submitSell: () => Promise<void>;
+      };
+      vm.sellForm.shares_count = 5;
+
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await flush();
+      await wrapper.vm.$nextTick();
+
+      expect(document.body.querySelector('[data-test="sell-preview"]')).toBeNull();
+
+      await vm.submitSell();
+      await flush();
+
+      expect(sell).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── ประวัติการขาย ───────────────────────────────────────────────────────────
@@ -512,6 +721,32 @@ describe('StockRecordPage', () => {
     expect(byTest(wrapper, 'sale-3').exists()).toBe(true);
     expect(byTest(wrapper, 'sale-3').text()).toContain('AAPL');
     expect(byTest(wrapper, 'sale-3').text()).toContain('150.00');
+  });
+
+  it('คอลัมน์จำนวนหุ้นที่ขายอ่านจาก shares_sold ของจริงจาก API ไม่ใช่ shares_count ที่ backend ไม่เคยส่งมา (QA sweep 2026-09-23: field-name mismatch ทำให้ขึ้น 0 เงียบๆ)', async () => {
+    // สร้างจากทรง response จริงของ GET /investor/portfolios/:id/stocks/sales (stock_sales
+    // Prisma row) ไม่ใช่แค่ shape ที่ type ประกาศไว้ — กันไม่ให้ type ผิดแล้ว test ยังผ่านหลอกๆ อีก
+    const realApiShapedSale = {
+      id: 4,
+      portfolio_id: 2,
+      stock_symbol: 'AAPL',
+      shares_sold: 42,
+      sold_price: 210,
+      gross_proceeds: 8820,
+      net_proceeds: 8817,
+      fees: 3,
+      cost_basis: 1800,
+      realized_pnl: 150,
+      cost_method: 'FIFO' as const,
+      sold_date: '2026-05-20T10:00:00.000Z',
+      notes: null,
+      created_at: '2026-05-20T10:00:00.000Z',
+      allocations: [],
+    };
+
+    const { wrapper } = await mountPage({ sales: [realApiShapedSale] });
+
+    expect(byTest(wrapper, 'sale-4').text()).toContain('42');
   });
 
   it('ไม่มีประวัติการขาย -> empty state', async () => {

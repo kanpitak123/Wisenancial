@@ -92,9 +92,9 @@ export function buildRealizedPnlCsv(sales: InvestorSale[], currency: string): st
   const rows = sales.map((sale) => [
     sale.stock_symbol,
     assetClassOf(sale.stock_symbol),
-    num(sale.shares_count),
+    num(sale.shares_sold),
     num(sale.sold_price),
-    num(sale.gross_amount),
+    num(sale.gross_proceeds),
     num(sale.cost_basis),
     num(sale.fees),
     num(sale.realized_pnl),

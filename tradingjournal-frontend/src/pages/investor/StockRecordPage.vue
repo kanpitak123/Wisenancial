@@ -800,7 +800,7 @@ const costMethodOptions = ['FIFO', 'LIFO', 'AVERAGE'];
                     <span class="hold-sym-text">{{ sale.stock_symbol }}</span>
                   </div>
                 </td>
-                <td class="text-right num-cell">{{ shares(sale.shares_count) }}</td>
+                <td class="text-right num-cell">{{ shares(sale.shares_sold) }}</td>
                 <td class="text-right num-cell">{{ money(sale.sold_price) }}</td>
                 <td class="text-right text-muted num-cell">{{ money(sale.cost_basis) }}</td>
                 <td class="text-right">

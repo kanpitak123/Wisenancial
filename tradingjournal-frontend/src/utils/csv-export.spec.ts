@@ -51,9 +51,9 @@ function sale(overrides: Partial<InvestorSale> = {}): InvestorSale {
     id: 1,
     portfolio_id: 2,
     stock_symbol: 'AAPL',
-    shares_count: 10,
+    shares_sold: 10,
     sold_price: 210,
-    gross_amount: 2100,
+    gross_proceeds: 2100,
     fees: 3,
     cost_basis: 1800,
     realized_pnl: 297,
@@ -148,6 +148,37 @@ describe('buildRealizedPnlCsv', () => {
     expect(row).toContain('"297"');
     expect(row).toContain('"FIFO"');
     expect(row).toContain('"2026-05-20"');
+    // shares_sold/gross_proceeds — QA sweep 2026-09-23: frontend type used to declare
+    // shares_count/gross_amount, which the real API never sends, so both columns silently
+    // showed 0 (Number(undefined ?? 0) throws nothing, TypeScript catches nothing).
+    expect(row).toContain('"10"');
+    expect(row).toContain('"2100"');
+  });
+
+  it('ใช้ทรง response จริงของ GET .../stocks/sales (Prisma stock_sales row, มี field เกินกว่าที่ type ประกาศ) ยังอ่าน shares_sold/gross_proceeds ถูกต้อง', () => {
+    const realApiShapedSale = {
+      id: 9,
+      portfolio_id: 2,
+      stock_symbol: 'MSFT',
+      shares_sold: 15,
+      sold_price: 420,
+      gross_proceeds: 6300,
+      net_proceeds: 6297, // ไม่มีใน InvestorSale type ตอนนี้ — ยืนยันว่าไม่กระทบ field อื่น
+      fees: 3,
+      cost_basis: 5500,
+      realized_pnl: 800,
+      cost_method: 'FIFO' as const,
+      sold_date: '2026-06-01T00:00:00.000Z',
+      notes: null,
+      created_at: '2026-06-01T00:00:00.000Z',
+      allocations: [],
+    };
+
+    const csv = buildRealizedPnlCsv([realApiShapedSale], 'USD');
+    const row = csv.split('\r\n')[1] ?? '';
+
+    expect(row).toContain('"15"');
+    expect(row).toContain('"6300"');
   });
 
   it('cost_method ว่าง -> ใช้ FIFO เป็นค่าเริ่มต้น', () => {

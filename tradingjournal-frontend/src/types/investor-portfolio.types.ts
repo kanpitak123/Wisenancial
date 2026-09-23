@@ -103,13 +103,19 @@ export interface InvestorActivity {
   status?: string;
 }
 
+/**
+ * แถวดิบจาก stock_sales (GET /investor/portfolios/:id/stocks/sales) — field names ต้องตรงกับ
+ * Prisma model `stock_sales` เป๊ะ (shares_sold/gross_proceeds ไม่ใช่ shares_count/gross_amount —
+ * QA sweep 2026-09-23 พบว่าชื่อ field ที่ผิดทำให้ค่าที่แสดงกลายเป็น 0 เงียบๆ ทั้งตารางบนจอและ CSV
+ * export เพราะ Number(undefined ?? 0) ไม่ throw ไม่มี type error ให้เห็นเลย)
+ */
 export interface InvestorSale {
   id: number;
   portfolio_id: number;
   stock_symbol: string;
-  shares_count: number | string;
+  shares_sold: number | string;
   sold_price: number | string;
-  gross_amount?: number | string;
+  gross_proceeds?: number | string;
   fees?: number | string;
   cost_basis?: number | string;
   realized_pnl?: number | string;
