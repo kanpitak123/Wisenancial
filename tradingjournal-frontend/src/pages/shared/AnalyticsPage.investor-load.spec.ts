@@ -78,11 +78,6 @@ vi.mock('src/services/ai.service', () => ({
   isAiCreditError: () => false,
 }));
 
-vi.mock('src/services/dividend.service', () => ({
-  dividendService: { getTaxSummary: vi.fn().mockResolvedValue(null) },
-  getDividendErrorMessage: (_error: unknown, fallback: string) => fallback,
-}));
-
 vi.mock('stores/InvestorPortfolioStore', () => ({
   useInvestorPortfolioStore: () => ({
     portfolioId: null,

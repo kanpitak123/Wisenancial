@@ -16,7 +16,6 @@ import AiRiskAnalysisCard from 'components/analytics/AiRiskAnalysisCard.vue';
 import PerformersSection from 'components/analytics/PerformersSection.vue';
 import AverageCostCalculator from 'components/analytics/AverageCostCalculator.vue';
 import PlExportCard from 'components/analytics/PlExportCard.vue';
-import DividendTaxCard from 'components/analytics/DividendTaxCard.vue';
 import DcaPredictorCard from 'components/analytics/DcaPredictorCard.vue';
 import type { PortfolioRiskHolding } from 'src/types/ai.types';
 
@@ -340,14 +339,15 @@ const loadAllData = async () => {
   }
 };
 
+// เดิมโหลดซ้ำตอน mount แรก: loadPortfolios() เปลี่ยนค่า portStore.activePortfolio ->
+// watcher "1. ดักจับถ้า User เปลี่ยนพอร์ตโฟลิโอ" ด้านล่างสั่ง loadAllData() ไปแล้วครั้งหนึ่ง
+// แล้ว onMounted ก็ยิง loadAllData() explicit ซ้ำอีกรอบ (เจอจาก QA sweep 2026-09-23:
+// daily-pnl/performance/overview ยิงซ้ำ 3-6 ครั้งต่อการเปิดหน้าเดียว) -> ถ้าต้อง
+// loadPortfolios() ก็ปล่อยให้ watcher ด้านล่างเป็นคนสั่งโหลดแทน ไม่ยิงซ้ำเอง
 onMounted(async () => {
-  // โหลดพอร์ตโฟลิโอให้เสร็จก่อน
   if (portStore.portfolios.length === 0) {
     await safeLoad(() => portStore.loadPortfolios(), 'โหลดพอร์ตโฟลิโอไม่สำเร็จ');
-  }
-
-  // พอพอร์ตมาแล้ว ค่อยยิงดึงข้อมูล Analytics
-  if (portStore.activePortfolio) {
+  } else if (portStore.activePortfolio) {
     await safeLoad(() => loadAllData(), 'โหลดข้อมูล Analytics ไม่สำเร็จ');
   }
 });
@@ -1195,7 +1195,6 @@ const pnlMonthOpts = computed(() =>
       <div v-if="activeTab === 'tools'" class="stack-lg" data-test="analytics-tab-tools">
         <AverageCostCalculator />
         <PlExportCard />
-        <DividendTaxCard :portfolio-id="store.portfolioId" />
         <DcaPredictorCard />
       </div>
 

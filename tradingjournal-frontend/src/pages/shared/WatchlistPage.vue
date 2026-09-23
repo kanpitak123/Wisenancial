@@ -215,12 +215,16 @@ const load = async () => {
   await safeLoad(() => loadForPortfolio(), 'โหลด Watchlist ไม่สำเร็จ');
 };
 
+// เดิมโหลดซ้ำ 2 ครั้งตอน mount แรก: loadPortfolios() ด้านล่างเปลี่ยนค่า activePortfolio ->
+// watcher ท้ายไฟล์สั่ง load() ไปแล้วครั้งหนึ่ง แล้ว onMounted ก็ await load() explicit อีกครั้ง
+// (เจอจาก QA sweep 2026-09-23: GET /watchlist/portfolio/:id ยิงซ้ำ) -> ให้เลือกทางเดียว:
+// ถ้าต้อง loadPortfolios() ก็ปล่อยให้ watcher เป็นคนสั่ง load() แทน ไม่ยิงซ้ำเอง
 onMounted(async () => {
   if (portStore.portfolios.length === 0) {
     await safeLoad(() => portStore.loadPortfolios(), 'โหลดพอร์ตโฟลิโอไม่สำเร็จ');
+  } else {
+    await load();
   }
-
-  await load();
 });
 
 // สลับโหมด/เปลี่ยนพอร์ต -> โหลดใหม่ (store กรองตาม portfolio_type ให้เอง)

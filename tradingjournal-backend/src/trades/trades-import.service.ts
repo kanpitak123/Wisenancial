@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as csv from 'csv-parse/sync';
 import { PrismaService } from '../prisma/prisma.service';
+import { TraderAnalyticsService } from '../analytics/trader-analytics.service';
 import { TradeSide } from './dto/create-trade.dto';
 import { TradesService } from './trades.service';
 
@@ -53,7 +54,7 @@ export class TradesImportService {
     const normalizedBroker = broker.trim().toUpperCase();
     const normalizedAccountId = accountId.trim();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const tradeImport = await tx.trade_imports.create({
         data: {
           portfolio_id: portfolioId,
@@ -115,6 +116,11 @@ export class TradesImportService {
         import_id: tradeImport.id,
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    // CSV import can create/update many trades in one batch — invalidate once after
+    // commit rather than per-row, same portfolio/user for the whole batch.
+    TraderAnalyticsService.invalidate(portfolioId, userId);
+    return result;
   }
 
   private parseCsv(fileBuffer: Buffer): CsvTradeRow[] {

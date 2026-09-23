@@ -3,6 +3,7 @@ import { BrokerType, Prisma, broker_connections } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { ValidationError, validate } from 'class-validator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TraderAnalyticsService } from '../../analytics/trader-analytics.service';
 import { TradesService } from '../../trades/trades.service';
 import { BrokerSyncGateway } from '../broker-sync.gateway';
 import {
@@ -206,7 +207,7 @@ export class Mt5SyncService {
     const normalizedPositions = payload.positions.map((p) => normalizePositionOrThrow(p));
     const openTickets = new Set(normalizedPositions.map((p) => p.externalPositionId));
 
-    return this.prisma.$transaction(
+    const result = await this.prisma.$transaction(
       async (tx) => {
         const current = await tx.broker_connections.findUnique({
           where: { id: connection.id },
@@ -249,12 +250,19 @@ export class Mt5SyncService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+
+    // Only bust the Analytics cache when this snapshot actually wrote something — a
+    // stale/duplicate snapshot (accepted: false, see the early-return above) touched no rows.
+    if (result.accepted) {
+      TraderAnalyticsService.invalidate(portfolioId, connection.user_id);
+    }
+    return result;
   }
 
   private async applyDeals(connection: broker_connections, portfolioId: number, dealDtos: Mt5DealDto[]) {
     const normalizedDeals = dealDtos.map((d) => normalizeDealOrThrow(d));
 
-    return this.prisma.$transaction(
+    const result = await this.prisma.$transaction(
       async (tx) => {
         let appliedCount = 0;
         let duplicateCount = 0;
@@ -274,6 +282,13 @@ export class Mt5SyncService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+
+    // Only bust the cache when at least one deal actually changed a trade row — an
+    // all-duplicate replay (appliedCount 0) wrote nothing.
+    if (result.appliedCount > 0) {
+      TraderAnalyticsService.invalidate(portfolioId, connection.user_id);
+    }
+    return result;
   }
 
   private async validatePayload<T extends object>(

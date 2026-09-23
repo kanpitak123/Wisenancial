@@ -155,10 +155,6 @@ export class PostsService {
         }),
         this.prisma.posts.findMany({
           where,
-          include:
-            this.postInclude(
-              currentUserId,
-            ),
           orderBy: {
             created_at: 'desc',
           },
@@ -168,12 +164,9 @@ export class PostsService {
         }),
       ]);
 
-    const data = await Promise.all(
-      posts.map((post) =>
-        this.mapPostWithReference(
-          post,
-        ),
-      ),
+    const data = await this.hydratePosts(
+      posts,
+      currentUserId,
     );
 
     return {
@@ -204,10 +197,6 @@ export class PostsService {
     const post =
       await client.posts.findUnique({
         where: { id: postId },
-        include:
-          this.postInclude(
-            currentUserId,
-          ),
       });
 
     if (!post) {
@@ -227,9 +216,14 @@ export class PostsService {
       );
     }
 
-    return this.mapPostWithReference(
-      post,
-    );
+    const [hydrated] =
+      await this.hydratePosts(
+        [post],
+        currentUserId,
+        client,
+      );
+
+    return hydrated;
   }
 
   async update(
@@ -635,29 +629,206 @@ export class PostsService {
     }
   }
 
-  private async mapPostWithReference(
-    post: any,
+  /**
+   * Fetches every relation a post's response shape needs (author, portfolio, images,
+   * comments+comment-author, current-user's like, reference) with ONE round trip per
+   * relation type instead of Prisma's `include`, which resolves a multi-relation include as
+   * a chain of *serial* sub-queries under this app's pgbouncer transaction-mode connection
+   * (each sub-query pays its own connection round-trip). Firing them via Promise.all lets the
+   * driver dispatch them concurrently over the pool instead, which is the actual fix — see
+   * qa-full-sweep-2026-09-23.md's latency diagnosis for the measured 7-serial-groups finding.
+   */
+  private async hydratePosts(
+    posts: {
+      id: number;
+      user_id: number;
+      portfolio_id: number;
+      reference_type: PostReferenceType;
+      reference_id: number | null;
+    }[],
+    currentUserId: number,
+    client:
+      | PrismaService
+      | Prisma.TransactionClient =
+      this.prisma,
   ) {
-    const {
-      post_likes,
-      ...rest
-    } = post;
+    if (posts.length === 0) {
+      return [];
+    }
 
-    return {
-      ...rest,
-      isLiked:
-        post_likes.length > 0,
-      reference:
-        await this.resolveReference(
-          post.reference_type,
-          post.reference_id,
+    const postIds = posts.map(
+      (p) => p.id,
+    );
+    const userIds = [
+      ...new Set(
+        posts.map(
+          (p) => p.user_id,
         ),
-    };
+      ),
+    ];
+    const portfolioIds = [
+      ...new Set(
+        posts.map(
+          (p) => p.portfolio_id,
+        ),
+      ),
+    ];
+
+    const [
+      users,
+      portfolios,
+      images,
+      comments,
+      likes,
+      references,
+    ] = await Promise.all([
+      client.users.findMany({
+        where: {
+          id: { in: userIds },
+        },
+        select: {
+          id: true,
+          username: true,
+          full_name: true,
+          avatar_url: true,
+        },
+      }),
+      client.portfolios.findMany({
+        where: {
+          id: {
+            in: portfolioIds,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          portfolio_type: true,
+        },
+      }),
+      client.post_images.findMany({
+        where: {
+          post_id: {
+            in: postIds,
+          },
+        },
+      }),
+      client.comments.findMany({
+        where: {
+          post_id: {
+            in: postIds,
+          },
+        },
+        include: {
+          users: {
+            select: {
+              id: true,
+              username: true,
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+        },
+        orderBy: {
+          created_at:
+            'asc' as const,
+        },
+      }),
+      client.post_likes.findMany({
+        where: {
+          post_id: {
+            in: postIds,
+          },
+          user_id: currentUserId,
+        },
+        select: {
+          post_id: true,
+        },
+      }),
+      Promise.all(
+        posts.map((p) =>
+          this.resolveReference(
+            p.reference_type,
+            p.reference_id,
+            client,
+          ),
+        ),
+      ),
+    ]);
+
+    const userById = new Map(
+      users.map((u) => [u.id, u]),
+    );
+    const portfolioById = new Map(
+      portfolios.map((p) => [
+        p.id,
+        p,
+      ]),
+    );
+    const imagesByPostId = new Map<
+      number,
+      typeof images
+    >();
+    for (const image of images) {
+      const list =
+        imagesByPostId.get(
+          image.post_id,
+        ) ?? [];
+      list.push(image);
+      imagesByPostId.set(
+        image.post_id,
+        list,
+      );
+    }
+    const commentsByPostId = new Map<
+      number,
+      typeof comments
+    >();
+    for (const comment of comments) {
+      const list =
+        commentsByPostId.get(
+          comment.post_id,
+        ) ?? [];
+      list.push(comment);
+      commentsByPostId.set(
+        comment.post_id,
+        list,
+      );
+    }
+    const likedPostIds = new Set(
+      likes.map((l) => l.post_id),
+    );
+
+    return posts.map((post, i) => ({
+      ...post,
+      users: userById.get(
+        post.user_id,
+      ),
+      portfolios:
+        portfolioById.get(
+          post.portfolio_id,
+        ),
+      post_images:
+        imagesByPostId.get(
+          post.id,
+        ) ?? [],
+      comments:
+        commentsByPostId.get(
+          post.id,
+        ) ?? [],
+      isLiked: likedPostIds.has(
+        post.id,
+      ),
+      reference: references[i],
+    }));
   }
 
   private async resolveReference(
     type: PostReferenceType,
     id: number | null,
+    client:
+      | PrismaService
+      | Prisma.TransactionClient =
+      this.prisma,
   ) {
     if (
       type ===
@@ -671,7 +842,7 @@ export class PostsService {
       type ===
       PostReferenceType.PORTFOLIO
     ) {
-      return this.prisma.portfolios.findUnique({
+      return client.portfolios.findUnique({
         where: { id },
         select: {
           id: true,
@@ -685,7 +856,7 @@ export class PostsService {
       type ===
       PostReferenceType.TRADE
     ) {
-      return this.prisma.trades.findUnique({
+      return client.trades.findUnique({
         where: { id },
         select: {
           id: true,
@@ -701,7 +872,7 @@ export class PostsService {
       type ===
       PostReferenceType.STOCK_PURCHASE
     ) {
-      return this.prisma.stock_purchases.findUnique({
+      return client.stock_purchases.findUnique({
         where: { id },
         select: {
           id: true,
@@ -717,7 +888,7 @@ export class PostsService {
       type ===
       PostReferenceType.STOCK_SALE
     ) {
-      return this.prisma.stock_sales.findUnique({
+      return client.stock_sales.findUnique({
         where: { id },
         select: {
           id: true,
@@ -729,7 +900,7 @@ export class PostsService {
       });
     }
 
-    return this.prisma.dividends.findUnique({
+    return client.dividends.findUnique({
       where: { id },
       select: {
         id: true,
@@ -794,54 +965,6 @@ export class PostsService {
     }
 
     return post;
-  }
-
-  private postInclude(
-    currentUserId: number,
-  ) {
-    return {
-      users: {
-        select: {
-          id: true,
-          username: true,
-          full_name: true,
-          avatar_url: true,
-        },
-      },
-      portfolios: {
-        select: {
-          id: true,
-          name: true,
-          portfolio_type: true,
-        },
-      },
-      post_images: true,
-      comments: {
-        include: {
-          users: {
-            select: {
-              id: true,
-              username: true,
-              full_name: true,
-              avatar_url: true,
-            },
-          },
-        },
-        orderBy: {
-          created_at:
-            'asc' as const,
-        },
-      },
-      post_likes: {
-        where: {
-          user_id:
-            currentUserId,
-        },
-        select: {
-          user_id: true,
-        },
-      },
-    };
   }
 
   private normalizeSymbol(

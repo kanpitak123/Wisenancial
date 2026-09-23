@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { BrokerConnectionStatus, BrokerType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TraderAnalyticsService } from '../../analytics/trader-analytics.service';
 import { TradesService } from '../../trades/trades.service';
 import { BrokerSyncGateway } from '../broker-sync.gateway';
 import { BrokerConnectionsService } from '../connections/broker-connections.service';
@@ -475,6 +476,66 @@ describe('Mt5SyncService', () => {
           envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [{ ...dealPayload, entryType: 'CLOSE' }] } }),
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // 2026-09-24: closes the QA-round latency fix's cache-invalidation gap — the broker-sync
+  // path used to rely on the Analytics TTL cache expiring naturally (up to 15s of stale
+  // numbers after a sync) instead of busting it immediately like the manual/CSV trade
+  // write paths do.
+  describe('Analytics cache invalidation', () => {
+    let invalidateSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      invalidateSpy = jest
+        .spyOn(TraderAnalyticsService, 'invalidate')
+        .mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      invalidateSpy.mockRestore();
+    });
+
+    it('POSITIONS_SNAPSHOT: invalidates once, keyed by portfolio/user, when the snapshot is accepted', async () => {
+      await service.ingest(
+        connection({ portfolio_id: 3, user_id: 1 }),
+        envelope({
+          eventType: Mt5EventType.POSITIONS_SNAPSHOT,
+          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+        }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(invalidateSpy).toHaveBeenCalledWith(3, 1);
+    });
+
+    it('POSITIONS_SNAPSHOT: does not invalidate a stale/duplicate snapshot (accepted:false, no writes happened)', async () => {
+      snapshotSequenceStore[7] = 5; // connection already at sequence 5
+      await service.ingest(
+        connection(),
+        envelope({
+          eventType: Mt5EventType.POSITIONS_SNAPSHOT,
+          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+        }),
+      );
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    });
+
+    it('DEALS: invalidates once, keyed by portfolio/user, when at least one deal is newly applied', async () => {
+      await service.ingest(
+        connection({ portfolio_id: 3, user_id: 1 }),
+        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(invalidateSpy).toHaveBeenCalledWith(3, 1);
+    });
+
+    it('DEALS: does not invalidate when the whole batch is duplicates (appliedCount:0, no writes happened)', async () => {
+      tradesMock.applyMt5Deal.mockResolvedValueOnce({ trade: { id: 1 }, applied: false });
+      await service.ingest(
+        connection(),
+        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+      );
+      expect(invalidateSpy).not.toHaveBeenCalled();
     });
   });
 

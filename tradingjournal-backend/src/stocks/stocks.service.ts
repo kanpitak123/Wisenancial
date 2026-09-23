@@ -4,6 +4,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TtlCache } from '../common/ttl-cache';
 import { MarketDataService, type ListingMetric } from './market-data.service';
 import YahooFinance from 'yahoo-finance2';
 
@@ -162,7 +163,24 @@ export class StocksService {
     return Array.from(bySymbol.values()).slice(0, 50);
   }
 
+  // Full seeded universe rarely changes (admin-seeded, not user-driven) and is what
+  // StockSymbolPicker's autocomplete fetches on every mount across ≥4 different pages —
+  // measured at ~1.6-2s per call in the QA sweep's latency diagnosis purely from this app's
+  // DB round-trip cost. A short cache removes that cost on every call after the first.
+  private static readonly catalogCache = new TtlCache<
+    StockSearchResult[]
+  >(5 * 60 * 1000);
+
   private async queryDbStocks(term: string): Promise<StockSearchResult[]> {
+    if (term.length === 0) {
+      return StocksService.catalogCache.getOrSet('all', () =>
+        this.fetchDbStocks(''),
+      );
+    }
+    return this.fetchDbStocks(term);
+  }
+
+  private async fetchDbStocks(term: string): Promise<StockSearchResult[]> {
     try {
       const whereClause: any = {
         is_active: true,

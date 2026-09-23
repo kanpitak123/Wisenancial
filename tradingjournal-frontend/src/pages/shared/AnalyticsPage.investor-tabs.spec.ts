@@ -92,11 +92,6 @@ vi.mock('src/services/ai.service', () => ({
   isAiCreditError: () => false,
 }));
 
-vi.mock('src/services/dividend.service', () => ({
-  dividendService: { getTaxSummary: vi.fn().mockResolvedValue(null) },
-  getDividendErrorMessage: (_error: unknown, fallback: string) => fallback,
-}));
-
 vi.mock('stores/InvestorPortfolioStore', () => ({
   useInvestorPortfolioStore: () => ({
     portfolioId: null,
@@ -249,7 +244,7 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
     expect(getPerformers).toHaveBeenCalledTimes(1);
   });
 
-  it('เปิดแท็บ Planning & Tools -> เห็นเครื่องมือครบทั้ง 4 ตัว และโหลดข้อมูลพอร์ตหุ้น', async () => {
+  it('เปิดแท็บ Planning & Tools -> เห็นเครื่องมือครบทั้ง 3 ตัว และโหลดข้อมูลพอร์ตหุ้น', async () => {
     const wrapper = await mountPage();
 
     await openTab(wrapper, 'tools');
@@ -257,7 +252,6 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
     expect(investorLoad).toHaveBeenCalledWith(7);
     expect(wrapper.find('[data-test="avg-cost-calculator"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="pl-export-card"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="dividend-tax-card"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="dca-predictor"]').exists()).toBe(true);
   });
 

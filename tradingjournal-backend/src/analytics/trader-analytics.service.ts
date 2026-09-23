@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TtlCache } from '../common/ttl-cache';
 import {
   AnalyticsTimeframe,
   PerformancePoint,
@@ -35,6 +36,39 @@ type TradeRow = {
 
 @Injectable()
 export class TraderAnalyticsService {
+  /**
+   * Fix for the QA sweep's HIGH latency finding (2026-09-23): every one of the 6 Analytics
+   * tabs a page load fires re-fetches portfolio ownership + the full closed-trades list from
+   * scratch, with zero sharing between them even though they land within the same second.
+   * A short TTL collapses that burst into one DB round trip per portfolio/range; short enough
+   * that a user acting on stale numbers is never realistic, and always invalidated immediately
+   * on any trade write (see `TraderAnalyticsService.invalidate`, called from TradesService).
+   */
+  private static readonly CACHE_TTL_MS = 15_000;
+  private static readonly portfolioCache = new TtlCache<
+    Awaited<
+      ReturnType<
+        PrismaService['portfolios']['findFirst']
+      >
+    >
+  >(TraderAnalyticsService.CACHE_TTL_MS);
+  private static readonly tradesCache = new TtlCache<
+    TradeRow[]
+  >(TraderAnalyticsService.CACHE_TTL_MS);
+
+  /** Called by TradesService on any create/update/delete so cached numbers can never go stale. */
+  static invalidate(
+    portfolioId: number,
+    userId: number,
+  ) {
+    TraderAnalyticsService.portfolioCache.invalidate(
+      `${portfolioId}:${userId}`,
+    );
+    TraderAnalyticsService.tradesCache.invalidatePrefix(
+      `${portfolioId}:`,
+    );
+  }
+
   constructor(private readonly prisma: PrismaService) {}
 
   async overview(
@@ -501,44 +535,54 @@ export class TraderAnalyticsService {
     from?: string,
     to?: string,
   ): Promise<TradeRow[]> {
-    return this.prisma.trades.findMany({
-      where: {
-        portfolio_id: portfolioId,
-        result_status: {
-          in: ['WIN', 'LOSS', 'BREAKEVEN'],
-        },
-        ...(from || to
-          ? {
-              closed_at: {
-                ...(from
-                  ? { gte: new Date(from) }
-                  : {}),
-                ...(to
-                  ? { lte: new Date(to) }
-                  : {}),
-              },
-            }
-          : {}),
-      },
-      orderBy: [
-        { closed_at: 'asc' },
-        { id: 'asc' },
-      ],
-    }) as unknown as TradeRow[];
+    const key = `${portfolioId}:${from ?? ''}:${to ?? ''}`;
+    return TraderAnalyticsService.tradesCache.getOrSet(
+      key,
+      () =>
+        this.prisma.trades.findMany({
+          where: {
+            portfolio_id: portfolioId,
+            result_status: {
+              in: ['WIN', 'LOSS', 'BREAKEVEN'],
+            },
+            ...(from || to
+              ? {
+                  closed_at: {
+                    ...(from
+                      ? { gte: new Date(from) }
+                      : {}),
+                    ...(to
+                      ? { lte: new Date(to) }
+                      : {}),
+                  },
+                }
+              : {}),
+          },
+          orderBy: [
+            { closed_at: 'asc' },
+            { id: 'asc' },
+          ],
+        }) as unknown as Promise<TradeRow[]>,
+    );
   }
 
   private async assertPortfolio(
     id: number,
     userId: number,
   ) {
+    const key = `${id}:${userId}`;
     const portfolio =
-      await this.prisma.portfolios.findFirst({
-        where: {
-          id,
-          user_id: userId,
-          portfolio_type: PortfolioType.TRADER,
-        },
-      });
+      await TraderAnalyticsService.portfolioCache.getOrSet(
+        key,
+        () =>
+          this.prisma.portfolios.findFirst({
+            where: {
+              id,
+              user_id: userId,
+              portfolio_type: PortfolioType.TRADER,
+            },
+          }),
+      );
 
     if (!portfolio) {
       throw new NotFoundException(
