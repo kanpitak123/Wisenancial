@@ -113,7 +113,12 @@ describe('AssetStore.setActiveAsset — staleness guard on rapid symbol switchin
 
     expect(store.activeAsset?.symbol).toBe('GBP/USD');
     expect(store.chartData).toEqual(chartBData);
+
+    // vi.fn() mock property access ตรงๆ โดน @typescript-eslint/unbound-method (false positive
+    // มาตรฐานของ typescript-eslint กับ mocked object methods — ไม่ได้เรียกแบบ unbound จริง)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(service.getMonthly).toHaveBeenCalledTimes(1);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(service.getMonthly).toHaveBeenCalledWith(1, assetB.id);
   });
 });
