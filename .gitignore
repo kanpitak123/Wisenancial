@@ -40,3 +40,9 @@ Thumbs.db
 tmp/
 temp/
 .cache/
+
+# Python (News_AI_(Gemini) module) — 3 compiled files were committed on main before
+# this rule existed (bd9c37d/d893ad6); this only stops new ones, doesn't retroactively
+# remove those.
+__pycache__/
+*.pyc

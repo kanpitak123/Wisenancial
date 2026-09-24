@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { StockPurchasesService } from '../stock-purchases/stock-purchases.service';
 import { AiManagerService } from './ai-manager.service';
+import type { AiProviderId } from './ai.models';
 import { AiRuleEngineService } from './ai-rule-engine.service';
 import type {
   AnalyzeChartDto,
@@ -236,6 +237,7 @@ export class AiService {
     summary: string,
     content = '',
     language: 'en' | 'th' = 'en',
+    options?: { excludeProviders?: AiProviderId[] },
   ): Promise<NewsEnrichmentResult> {
     const fallback = this.buildFallback(headline, language);
 
@@ -252,6 +254,7 @@ export class AiService {
           }),
           systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
           maxOutputTokens: 1400,
+          excludeProviders: options?.excludeProviders,
         });
 
       return this.normalizeNewsResult(result.data, fallback);

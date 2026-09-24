@@ -386,6 +386,7 @@ export class NewsSyncService {
         stock_impact_analysis: analysis.stockImpactAnalysis || null,
         ai_trend: (analysis.aiTrend as AiTrend) ?? null,
         ai_impact_probability: analysis.aiImpactProbability ?? null,
+        ai_confidence: analysis.confidence,
         ai_translated_summary:
           (analysis.aiTranslatedSummary as Prisma.InputJsonValue) ??
           Prisma.JsonNull,

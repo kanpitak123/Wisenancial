@@ -663,6 +663,10 @@ model news {
   market_impact_analysis String?        @db.Text
   ai_trend               AiTrend?
   ai_impact_probability  Float?
+  // Model-reported confidence (0-1), distinct from ai_impact_probability (impact
+  // magnitude, 0-100). Populated by Gemini first-pass enrichment; gates the later
+  // Wise_ai selective second pass on market_news (importance=HIGH OR low confidence).
+  ai_confidence          Float?
   ai_translated_summary  Json?
   related_symbols        String[]       @default([])
   ai_analyzed_at         DateTime?      @db.Timestamp(6)
@@ -969,6 +973,9 @@ model market_news {
   stock_impact_analysis String?        @db.Text
   ai_trend              AiTrend?
   ai_impact_probability Float?
+  // See news.ai_confidence for rationale — same column, same purpose, on the
+  // INVESTOR-side table.
+  ai_confidence         Float?
   ai_translated_summary Json?
   sector                String?        @db.VarChar(100)
   stock_symbols         String[]       @default([])

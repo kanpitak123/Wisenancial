@@ -233,6 +233,15 @@ export class AiManagerService {
       systemPrompt?: string;
       temperature?: number;
       maxOutputTokens?: number;
+      /**
+       * Try only `modelId` — no fallback walk. For callers that run their own,
+       * differently-prompted fallback afterward (e.g. Gemini news enrichment, whose
+       * fallback re-runs the *existing* enrichment prompt on the *other* providers
+       * rather than retrying the same provider with a different prompt).
+       */
+      preferredOnly?: boolean;
+      /** Skip these providers entirely, e.g. to avoid retrying one that just failed. */
+      excludeProviders?: AiProviderId[];
     },
   ): Promise<{
     data: T;
@@ -241,6 +250,8 @@ export class AiManagerService {
   }> {
     const chain = this.buildSystemChain(
       request.modelId,
+      request.preferredOnly,
+      request.excludeProviders,
     );
 
     if (chain.length === 0) {
@@ -342,6 +353,8 @@ export class AiManagerService {
    */
   private buildSystemChain(
     preferredModelId?: string,
+    preferredOnly = false,
+    excludeProviders?: AiProviderId[],
   ): AiModelPricing[] {
     const ordered: AiModelId[] = [];
 
@@ -352,9 +365,11 @@ export class AiManagerService {
       ordered.push(preferredModelId);
     }
 
-    for (const modelId of AI_SYSTEM_FALLBACK_ORDER) {
-      if (!ordered.includes(modelId)) {
-        ordered.push(modelId);
+    if (!preferredOnly) {
+      for (const modelId of AI_SYSTEM_FALLBACK_ORDER) {
+        if (!ordered.includes(modelId)) {
+          ordered.push(modelId);
+        }
       }
     }
 
@@ -366,7 +381,8 @@ export class AiManagerService {
         (pricing) =>
           this.providers
             .get(pricing.provider)
-            ?.isConfigured() === true,
+            ?.isConfigured() === true &&
+          !excludeProviders?.includes(pricing.provider),
       );
   }
 
