@@ -994,3 +994,183 @@ path.
 - Frontend: `vitest` **525/525** (baseline 519 → 525 after this session's 6 new tests: 2 buy-button
   gating + 4 sell multi-lot/preview), `vue-tsc` clean, `eslint` clean on `src/` (pre-existing lint noise
   in the untracked `qa/` script directory only, unrelated to this work), `quasar build` succeeded.
+
+## Asset Explorer (Forex) — follow-up QA (2026-09-24)
+
+Report-only pass, page was missed in the original sweep. No app code was changed in this section.
+Driven with Playwright as `qa@wisenancial.test`, real backend (localhost:3000) + real frontend
+(localhost:9000), script: `qa/5-asset-explorer-forex.mjs`.
+
+**Scope requested:** open Asset Explorer in Forex mode, search/select a major pair, a cross pair, and
+gold (XAUUSD); verify price/chart data loads, chart interactions work, and rapid symbol switching
+doesn't show stale data; check light and dark mode; capture console errors and 4xx/5xx responses.
+
+### BLOCKER — Forex asset catalog is completely empty; Asset Explorer is non-functional in Forex mode
+
+**Observed:** switching to Forex mode and opening `/AssetExplorer` renders an entirely empty page —
+the symbol search `q-select` has zero options, no asset is auto-selected, no chart renders, RSI shows
+`--`, "Pattern Detected" is stuck on "Scanning...". Screenshot:
+`qa/screenshots/5-asset-explorer-interval-1D.png`.
+
+**Root cause (read-only, confirmed at two layers, nothing fixed):**
+- Network: `GET /assets/portfolio/15` (qa@'s real "QA Forex Main" TRADER portfolio) returns `200 []` —
+  not an error, just genuinely zero assets.
+- DB: `SELECT count(*) FROM assets` → **0 rows**, `is_active = true` count → **0**. The table isn't
+  filtered down to zero for this portfolio — it is empty for the entire environment.
+- Code: `AssetsService.getAssetsForPortfolio` (`tradingjournal-backend/src/assets/assets.service.ts:63-67`)
+  queries this global `assets` table directly for any TRADER-type portfolio (no portfolio-specific
+  filter — it's meant to be a shared symbol catalog, not holdings). The table's own schema comment
+  (`prisma/schema.prisma:698-709`) lists `BTC/USD`, `XAU/USD` etc. as expected rows, and
+  `toYahooTraderSymbol` (`assets.service.ts:555-571`) already has a hardcoded Yahoo-symbol map for 14
+  expected entries (`EUR/USD`, `GBP/USD`, `USD/JPY`, `USD/CHF`, `XAU/USD`, `BTC/USD`, `ETH/USD`,
+  `BNB/USD`, `SOL/USD`, `XRP/USD`, `DOGE/USD`, `US30`, `NAS100`, `SPX500`) — so the feature was clearly
+  built assuming this table would be seeded, but it never was. `package.json`'s `db:seed` only wires up
+  `prisma/seed-stocks.ts` (Investor/stock catalog) and `prisma/seed.ts` (missions); there is no
+  `seed-assets.ts` or equivalent for this table anywhere in the repo.
+- **Impact:** this is not a QA-data gap specific to the qa@ account — every Forex/Trader-mode user in
+  this environment sees a permanently empty Asset Explorer, because the underlying catalog table has
+  no rows for anyone. Recommend seeding `assets` (the 14 symbols above are a reasonable starting set,
+  matching what the code already expects) before this page can be used or meaningfully QA'd further.
+
+**Consequence for this QA pass:** the originally-scoped checks — selecting a major pair/cross/gold,
+verifying chart load and chart interactions per symbol, and the rapid-switch stale-data race check —
+could not be executed, because there is nothing to select. Not marked pass or fail; blocked.
+
+### Secondary bug — unguarded null access on interval toggle (independent of the data gap)
+
+**Observed:** clicking the 1W/1M/1D chart-interval toggle while `assetStore.activeAsset` is `null`
+throws an uncaught `TypeError: Cannot read properties of null (reading 'symbol')`, logged 3 times (once
+per toggle click) as a Vue "Unhandled error during execution of component event handler" console
+warning. No visible crash/blank-screen in this build (Vue swallows it into a warning), but it's a real
+unguarded null-assertion bug, not just a symptom of the empty catalog.
+
+**Where:** `tradingjournal-frontend/src/pages/trader/AssetExplorerPage.vue:323-325` —
+```
+@update:model-value="(val) => assetStore.fetchChartData(assetStore.activeAsset!.symbol, val)"
+```
+The `!` non-null assertion is unsound: `activeAsset` really can be `null` at runtime (confirmed here),
+and the toggle isn't disabled when it is. Would repro any time a user clicks 1W/1M/1D before an asset
+is selected/loaded — currently only reachable via the empty-catalog state above, but would still be
+reachable later (e.g. a slow initial load) even after the catalog is seeded, since nothing gates the
+toggle on `assetStore.activeAsset` being non-null. Not fixed — report only, per scope.
+
+### Other checks completed on the (empty-state) page
+
+- **Chart interactions (wheel-zoom, drag-pan):** attempted on the chart canvas; no crash, but nothing
+  meaningful to verify since no candlestick series ever renders with zero chart data. Re-test once the
+  catalog is seeded. Screenshot: `qa/screenshots/5-asset-explorer-after-interaction.png`.
+- **Light/dark mode:** `.theme-toggle-btn` correctly flips `document.body`'s class to include
+  `body--dark` and back; empty-state page layout holds up in both themes, no console errors from the
+  toggle itself. Screenshots: `qa/screenshots/5-asset-explorer-interval-1D.png` (light),
+  `qa/screenshots/5-asset-explorer-dark.png` (dark).
+- **4xx/5xx responses:** none observed anywhere in this pass — the empty asset list is a genuine `200`,
+  not a hidden error. Worth noting as its own small gap: the page gives the user zero empty-state
+  feedback (no "no assets available" message) when the symbol list is empty — it just renders blank
+  below the RSI/pattern badges, which is confusing on its own even after a real bug is ruled out.
+- **Rapid symbol switching (stale-data race):** script includes this check (rapid-fire select across
+  3 candidate symbols, then compares the final on-screen symbol/price against the last one requested),
+  but it self-skipped (`fewer than 2 distinct symbols available to test with`) since the dropdown is
+  empty. Also worth flagging independent of this run: `AssetStore.setActiveAsset`/`fetchChartData`
+  (`tradingjournal-frontend/src/stores/AssetStore.ts:98-144`) has no request-ordering guard (no
+  `AbortController`, no "ignore stale response" check) — if a slower earlier request resolves after a
+  faster later one, `chartData` would get silently overwritten with the wrong symbol's data. This is a
+  plausible bug based on reading the code, but **not empirically confirmed** since the race test itself
+  couldn't run — needs re-verification once the catalog is seeded, don't treat as confirmed yet.
+
+## Fix chunk — Asset Explorer (Forex) (2026-09-24)
+
+Follow-up fix for the three items reported above. Investigation done first (read-only), confirmed the
+assumption that `assets` is a global catalog table, then implemented the fix. Not committed yet.
+
+### Investigation
+
+- `prisma/schema.prisma:698-709` — `assets` has no `user_id`/`portfolio_id` FK, `symbol` is `@unique`.
+  Confirmed global reference/catalog table, not per-user or per-portfolio data.
+- `AssetsService` (`tradingjournal-backend/src/assets/assets.service.ts`) only ever reads `assets`
+  (`findMany`/`findFirst`) — grepped the whole backend for `.assets.create`/`.assets.upsert`/
+  `.assets.createMany`: zero matches anywhere. No code path has ever written to this table.
+- No seed for it ever existed: searched the old legacy project
+  (`C:\Users\iamre\OneDrive\Desktop\TradingJournal`, read-only) — only a `seed-stocks.ts` equivalent,
+  no assets/forex seed or fixture. Searched this repo's git history
+  (`git log --all -- '**/seed*'`, `git log --all -S "asset_type"`) — no commit ever added an assets
+  seed script; the two commits that touched `asset_type` only added the read-only service/controller
+  code, not seed data.
+- `pg_restore --list tradingjournal-backend/backups/neon-2026-09-24.dump` shows a `TABLE DATA public
+  assets` entry, but that entry exists in every `pg_dump` regardless of row count — it doesn't by
+  itself prove the table ever had rows. Attempted a scratch-local-DB restore to check the actual row
+  count; a local Postgres 18 instance is running on this machine but no working credentials were
+  available (`postgres`/`postgres` failed auth), and guessing credentials further wasn't pursued.
+  Treated as inconclusive and not needed given the other evidence already gathered.
+- Full read-only table audit against the real Neon DB (row counts via Prisma, one query per table):
+
+  | Rows | Table | Classification |
+  |---|---|---|
+  | 0 | `plans`, `subscriptions`, `trade_screenshots`, `share_logs`, `post_images`, `point_transactions`, `assets`, `asset_monthly_data`, `dividends`, `trending_stocks`, `corporate_events`, `user_pinned_market_news`, `lesson_progress`, `readiness_assessments`, `coach_sessions` | mixed — see below |
+  | 1–17 | `trade_imports`, `token_transactions`, `user_pinned_news`, `watchlist`, `ai_usage_logs`, `goals`, `post_likes`, `chat_messages`, `market_prices`, `coaches`, `posts`, `comments`, `coach_reviews`, `stock_sales`, `missions`, `stock_sale_allocations`, `stock_purchases`, `broker_connections`, `coach_availability`, `trades`, `portfolios`, `users` | user/account data, small numbers expected in this environment |
+  | 26–437 | `user_missions`, `records`, `stocks`, `refresh_tokens`, `news`, `market_news` | populated as expected |
+
+  Of the 0-row tables: `assets`/`asset_monthly_data` are the confirmed catalog bug (this fix).
+  `trade_screenshots`, `share_logs`, `post_images`, `point_transactions`, `dividends`,
+  `user_pinned_market_news`, `lesson_progress`, `readiness_assessments`, `coach_sessions` are
+  legitimately-empty per-user data (nothing for any account to have generated yet in this
+  environment) — not seeded, no action needed. `plans`, `subscriptions`, `trending_stocks`,
+  `corporate_events` are **ambiguous** — `plans` isn't queried anywhere in current backend `src`
+  (possibly dead/legacy), `subscriptions` being empty is odd given qa@ is documented as a "paid"
+  account (paid status may be tracked elsewhere, e.g. on `users` directly — not investigated further),
+  and `trending_stocks`/`corporate_events` look like they're meant to be populated by an ingestion
+  job rather than a static seed. **Not touched, flagged here for a decision, per instruction to ask
+  before seeding anything large/unclear.**
+
+### Fix
+
+1. **New seed:** `tradingjournal-backend/prisma/seed-assets.ts` — idempotent (`upsert`, not `create`),
+   covers the same 14 symbols already hardcoded in `toYahooTraderSymbol`, classified into
+   `CRYPTO`/`FOREX`/`INDICES` (gold grouped under `FOREX` alongside the other pairs — there's no
+   separate commodity category anywhere in the codebase). Wired into `package.json`: added
+   `db:seed:assets` and included it in the `db:seed` chain (`db:seed:stocks && db:seed:missions &&
+   db:seed:assets`). Run against the real Neon DB: **0 → 14 rows** (`created: 14, updated: 0`).
+2. **`AssetExplorerPage.vue:313-326`** — removed the unsafe `assetStore.activeAsset!.symbol` non-null
+   assertion; the interval toggle now has `:disable="!assetStore.activeAsset"` and its handler
+   short-circuits (`assetStore.activeAsset && assetStore.fetchChartData(...)`) so there's no reachable
+   uncaught error in that state anymore.
+3. **Empty state added** (`AssetExplorerPage.vue`, chart-wrapper section) — when no asset is active,
+   an overlay message reads "No assets available right now." (catalog genuinely empty) or "Pick a
+   symbol to see its chart." (catalog has options, nothing selected), instead of a blank chart area.
+   Kept the chart container itself always mounted (not `v-if`-removed) so `initChart()` in `onMounted`
+   still has a DOM node to attach to regardless of whether an asset is active yet.
+4. **`AssetStore.ts` staleness guard** — added a `generation` counter (same pattern as
+   `TraderStore.initialize`/`reset`). `setActiveAsset` increments it on every call and passes the
+   snapshot into `fetchChartData`/`fetchMonthlyData`/`fetchInvestorNews`/`fetchCorporateEvents`/
+   `fetchStockValuation`; each of those only commits its result to state if the generation is still
+   current when its request resolves, so a slow response for a symbol the user has since switched away
+   from can no longer overwrite the newer selection's `chartData`/`monthlyData`/etc. Added
+   `tradingjournal-frontend/src/stores/AssetStore.staleness.spec.ts`: simulates two overlapping
+   `setActiveAsset` calls where the first (stale) call's chart-data promise resolves *after* the second
+   (current) call has already completed and committed — asserts `chartData`/`activeAsset` still reflect
+   the second call, and that `getMonthly` was only called once (for the current symbol, not the stale
+   one that should have bailed out early).
+
+### Verification
+
+Re-ran `qa/5-asset-explorer-forex.mjs` (regenerated `qa/.auth/qa-paid.json` first, token had expired) —
+all 14 seeded symbols now show in the dropdown. Results:
+
+- **Major (EUR/USD):** price `$1.14`, chart renders (7 canvas layers), no stuck spinner.
+- **Cross (NAS100):** price `$26,936.04`, chart renders, no stuck spinner.
+- **Gold (XAU/USD):** price `$4,293.10`, chart renders, no stuck spinner.
+- **Interval switching (1W/1M/1D):** chart re-renders on every click, no console errors, toggle no
+  longer throws.
+- **Chart interaction:** wheel-zoom + drag-pan executed against the canvas without error.
+- **Rapid symbol switching** (EUR/USD → NAS100 → XAU/USD, ~120ms apart, faster than the chart
+  round-trip): final on-screen symbol/price (`XAU/USD`, `$4,292.60`) correctly matches the last symbol
+  clicked; captured network timeline shows responses actually came back in request order in this run
+  (so this particular run didn't exercise true out-of-order resolution), but the staleness guard is
+  independently proven by the unit test above, which forces true out-of-order resolution. Previously
+  self-skipped ("fewer than 2 distinct symbols available") — now runs fully.
+- **Light/dark mode:** unchanged from before, still correct (`body--dark` toggles cleanly).
+- **Console/network:** `(clean: no pageerror, no console error/warning, no 4xx/5xx)`.
+
+Full regression: **backend 585/585** (`npx jest`), **frontend 526/526** (`npx vitest run`, includes the
+new `AssetStore.staleness.spec.ts`). No commits made — seed script, `package.json`, `AssetExplorerPage.vue`,
+`AssetStore.ts`, the new spec, and the updated `qa/5-asset-explorer-forex.mjs` run output are all left
+uncommitted for review. Nothing written to Neon beyond the 14-row assets upsert.

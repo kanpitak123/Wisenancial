@@ -27,6 +27,9 @@ export const useAssetStore = defineStore('asset', {
     loadedPortfolioId: null as number | null,
     selectedSector: null as string | null,
     selectedInterval: DEFAULT_CHART_INTERVAL,
+    // เพิ่มทีละ 1 ทุกครั้งที่ setActiveAsset ถูกเรียก — ถ้า fetch ที่ค้างอยู่กลับมาตอน
+    // generation เปลี่ยนไปแล้ว (ผู้ใช้สลับ symbol ไปแล้ว) ผลลัพธ์นั้นจะถูกทิ้ง ไม่ทับ state
+    generation: 0,
     isLoading: false,
     isLoadingChart: false,
     isLoadingDetails: false,
@@ -101,28 +104,42 @@ export const useAssetStore = defineStore('asset', {
         return false;
       }
 
+      const generation = ++this.generation;
+
       this.activeAsset = asset;
       this.selectedInterval = interval;
 
-      await this.fetchChartData(asset.symbol, interval);
+      await this.fetchChartData(asset.symbol, interval, generation);
+
+      if (generation !== this.generation) {
+        return false;
+      }
 
       if (asset.portfolio_type === 'TRADER') {
-        await this.fetchMonthlyData(asset.id);
+        await this.fetchMonthlyData(asset.id, generation);
+        if (generation !== this.generation) {
+          return false;
+        }
         this.clearInvestorDetails();
       } else {
         this.monthlyData = [];
         await Promise.all([
-          this.fetchInvestorNews(asset.symbol),
-          this.fetchCorporateEvents(asset.symbol),
-          this.fetchStockValuation(asset.symbol),
+          this.fetchInvestorNews(asset.symbol, generation),
+          this.fetchCorporateEvents(asset.symbol, generation),
+          this.fetchStockValuation(asset.symbol, generation),
         ]);
       }
 
       return true;
     },
 
-    async fetchChartData(symbol: string, interval: ChartInterval = DEFAULT_CHART_INTERVAL) {
+    async fetchChartData(
+      symbol: string,
+      interval: ChartInterval = DEFAULT_CHART_INTERVAL,
+      generation?: number,
+    ) {
       const portfolioId = this.requirePortfolioId();
+      const isCurrent = () => generation === undefined || generation === this.generation;
 
       this.isLoadingChart = true;
       this.error = null;
@@ -130,26 +147,33 @@ export const useAssetStore = defineStore('asset', {
       try {
         const data = await assetService.getChart(portfolioId, symbol, interval);
 
-        this.chartData = data;
-        this.selectedInterval = interval;
+        if (isCurrent()) {
+          this.chartData = data;
+          this.selectedInterval = interval;
+        }
 
         return data;
       } catch (error) {
-        this.error = getAssetErrorMessage(error, ASSET_MESSAGES.chartFailed);
-        this.chartData = [];
+        if (isCurrent()) {
+          this.error = getAssetErrorMessage(error, ASSET_MESSAGES.chartFailed);
+          this.chartData = [];
+        }
         throw error;
       } finally {
-        this.isLoadingChart = false;
+        if (isCurrent()) {
+          this.isLoadingChart = false;
+        }
       }
     },
 
-    async fetchMonthlyData(assetId: number) {
+    async fetchMonthlyData(assetId: number, generation?: number) {
       if (this.activePortfolioType !== 'TRADER') {
         this.monthlyData = [];
         return [];
       }
 
       const portfolioId = this.requirePortfolioId();
+      const isCurrent = () => generation === undefined || generation === this.generation;
 
       this.isLoadingDetails = true;
       this.error = null;
@@ -157,15 +181,21 @@ export const useAssetStore = defineStore('asset', {
       try {
         const data = await assetService.getMonthly(portfolioId, assetId);
 
-        this.monthlyData = data;
+        if (isCurrent()) {
+          this.monthlyData = data;
+        }
 
         return data;
       } catch (error) {
-        this.error = getAssetErrorMessage(error, ASSET_MESSAGES.monthlyFailed);
-        this.monthlyData = [];
+        if (isCurrent()) {
+          this.error = getAssetErrorMessage(error, ASSET_MESSAGES.monthlyFailed);
+          this.monthlyData = [];
+        }
         throw error;
       } finally {
-        this.isLoadingDetails = false;
+        if (isCurrent()) {
+          this.isLoadingDetails = false;
+        }
       }
     },
 
@@ -191,38 +221,48 @@ export const useAssetStore = defineStore('asset', {
       }
     },
 
-    async fetchInvestorNews(symbol: string) {
+    async fetchInvestorNews(symbol: string, generation?: number) {
       this.requireInvestorPortfolio();
 
       const portfolioId = this.requirePortfolioId();
+      const isCurrent = () => generation === undefined || generation === this.generation;
 
       try {
         const items = await assetService.getInvestorNews(portfolioId, symbol);
 
-        this.investorNews = items;
+        if (isCurrent()) {
+          this.investorNews = items;
+        }
 
         return items;
       } catch (error) {
-        this.error = getAssetErrorMessage(error, ASSET_MESSAGES.newsFailed);
-        this.investorNews = [];
+        if (isCurrent()) {
+          this.error = getAssetErrorMessage(error, ASSET_MESSAGES.newsFailed);
+          this.investorNews = [];
+        }
         throw error;
       }
     },
 
-    async fetchCorporateEvents(symbol: string) {
+    async fetchCorporateEvents(symbol: string, generation?: number) {
       this.requireInvestorPortfolio();
 
       const portfolioId = this.requirePortfolioId();
+      const isCurrent = () => generation === undefined || generation === this.generation;
 
       try {
         const items = await assetService.getCorporateEvents(portfolioId, symbol);
 
-        this.corporateEvents = items;
+        if (isCurrent()) {
+          this.corporateEvents = items;
+        }
 
         return items;
       } catch (error) {
-        this.error = getAssetErrorMessage(error, ASSET_MESSAGES.eventsFailed);
-        this.corporateEvents = [];
+        if (isCurrent()) {
+          this.error = getAssetErrorMessage(error, ASSET_MESSAGES.eventsFailed);
+          this.corporateEvents = [];
+        }
         throw error;
       }
     },
@@ -250,20 +290,25 @@ export const useAssetStore = defineStore('asset', {
       }
     },
 
-    async fetchStockValuation(symbol: string) {
+    async fetchStockValuation(symbol: string, generation?: number) {
       this.requireInvestorPortfolio();
 
       const portfolioId = this.requirePortfolioId();
+      const isCurrent = () => generation === undefined || generation === this.generation;
 
       try {
         const valuation = await assetService.getStockValuation(portfolioId, symbol);
 
-        this.valuation = valuation;
+        if (isCurrent()) {
+          this.valuation = valuation;
+        }
 
         return valuation;
       } catch (error) {
-        this.error = getAssetErrorMessage(error, ASSET_MESSAGES.valuationFailed);
-        this.valuation = null;
+        if (isCurrent()) {
+          this.error = getAssetErrorMessage(error, ASSET_MESSAGES.valuationFailed);
+          this.valuation = null;
+        }
         throw error;
       }
     },
@@ -293,6 +338,7 @@ export const useAssetStore = defineStore('asset', {
       this.loadedPortfolioId = null;
       this.selectedSector = null;
       this.selectedInterval = DEFAULT_CHART_INTERVAL;
+      this.generation += 1;
       this.isLoading = false;
       this.isLoadingChart = false;
       this.isLoadingDetails = false;

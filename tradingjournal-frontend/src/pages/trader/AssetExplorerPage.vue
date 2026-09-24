@@ -315,13 +315,14 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
               flat
               dense
               toggle-color="primary"
+              :disable="!assetStore.activeAsset"
               :options="[
                 { label: '1D', value: '1d' },
                 { label: '1W', value: '1wk' },
                 { label: '1M', value: '1mo' },
               ]"
               @update:model-value="
-                (val) => assetStore.fetchChartData(assetStore.activeAsset!.symbol, val)
+                (val) => assetStore.activeAsset && assetStore.fetchChartData(assetStore.activeAsset.symbol, val)
               "
             />
             <q-separator vertical class="q-mx-md" inset />
@@ -349,6 +350,17 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 
           <div class="chart-wrapper relative-position">
             <div ref="chartContainer" class="full-width" style="height: 500px"></div>
+            <div
+              v-if="!assetStore.activeAsset"
+              class="absolute-full flex flex-center explorer-empty-state"
+              data-test="asset-explorer-empty"
+            >
+              {{
+                assetStore.assets.length === 0
+                  ? 'No assets available right now.'
+                  : 'Pick a symbol to see its chart.'
+              }}
+            </div>
             <div v-if="assetStore.isLoading" class="absolute-full flex flex-center bg-overlay">
               <q-spinner-dots color="primary" size="4em" />
             </div>
@@ -467,6 +479,13 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
   background: rgba(15, 23, 42, 0.4);
   backdrop-filter: blur(4px);
   z-index: 10;
+}
+
+.explorer-empty-state {
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  text-align: center;
+  padding: 0 24px;
 }
 
 .rounded-input :deep(.q-field__control) {

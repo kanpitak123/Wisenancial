@@ -10,7 +10,8 @@
     "start:prod": "node dist/src/main",
     "db:seed:stocks": "tsx --env-file=.env prisma/seed-stocks.ts",
     "db:seed:missions": "tsx --env-file=.env prisma/seed.ts",
-    "db:seed": "npm run db:seed:stocks && npm run db:seed:missions",
+    "db:seed:assets": "tsx --env-file=.env prisma/seed-assets.ts",
+    "db:seed": "npm run db:seed:stocks && npm run db:seed:missions && npm run db:seed:assets",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage"
