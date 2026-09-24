@@ -46,6 +46,11 @@ lerna-debug.log*
 # db backups
 backups/
 
+# data-export/backup files that sometimes get dropped inside migration folders
+# (may contain real user data) — never belongs in version control
+prisma/**/*backup*.json
+prisma/**/*.dump
+
 # temp directory
 .temp
 .tmp
