@@ -123,6 +123,18 @@ export class AuthService {
       throw new UnauthorizedException(AUTH_ERROR_MESSAGES.invalidCredentials);
     }
 
+    // ล็อกอินสำเร็จระหว่างช่วงรอลบบัญชี = ยกเลิกการลบ (ผู้ใช้กลับมาแสดงว่ายังต้องการบัญชีนี้)
+    // ตั้งใจให้เกิดเฉพาะตอนล็อกอินด้วยรหัสผ่าน ไม่ใช่ตอน refresh — token ทุกใบถูกไล่ออกไปแล้ว
+    // ตอนขอลบ จึง refresh ไม่ได้อยู่แล้ว
+    const deletionCancelled = Boolean(user.deletion_scheduled_at);
+
+    if (deletionCancelled) {
+      await this.prisma.users.update({
+        where: { id: user.id },
+        data: { deletion_scheduled_at: null },
+      });
+    }
+
     const accessToken = await this.jwtService.signAsync(
       this.buildAccessPayload(user),
     );
@@ -136,6 +148,8 @@ export class AuthService {
       access_token: accessToken,
       refresh_token: refreshToken.token,
       user: this.toPublicUser(user),
+      // มีเฉพาะตอนที่การล็อกอินครั้งนี้ยกเลิกการลบบัญชี — หน้าบ้านใช้แสดงประกาศให้ผู้ใช้เห็นชัด
+      ...(deletionCancelled ? { account_deletion_cancelled: true } : {}),
     };
   }
 

@@ -9,3 +9,9 @@ export const EXPORT_THROTTLE = {
   ttlMs: Number(process.env.EXPORT_THROTTLE_TTL_SECONDS ?? 3600) * 1000,
   limit: Number(process.env.EXPORT_THROTTLE_LIMIT ?? 5),
 } as const;
+
+/** ลบบัญชี: ช่วงผ่อนผันก่อนลบถาวร และขนาดชุดที่งานรายวันหยิบมาลบต่อรอบ */
+export const ACCOUNT_DELETION = {
+  graceDays: 30,
+  purgeBatchSize: 100,
+} as const;

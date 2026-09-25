@@ -12,6 +12,8 @@ import {
   ThrottlerModule,
 } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AUTH_THROTTLE } from '../auth/constants/auth.constants';
+import { AccountDeletionService } from './account-deletion.service';
 import { EXPORT_THROTTLE } from './constants/users.constants';
 import { UsersController } from './users.controller';
 import { UsersExportService } from './users-export.service';
@@ -26,6 +28,7 @@ async function buildApp(): Promise<INestApplication> {
     providers: [
       { provide: UsersService, useValue: {} },
       { provide: UsersExportService, useValue: {} },
+      { provide: AccountDeletionService, useValue: {} },
       ThrottlerGuard,
     ],
   })
@@ -41,6 +44,7 @@ async function buildApp(): Promise<INestApplication> {
 async function callExport(
   app: INestApplication,
   ip: string,
+  handler: 'exportMe' | 'requestDeletion' = 'exportMe',
 ): Promise<'ok' | 'throttled'> {
   const guard = app.get(ThrottlerGuard);
   const controller = app.get(UsersController);
@@ -57,7 +61,7 @@ async function callExport(
     getClass: () => UsersController,
     // อ้างอิง method เพื่อให้ guard อ่าน decorator metadata เท่านั้น ไม่เคยเรียกเอง
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    getHandler: () => controller.exportMe,
+    getHandler: () => controller[handler],
     getType: () => 'http',
     switchToHttp: () => ({
       getRequest: () => request,
@@ -100,6 +104,20 @@ describe('GET /users/me/export rate limit', () => {
 
     expect(results.every((r) => r === 'ok')).toBe(true);
     expect(await callExport(app, '203.0.113.30')).toBe('throttled');
+  });
+
+  /** ยืนยันด้วยรหัสผ่าน = จุดเดารหัสผ่านได้ จึงต้องอยู่ใต้เพดานเดียวกับ login */
+  it('POST /users/me/deletion ใช้เพดาน auth เดียวกับ login', async () => {
+    const results: string[] = [];
+
+    for (let i = 0; i < AUTH_THROTTLE.limit; i++) {
+      results.push(await callExport(app, '203.0.113.40', 'requestDeletion'));
+    }
+
+    expect(results.every((r) => r === 'ok')).toBe(true);
+    expect(await callExport(app, '203.0.113.40', 'requestDeletion')).toBe(
+      'throttled',
+    );
   });
 
   it('IP อื่นไม่ได้รับผลจากคนที่โดนบล็อก', async () => {

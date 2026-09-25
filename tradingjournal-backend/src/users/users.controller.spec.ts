@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UsersController } from './users.controller';
+import { AccountDeletionService } from './account-deletion.service';
 import { UsersExportService } from './users-export.service';
 import { UsersService } from './users.service';
 
@@ -13,6 +14,10 @@ const usersServiceMock = {
 
 const usersExportServiceMock = {
   buildExport: jest.fn(),
+};
+
+const accountDeletionServiceMock = {
+  requestDeletion: jest.fn(),
 };
 
 describe('UsersController', () => {
@@ -31,6 +36,10 @@ describe('UsersController', () => {
         {
           provide: UsersExportService,
           useValue: usersExportServiceMock,
+        },
+        {
+          provide: AccountDeletionService,
+          useValue: accountDeletionServiceMock,
         },
       ],
     })
@@ -56,6 +65,15 @@ describe('UsersController', () => {
     expect(usersServiceMock.getPublicProfile).toHaveBeenCalledWith(
       'trader01',
       7,
+    );
+  });
+
+  it('requestDeletion uses the id from the token, never one from the body', () => {
+    controller.requestDeletion({ userId: 7 } as never, { password: 'pw' });
+
+    expect(accountDeletionServiceMock.requestDeletion).toHaveBeenCalledWith(
+      7,
+      'pw',
     );
   });
 

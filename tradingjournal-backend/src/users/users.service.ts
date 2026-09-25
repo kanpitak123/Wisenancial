@@ -24,6 +24,7 @@ export class UsersService {
         avatar_url: true,
         bio: true,
         is_public_profile: true,
+        deletion_scheduled_at: true,
         subscription_tier: true,
         created_at: true,
         updated_at: true,
@@ -72,6 +73,7 @@ export class UsersService {
       avatar_url: user.avatar_url,
       bio: user.bio,
       is_public_profile: user.is_public_profile,
+      deletion_scheduled_at: user.deletion_scheduled_at,
       subscription_tier: user.subscription_tier,
       created_at: user.created_at,
       updated_at: user.updated_at,
@@ -172,6 +174,7 @@ export class UsersService {
         bio: true,
         subscription_tier: true,
         is_public_profile: true,
+        deletion_scheduled_at: true,
         current_streak: true,
         created_at: true,
         portfolios: {
@@ -201,6 +204,11 @@ export class UsersService {
     }
 
     const isOwner = user.id === viewerUserId;
+
+    // บัญชีที่อยู่ในช่วงรอลบต้องหายจากสายตาคนอื่นทันที (เจ้าของยังเห็นของตัวเองได้)
+    if (user.deletion_scheduled_at && !isOwner) {
+      throw new NotFoundException('ไม่พบผู้ใช้นี้');
+    }
 
     if (!user.is_public_profile && !isOwner) {
       throw new ForbiddenException('โปรไฟล์นี้ตั้งเป็นส่วนตัว');

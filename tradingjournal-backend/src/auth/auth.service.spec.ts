@@ -108,6 +108,65 @@ describe('AuthService', () => {
     expect(result.access_token).toBe('access-token');
   });
 
+  describe('login during the account-deletion grace period', () => {
+    beforeEach(() => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      jwtMock.signAsync.mockResolvedValue('access-token');
+      refreshTokenMock.issue.mockResolvedValue({
+        token: 'refresh-token',
+        expiresAt: new Date(),
+      });
+      prismaMock.users.update.mockResolvedValue({});
+    });
+
+    it('clears deletion_scheduled_at and tells the client the deletion was cancelled', async () => {
+      prismaMock.users.findUnique.mockResolvedValue({
+        ...USER_ROW,
+        deletion_scheduled_at: new Date(Date.now() + 86_400_000),
+      });
+
+      const result = await service.login({
+        email: 'user@example.com',
+        password: 'Password123',
+      });
+
+      expect(prismaMock.users.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { deletion_scheduled_at: null },
+      });
+      expect(result).toMatchObject({ account_deletion_cancelled: true });
+    });
+
+    it('does nothing extra for a normal account (no write, no flag)', async () => {
+      prismaMock.users.findUnique.mockResolvedValue({
+        ...USER_ROW,
+        deletion_scheduled_at: null,
+      });
+
+      const result = await service.login({
+        email: 'user@example.com',
+        password: 'Password123',
+      });
+
+      expect(prismaMock.users.update).not.toHaveBeenCalled();
+      expect(result).not.toHaveProperty('account_deletion_cancelled');
+    });
+
+    it('does NOT cancel the deletion when the password is wrong', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      prismaMock.users.findUnique.mockResolvedValue({
+        ...USER_ROW,
+        deletion_scheduled_at: new Date(Date.now() + 86_400_000),
+      });
+
+      await expect(
+        service.login({ email: 'user@example.com', password: 'wrong' }),
+      ).rejects.toThrow();
+
+      expect(prismaMock.users.update).not.toHaveBeenCalled();
+    });
+  });
+
   it('should issue a refresh token on login and pass the request context along', async () => {
     prismaMock.users.findUnique.mockResolvedValue(USER_ROW);
 

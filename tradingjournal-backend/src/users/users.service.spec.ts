@@ -103,6 +103,26 @@ describe('UsersService', () => {
       );
     });
 
+    it('บัญชีที่รอลบ + คนอื่นเปิดดู -> 404 แม้จะตั้งเป็นสาธารณะไว้', async () => {
+      prismaMock.users.findUnique.mockResolvedValue(
+        profile({ deletion_scheduled_at: new Date(Date.now() + 86_400_000) }),
+      );
+
+      await expect(service.getPublicProfile('trader01', 99)).rejects.toThrow(
+        'ไม่พบผู้ใช้นี้',
+      );
+    });
+
+    it('บัญชีที่รอลบ + เจ้าของเปิดดูเอง -> ยังดูได้', async () => {
+      prismaMock.users.findUnique.mockResolvedValue(
+        profile({ deletion_scheduled_at: new Date(Date.now() + 86_400_000) }),
+      );
+
+      const result = await service.getPublicProfile('trader01', 1);
+
+      expect(result.is_owner).toBe(true);
+    });
+
     it('โปรไฟล์ส่วนตัว + เจ้าของเปิดดูเอง -> ดูได้ และรู้ว่าเป็นเจ้าของ', async () => {
       // ไม่ยอมให้ผ่านตรงนี้ = เจ้าของเปิดหน้าไปกดสวิตช์เปิดสาธารณะไม่ได้เลย
       prismaMock.users.findUnique.mockResolvedValue(

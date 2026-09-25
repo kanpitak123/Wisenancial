@@ -3,8 +3,11 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
+  Post,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -13,10 +16,18 @@ import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthUser } from '../auth/types/auth-user.type';
+import { AUTH_THROTTLE } from '../auth/constants/auth.constants';
+import { AccountDeletionService } from './account-deletion.service';
 import { EXPORT_THROTTLE } from './constants/users.constants';
+import { RequestAccountDeletionDto } from './dto/request-account-deletion.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersExportService } from './users-export.service';
 import { UsersService } from './users.service';
+
+// ยืนยันด้วยรหัสผ่าน จึงเป็นจุดเดารหัสผ่านได้ — ใช้เพดานเดียวกับ /auth/login
+const deletionThrottle = {
+  default: { limit: AUTH_THROTTLE.limit, ttl: AUTH_THROTTLE.ttlMs },
+};
 
 const exportThrottle = {
   default: { limit: EXPORT_THROTTLE.limit, ttl: EXPORT_THROTTLE.ttlMs },
@@ -28,6 +39,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly usersExportService: UsersExportService,
+    private readonly accountDeletionService: AccountDeletionService,
   ) {}
 
   @Get('me')
@@ -61,6 +73,23 @@ export class UsersController {
     );
 
     return bundle;
+  }
+
+  /**
+   * ขอลบบัญชี (soft delete + ช่วงผ่อนผัน) — ต้องส่งรหัสผ่านมายืนยัน
+   * ไล่ออกจากระบบทุกเครื่อง ล็อกอินก่อนถึงกำหนดเพื่อยกเลิก
+   */
+  @Throttle(deletionThrottle)
+  @Post('me/deletion')
+  @HttpCode(HttpStatus.OK)
+  requestDeletion(
+    @CurrentUser() user: AuthUser,
+    @Body() body: RequestAccountDeletionDto,
+  ) {
+    return this.accountDeletionService.requestDeletion(
+      user.userId,
+      body.password,
+    );
   }
 
   @Delete('me/avatar')
