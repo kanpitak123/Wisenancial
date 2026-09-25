@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UsersController } from './users.controller';
+import { UsersExportService } from './users-export.service';
 import { UsersService } from './users.service';
 
 const usersServiceMock = {
@@ -8,6 +9,10 @@ const usersServiceMock = {
   updateProfile: jest.fn(),
   removeAvatar: jest.fn(),
   getPublicProfile: jest.fn(),
+};
+
+const usersExportServiceMock = {
+  buildExport: jest.fn(),
 };
 
 describe('UsersController', () => {
@@ -22,6 +27,10 @@ describe('UsersController', () => {
         {
           provide: UsersService,
           useValue: usersServiceMock,
+        },
+        {
+          provide: UsersExportService,
+          useValue: usersExportServiceMock,
         },
       ],
     })
@@ -48,6 +57,39 @@ describe('UsersController', () => {
       'trader01',
       7,
     );
+  });
+
+  describe('exportMe', () => {
+    const BUNDLE = { exported_at: '2026-09-26T03:00:00.000Z', data: {} };
+
+    it('exports the account of the token, never an id from the client', async () => {
+      usersExportServiceMock.buildExport.mockResolvedValue(BUNDLE);
+      const response = { setHeader: jest.fn() };
+
+      const result = await controller.exportMe(
+        { userId: 7 } as never,
+        response as never,
+      );
+
+      expect(usersExportServiceMock.buildExport).toHaveBeenCalledWith(7);
+      expect(result).toBe(BUNDLE);
+    });
+
+    it('marks the response no-store and as a dated attachment', async () => {
+      usersExportServiceMock.buildExport.mockResolvedValue(BUNDLE);
+      const response = { setHeader: jest.fn() };
+
+      await controller.exportMe({ userId: 7 } as never, response as never);
+
+      expect(response.setHeader).toHaveBeenCalledWith(
+        'Cache-Control',
+        'no-store',
+      );
+      expect(response.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'attachment; filename="wisenancial-export-2026-09-26.json"',
+      );
+    });
   });
 
   it('getMe ใช้ id จาก token ไม่ใช่ค่าจาก client', () => {
