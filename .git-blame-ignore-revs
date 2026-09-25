@@ -1,0 +1,8 @@
+# git blame --ignore-revs-file .git-blame-ignore-revs
+# (or set once: git config blame.ignoreRevsFile .git-blame-ignore-revs)
+#
+# Commits listed here are pure mechanical reformatting with zero semantic
+# change — skip them when tracing a line's real history.
+
+# style(backend): apply eslint --fix (prettier) — formatting only, zero logic changes
+a95e3c9
