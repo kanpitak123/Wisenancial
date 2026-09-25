@@ -14,6 +14,9 @@ export const AUTH_ENDPOINTS = {
   changePassword: '/auth/change-password',
 } as const;
 
+// รอ /auth/logout ได้นานสุดเท่านี้ — เกินก็ล้าง session ในเครื่องแล้วไปต่อ ไม่ให้ปุ่ม Sign out ค้าง
+export const LOGOUT_TIMEOUT_MS = 5000;
+
 // backend ฟังที่พอร์ต 3000 (main.ts) และไม่มี global prefix
 // ('/api' คือ route ของ Swagger UI ไม่ใช่ prefix ของ API)
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();

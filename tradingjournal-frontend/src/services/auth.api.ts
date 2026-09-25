@@ -1,4 +1,9 @@
-import { API_BASE_URL, AUTH_ENDPOINTS, AUTH_STORAGE_KEYS } from 'src/constants/auth.constants';
+import {
+  API_BASE_URL,
+  AUTH_ENDPOINTS,
+  AUTH_STORAGE_KEYS,
+  LOGOUT_TIMEOUT_MS,
+} from 'src/constants/auth.constants';
 import { MOCK_LATENCY_MS, isMockEnabled } from 'src/mocks/mock.config';
 import { mockAuthResponse } from 'src/mocks/auth.mock';
 import type {
@@ -90,6 +95,8 @@ export const authApi = {
   logout() {
     return request<LogoutResponse>(AUTH_ENDPOINTS.logout, {
       method: 'POST',
+      // backend ค้าง = ผู้ใช้ค้าง — ตัดทิ้งแล้วให้ AuthStore.logout() ล้าง session ฝั่งเครื่องต่อ
+      signal: AbortSignal.timeout(LOGOUT_TIMEOUT_MS),
     });
   },
 

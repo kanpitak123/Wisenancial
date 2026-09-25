@@ -87,6 +87,7 @@
                 clickable
                 v-ripple
                 class="account-list-item text-negative"
+                data-test="account-menu-logout"
                 @click="handleLogout"
               >
                 <q-item-section>Sign out</q-item-section>
@@ -209,6 +210,7 @@ import { useWorkspace } from 'src/composables/useWorkspace';
 import { tradeService } from 'src/services/trade.service';
 import type { LeaderboardUser } from 'src/types/trade.types';
 import { useUserStore } from 'stores/UserStore';
+import { useAuthStore } from 'stores/AuthStore';
 import { useGamificationStore } from 'stores/GamificationStore';
 import GlobalDateFilter from 'components/GlobalDateFilter.vue';
 import MissionDialog from 'components/MissionDialog.vue';
@@ -220,6 +222,7 @@ useKeyboardShortcuts();
 
 const $q = useQuasar();
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const missionsStore = useGamificationStore();
 const missionsDialogOpen = ref(false);
 
@@ -279,7 +282,16 @@ function toggleDarkMode() {
   localStorage.setItem('darkMode', $q.dark.isActive ? 'true' : 'false');
 }
 
-function handleLogout() {
+let loggingOut = false;
+
+async function handleLogout() {
+  if (loggingOut) return;
+  loggingOut = true;
+
+  // ยิง POST /auth/logout ให้ backend revoke refresh token + สั่งลบ cookie ก่อน
+  // authStore.logout() ไม่ throw — ถ้ายิงไม่ถึง (ออฟไลน์/backend ล่ม/timeout) ก็ล้าง session ในเครื่องต่อได้เลย
+  await authStore.logout();
+
   const savedDarkMode = localStorage.getItem('darkMode');
   localStorage.clear();
   if (savedDarkMode !== null) {
