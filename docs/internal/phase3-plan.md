@@ -296,3 +296,23 @@ This policy explains how Wisenancial collects, uses, and protects your personal 
 3. **B2**: which real mail provider/transport for production (blocked on "company domain" per the original ask — nothing chosen here).
 4. **B2**: whether/where to gate unverified-email users.
 5. **B3**: every `[Placeholder]` in the four documents above — refund policy, liability cap, governing law/jurisdiction, exact AI providers live in production, data retention schedule, actual encryption standards to claim, age of consent, and who the designated contact/DPO is. **None of these were guessed at** — they're each flagged as needing a real answer from the user or counsel, not filled in with a plausible-sounding default.
+
+---
+
+## B1 — implementation status (2026-09-26)
+
+Implemented per the decisions below. Everything except account deletion needs no schema change and is on `main`; account deletion (schema + migration + code + UI) is on branch `feat/account-deletion`, **migration not applied** — SQL awaiting review.
+
+| Capability | Endpoint | Notes |
+|---|---|---|
+| Edit profile | existing `PATCH /users/me`, `DELETE /users/me/avatar` | UI only. `GET /users/me` now also returns `is_public_profile`. |
+| Change password | `POST /auth/change-password` `{ current_password, new_password }` | Needs current password; wrong one = **400** (a 401 would trigger the client's force-logout). Revokes every OTHER refresh-token family; this device is identified through its refresh cookie. Throttled like login. |
+| Export my data | `GET /users/me/export` | One JSON bundle, allow-listed columns, no password/Stripe ids/refresh tokens/broker credentials. `Cache-Control: no-store`. Throttled (5/hour/IP, `EXPORT_THROTTLE_*`). Synchronous. |
+| Delete account | `POST /users/me/deletion` `{ password }` (branch `feat/account-deletion`) | Soft delete: `users.deletion_scheduled_at = now + 30 days`, all sessions revoked. Login before then clears it (response carries `account_deletion_cancelled: true`, Login page shows a notice). Daily `@Cron('0 3 * * *')` hard-deletes (cascade), logs only counts. |
+
+Deviations from the plan above, on purpose:
+- **Change-password lives at `/auth/change-password`, not `/users/me/password`.** The refresh cookie is scoped to path `/auth`, so only endpoints under it can tell which session is "this device"; widening the cookie path would expose the refresh token to every API route.
+- **Deleting is refused (409) while a paid Stripe subscription is live**, and the purge job skips such accounts. No Stripe code was touched; the user must cancel the plan first. Consequence: a user who cancelled but is still inside a paid period must wait for `end_date`.
+- Community content (posts/comments) stays visible during the grace period; only the public profile page returns 404. After the purge, cascade removes it.
+
+Known limits: access tokens (15 min) issued before a password change / deletion request stay valid until they expire (no deny-list). The export is not paginated (fine up to tens of MB).
