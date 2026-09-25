@@ -251,7 +251,7 @@ const POSTS: Post[] = POST_SEED.map((seed, index) => {
 // ============================================================
 // Coach Room
 // ============================================================
-const COACHES: Coach[] = [
+export const COACHES: Coach[] = [
   {
     id: 'coach-01',
     name: 'ครูหนึ่ง · Somchai P.',
@@ -325,7 +325,7 @@ const COACHES: Coach[] = [
   },
 ];
 
-const SESSIONS: CoachSession[] = [
+export const SESSIONS: CoachSession[] = [
   {
     id: 'session-01',
     coachId: 'coach-01',

@@ -4,7 +4,7 @@ import type {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { MOCK_LATENCY_MS, isMockEnabled } from './mock.config';
 import { asString, type MockContext, type MockMethod, type MockRoute } from './mock.types';
 import { coreRoutes } from './routes/core.routes';
@@ -13,6 +13,7 @@ import { investorRoutes } from './routes/investor.routes';
 import { analyticsRoutes } from './routes/analytics.routes';
 import { contentRoutes } from './routes/content.routes';
 import { extraRoutes } from './routes/extras.routes';
+import { demoRoutes } from './routes/demo.routes';
 
 const ROUTES: MockRoute[] = [
   ...coreRoutes,
@@ -21,6 +22,7 @@ const ROUTES: MockRoute[] = [
   ...analyticsRoutes,
   ...contentRoutes,
   ...extraRoutes,
+  ...demoRoutes,
 ];
 
 interface CompiledRoute extends MockRoute {
@@ -163,8 +165,16 @@ function delay(ms: number) {
  *
  * - mock ปิด -> ยิงจริงตามปกติ
  * - mock เปิด + เจอ route -> ตอบข้อมูลตัวอย่าง
- * - mock เปิด + ไม่เจอ route -> เตือนใน console แล้วปล่อยไปยิงจริง
- *   (จะได้รู้ทันทีว่ามี endpoint ไหนยังไม่ได้ mock)
+ * - mock เปิด + ไม่เจอ route -> เตือนใน console แล้วตอบ 404 (mock) กลับไปเลย
+ *   ไม่ปล่อยไปยิง backend จริง
+ *
+ *   เดิมปล่อยไปยิงจริง แต่ตอน mock ไม่มี token จริง ถ้า backend เปิดอยู่มันจะตอบ 401
+ *   -> interceptor ลอง refresh (mock ตอบสำเร็จ) -> ยิงซ้ำยังได้ 401 -> forceLogout
+ *   ผู้ใช้เลยถูกเตะกลับหน้า Login กลางการ demo เพราะ endpoint แค่ตัวเดียวที่ลืม mock
+ *   ส่วนถ้า backend ปิดอยู่ก็ต้องรอ retry เงียบๆ อีก ~1 วินาทีก่อนจะ error
+ *
+ *   ตอบ 404 แทนให้ทุกหน้าเข้า error path เดิมที่เขียนรองรับไว้แล้ว (ไม่มี side effect ต่อ session)
+ *   และยังเห็นชื่อ endpoint ที่ขาดใน console เหมือนเดิม
  */
 export function installMockAdapter(instance: AxiosInstance): void {
   const realAdapter = axios.getAdapter(instance.defaults.adapter);
@@ -177,10 +187,28 @@ export function installMockAdapter(instance: AxiosInstance): void {
     const match = matchMock(config);
 
     if (!match) {
+      const missingPath = toPath(config.url ?? '', config.baseURL);
+      const missingMethod = (config.method ?? 'get').toUpperCase();
+
       console.warn(
-        `[mock] ยังไม่มี handler สำหรับ ${(config.method ?? 'get').toUpperCase()} ${toPath(config.url ?? '', config.baseURL)} — ส่งต่อไปยัง backend จริง`,
+        `[mock] ยังไม่มี handler สำหรับ ${missingMethod} ${missingPath} — ตอบ 404 (mock)`,
       );
-      return realAdapter(config);
+
+      const notFound: AxiosResponse = {
+        data: { message: `Mock: ไม่มี handler สำหรับ ${missingMethod} ${missingPath}` },
+        status: 404,
+        statusText: 'Not Found (mock)',
+        headers: {},
+        config,
+      };
+
+      throw new AxiosError(
+        `Mock: no handler for ${missingMethod} ${missingPath}`,
+        AxiosError.ERR_BAD_REQUEST,
+        config,
+        null,
+        notFound,
+      );
     }
 
     await delay(MOCK_LATENCY_MS);

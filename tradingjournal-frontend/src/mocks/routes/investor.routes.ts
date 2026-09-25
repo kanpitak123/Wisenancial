@@ -477,50 +477,6 @@ export const investorRoutes = defineMockRoutes([
     }),
   },
   {
-    method: 'GET',
-    path: '/dividends/portfolio/:portfolioId/tax-summary',
-    handler: (ctx) => {
-      const year = Number(ctx.query.year ?? new Date().getFullYear());
-
-      const records = DIVIDENDS.filter(
-        (item) => new Date(item.payment_date).getFullYear() === year,
-      ).map((item) => ({
-        id: item.id,
-        symbol: item.symbol,
-        name: item.name ?? item.symbol,
-        paymentDate: String(item.payment_date).slice(0, 10),
-        shares: Number(item.shares),
-        dividendPerShare: Number(item.dividend_per_share),
-        grossAmount: Number(item.gross_amount),
-        whtRate: Number(item.wht_rate),
-        taxWithheld: Number(item.tax_withheld),
-        netAmount: Number(item.net_amount),
-      }));
-
-      const total = (pick: (item: (typeof records)[number]) => number) =>
-        round(records.reduce((sum, item) => sum + pick(item), 0));
-
-      return {
-        portfolio_id: Number(ctx.params.portfolioId),
-        year,
-        records,
-        totalGross: total((item) => item.grossAmount),
-        totalTaxWithheld: total((item) => item.taxWithheld),
-        totalNet: total((item) => item.netAmount),
-        byWhtRate: records.length
-          ? [
-              {
-                whtRate: 0.1,
-                count: records.length,
-                grossAmount: total((item) => item.grossAmount),
-                taxWithheld: total((item) => item.taxWithheld),
-              },
-            ]
-          : [],
-      };
-    },
-  },
-  {
     method: 'POST',
     path: '/dividends/portfolio/:portfolioId',
     handler: (ctx) => ({
