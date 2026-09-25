@@ -93,8 +93,16 @@ export class CoachService {
         },
         reviews: {
           create: [
-            { author: 'Tom P.', rating: 5, comment: 'Completely changed how I size my positions.' },
-            { author: 'May S.', rating: 5, comment: 'Helped me stop revenge trading.' },
+            {
+              author: 'Tom P.',
+              rating: 5,
+              comment: 'Completely changed how I size my positions.',
+            },
+            {
+              author: 'May S.',
+              rating: 5,
+              comment: 'Helped me stop revenge trading.',
+            },
           ],
         },
       },
@@ -124,7 +132,11 @@ export class CoachService {
         },
         reviews: {
           create: [
-            { author: 'Alex W.', rating: 5, comment: 'Finally understand spreads. Worth every baht.' },
+            {
+              author: 'Alex W.',
+              rating: 5,
+              comment: 'Finally understand spreads. Worth every baht.',
+            },
           ],
         },
       },
@@ -153,15 +165,17 @@ export class CoachService {
         },
         reviews: {
           create: [
-            { author: 'Nok T.', rating: 4, comment: 'Patient and clear with fundamentals.' },
+            {
+              author: 'Nok T.',
+              rating: 4,
+              comment: 'Patient and clear with fundamentals.',
+            },
           ],
         },
       },
     });
 
-    this.logger.log(
-      `Seeded coaches: ${coach1.id}, ${coach2.id}, ${coach3.id}`,
-    );
+    this.logger.log(`Seeded coaches: ${coach1.id}, ${coach2.id}, ${coach3.id}`);
     this.seeded = true;
   }
 
@@ -313,7 +327,9 @@ export class CoachService {
       yearsExperience: coach.years_experience,
       hourlyRateThb: coach.hourly_rate_thb,
       languages: coach.languages,
-      availableSlots: (coach.availability ?? []).map((a) => a.slot.toISOString()),
+      availableSlots: (coach.availability ?? []).map((a) =>
+        a.slot.toISOString(),
+      ),
     };
   }
 

@@ -37,7 +37,9 @@ describe('auth-cookie.util', () => {
     });
 
     it('should not confuse a cookie whose name merely ends with the same text', () => {
-      const request = requestWith('not_refresh_token=wrong; refresh_token=right');
+      const request = requestWith(
+        'not_refresh_token=wrong; refresh_token=right',
+      );
 
       expect(readRefreshCookie(request)).toBe('right');
     });

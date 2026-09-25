@@ -5,10 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import {
-  PortfolioType,
-  Prisma,
-} from '@prisma/client';
+import { PortfolioType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type FinnhubQuote = {
@@ -35,11 +32,8 @@ class TransientFinnhubError extends ServiceUnavailableException {}
 
 @Injectable()
 export class FinnhubMarketDataService {
-  private readonly logger = new Logger(
-    FinnhubMarketDataService.name,
-  );
-  private readonly baseUrl =
-    'https://finnhub.io/api/v1';
+  private readonly logger = new Logger(FinnhubMarketDataService.name);
+  private readonly baseUrl = 'https://finnhub.io/api/v1';
 
   // ลองใหม่สูงสุด 3 ครั้ง (1 ครั้งแรก + retry 2 ครั้ง) แบบ exponential backoff
   // มี jitter กันหลาย request ยิงพร้อมกันตอน retry (thundering herd)
@@ -49,22 +43,12 @@ export class FinnhubMarketDataService {
   private static readonly MAX_FETCH_ATTEMPTS = 3;
   private static readonly RETRY_BASE_DELAY_MS = 600;
 
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async syncSymbol(
-    symbolInput: string,
-    currencyInput = 'USD',
-  ) {
-    const symbol =
-      this.normalizeSymbol(symbolInput);
-    const currency =
-      this.normalizeCurrency(
-        currencyInput,
-      );
-    const token =
-      process.env.FINNHUB_API_KEY;
+  async syncSymbol(symbolInput: string, currencyInput = 'USD') {
+    const symbol = this.normalizeSymbol(symbolInput);
+    const currency = this.normalizeCurrency(currencyInput);
+    const token = process.env.FINNHUB_API_KEY;
 
     if (!token) {
       throw new ServiceUnavailableException(
@@ -72,24 +56,13 @@ export class FinnhubMarketDataService {
       );
     }
 
-    const url = new URL(
-      `${this.baseUrl}/quote`,
-    );
-    url.searchParams.set(
-      'symbol',
-      symbol,
-    );
+    const url = new URL(`${this.baseUrl}/quote`);
+    url.searchParams.set('symbol', symbol);
     url.searchParams.set('token', token);
 
-    const quote = await this.fetchQuoteWithRetry(
-      symbol,
-      url,
-    );
+    const quote = await this.fetchQuoteWithRetry(symbol, url);
 
-    const priceDate =
-      quote.t > 0
-        ? new Date(quote.t * 1000)
-        : new Date();
+    const priceDate = quote.t > 0 ? new Date(quote.t * 1000) : new Date();
 
     return this.prisma.market_prices.upsert({
       where: {
@@ -101,37 +74,28 @@ export class FinnhubMarketDataService {
       create: {
         symbol,
         currency,
-        price: new Prisma.Decimal(
-          quote.c,
-        ),
+        price: new Prisma.Decimal(quote.c),
         price_date: priceDate,
         source: 'FINNHUB',
       },
       update: {
-        price: new Prisma.Decimal(
-          quote.c,
-        ),
+        price: new Prisma.Decimal(quote.c),
         price_date: priceDate,
         source: 'FINNHUB',
       },
     });
   }
 
-  async syncPortfolio(
-    portfolioId: number,
-    userId?: number,
-  ) {
+  async syncPortfolio(portfolioId: number, userId?: number) {
     if (userId !== undefined) {
-      const portfolio =
-        await this.prisma.portfolios.findFirst({
-          where: {
-            id: portfolioId,
-            user_id: userId,
-            portfolio_type:
-              PortfolioType.INVESTOR,
-          },
-          select: { id: true },
-        });
+      const portfolio = await this.prisma.portfolios.findFirst({
+        where: {
+          id: portfolioId,
+          user_id: userId,
+          portfolio_type: PortfolioType.INVESTOR,
+        },
+        select: { id: true },
+      });
 
       if (!portfolio) {
         throw new NotFoundException(
@@ -140,21 +104,17 @@ export class FinnhubMarketDataService {
       }
     }
 
-    const rows =
-      await this.prisma.stock_purchases.findMany({
-        where: {
-          portfolio_id: portfolioId,
-          remaining_shares: { gt: 0 },
-        },
-        select: {
-          stock_symbol: true,
-          currency: true,
-        },
-        distinct: [
-          'stock_symbol',
-          'currency',
-        ],
-      });
+    const rows = await this.prisma.stock_purchases.findMany({
+      where: {
+        portfolio_id: portfolioId,
+        remaining_shares: { gt: 0 },
+      },
+      select: {
+        stock_symbol: true,
+        currency: true,
+      },
+      distinct: ['stock_symbol', 'currency'],
+    });
 
     const prices: unknown[] = [];
     const failures: Array<{
@@ -165,26 +125,16 @@ export class FinnhubMarketDataService {
     // Sequential calls reduce the chance of hitting Finnhub rate limits.
     for (const row of rows) {
       try {
-        prices.push(
-          await this.syncSymbol(
-            row.stock_symbol,
-            row.currency,
-          ),
-        );
+        prices.push(await this.syncSymbol(row.stock_symbol, row.currency));
       } catch (error) {
-        const reason =
-          error instanceof Error
-            ? error.message
-            : String(error);
+        const reason = error instanceof Error ? error.message : String(error);
 
         failures.push({
           symbol: row.stock_symbol,
           reason,
         });
 
-        this.logger.warn(
-          `Unable to sync ${row.stock_symbol}: ${reason}`,
-        );
+        this.logger.warn(`Unable to sync ${row.stock_symbol}: ${reason}`);
       }
     }
 
@@ -197,38 +147,29 @@ export class FinnhubMarketDataService {
     };
   }
 
-  @Cron(
-    CronExpression.EVERY_30_MINUTES,
-  )
+  @Cron(CronExpression.EVERY_30_MINUTES)
   async syncAllOpenHoldings() {
-    if (
-      !process.env.FINNHUB_API_KEY
-    ) {
+    if (!process.env.FINNHUB_API_KEY) {
       return;
     }
 
-    const portfolios =
-      await this.prisma.stock_purchases.findMany({
-        where: {
-          remaining_shares: { gt: 0 },
-        },
-        select: {
-          portfolio_id: true,
-        },
-        distinct: ['portfolio_id'],
-      });
+    const portfolios = await this.prisma.stock_purchases.findMany({
+      where: {
+        remaining_shares: { gt: 0 },
+      },
+      select: {
+        portfolio_id: true,
+      },
+      distinct: ['portfolio_id'],
+    });
 
     for (const item of portfolios) {
       try {
-        await this.syncPortfolio(
-          item.portfolio_id,
-        );
+        await this.syncPortfolio(item.portfolio_id);
       } catch (error) {
         this.logger.warn(
           `Unable to sync portfolio ${item.portfolio_id}: ${
-            error instanceof Error
-              ? error.message
-              : String(error)
+            error instanceof Error ? error.message : String(error)
           }`,
         );
       }
@@ -243,32 +184,20 @@ export class FinnhubMarketDataService {
   ): Promise<FinnhubQuote> {
     for (
       let attempt = 1;
-      attempt <=
-      FinnhubMarketDataService.MAX_FETCH_ATTEMPTS;
+      attempt <= FinnhubMarketDataService.MAX_FETCH_ATTEMPTS;
       attempt++
     ) {
       try {
-        return await this.fetchQuoteOnce(
-          symbol,
-          url,
-        );
+        return await this.fetchQuoteOnce(symbol, url);
       } catch (error) {
         const isLastAttempt =
-          attempt ===
-          FinnhubMarketDataService.MAX_FETCH_ATTEMPTS;
+          attempt === FinnhubMarketDataService.MAX_FETCH_ATTEMPTS;
 
-        if (
-          !(
-            error instanceof
-            TransientFinnhubError
-          ) ||
-          isLastAttempt
-        ) {
+        if (!(error instanceof TransientFinnhubError) || isLastAttempt) {
           throw error;
         }
 
-        const delay =
-          this.retryDelay(attempt);
+        const delay = this.retryDelay(attempt);
 
         this.logger.warn(
           `Finnhub transient error for ${symbol} (attempt ${attempt}/${FinnhubMarketDataService.MAX_FETCH_ATTEMPTS}), retrying in ${Math.round(delay)}ms: ${
@@ -298,8 +227,7 @@ export class FinnhubMarketDataService {
         headers: {
           Accept: 'application/json',
         },
-        signal:
-          AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (error) {
       // ของเดิมกลืน error ทิ้งทั้งก้อน เหลือแต่ "Finnhub request failed" ที่ไม่บอกอะไรเลย
@@ -338,28 +266,16 @@ export class FinnhubMarketDataService {
 
       // 429 (rate limit) และ 5xx (server-side ของ Finnhub เอง) เป็นปัญหาชั่วคราว
       // ที่ retry แล้วมีโอกาสหาย — ส่วน 400/401/403/404 คือปัญหาถาวรของ request นี้เอง
-      if (
-        FinnhubMarketDataService.TRANSIENT_HTTP_STATUS.has(
-          response.status,
-        )
-      ) {
-        throw new TransientFinnhubError(
-          message,
-        );
+      if (FinnhubMarketDataService.TRANSIENT_HTTP_STATUS.has(response.status)) {
+        throw new TransientFinnhubError(message);
       }
 
-      throw new ServiceUnavailableException(
-        message,
-      );
+      throw new ServiceUnavailableException(message);
     }
 
-    const quote =
-      (await response.json()) as FinnhubQuote;
+    const quote = (await response.json()) as FinnhubQuote;
 
-    if (
-      !Number.isFinite(quote.c) ||
-      quote.c <= 0
-    ) {
+    if (!Number.isFinite(quote.c) || quote.c <= 0) {
       // ตอบ 200 มาแต่ข้อมูลว่าง/ไม่ valid — ไม่ใช่ปัญหาเครือข่ายชั่วคราว
       // (Finnhub มักตอบแบบนี้ตอน symbol ไม่มีอยู่จริง) จึงไม่ retry
       throw new ServiceUnavailableException(
@@ -372,39 +288,28 @@ export class FinnhubMarketDataService {
 
   private retryDelay(attempt: number): number {
     const backoff =
-      FinnhubMarketDataService.RETRY_BASE_DELAY_MS *
-      2 ** (attempt - 1);
+      FinnhubMarketDataService.RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
     const jitter = Math.random() * 150;
     return backoff + jitter;
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) =>
-      setTimeout(resolve, ms),
-    );
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private normalizeSymbol(
-    value: string,
-  ): string {
-    const symbol = String(
-      value ?? '',
-    )
+  private normalizeSymbol(value: string): string {
+    const symbol = String(value ?? '')
       .trim()
       .toUpperCase();
 
     if (!symbol) {
-      throw new ServiceUnavailableException(
-        'symbol is required',
-      );
+      throw new ServiceUnavailableException('symbol is required');
     }
 
     return symbol;
   }
 
-  private normalizeCurrency(
-    value: string,
-  ): string {
+  private normalizeCurrency(value: string): string {
     return String(value ?? 'USD')
       .trim()
       .toUpperCase();

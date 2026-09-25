@@ -221,7 +221,7 @@ export class MarketService {
       const yahooSymbol = toYahooTraderSymbol(symbol);
       const isTraderSymbol = yahooSymbol !== symbol;
       const raw = await this.yahooFinance.quote(yahooSymbol);
-      const quote = (Array.isArray(raw) ? raw[0] : raw) as any;
+      const quote = Array.isArray(raw) ? raw[0] : raw;
       const price = this.positiveNumber(quote?.regularMarketPrice);
 
       if (price === null) {
@@ -234,7 +234,9 @@ export class MarketService {
         // forex/gold ต้องการทศนิยมระดับ pip (เช่น EUR/USD 1.13856) ไม่ใช่ 2 ตำแหน่งแบบราคาหุ้น
         // — round() เดิม (.toFixed(2)) ปัด tick จริงจนราคาแทบไม่ขยับเลยระหว่าง poll แต่ละรอบ
         // แยกออกมาเฉพาะ price ที่กราฟใช้ผูกแท่งล่าสุดจริงๆ ไม่แตะ round() เดิมที่หุ้นยังใช้อยู่
-        price: isTraderSymbol ? this.roundTraderPrice(price) : this.round(price),
+        price: isTraderSymbol
+          ? this.roundTraderPrice(price)
+          : this.round(price),
         change: this.roundOptional(
           this.optionalNumber(quote?.regularMarketChange),
         ),

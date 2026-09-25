@@ -81,10 +81,7 @@ export class StockPurchasesController {
 
   /** ลบได้เฉพาะ lot ที่ยังไม่เคยขาย — ไม่งั้นตอบ 409 */
   @Delete(':id')
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: AuthUser,
-  ) {
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
     return this.service.remove(id, user.userId);
   }
 }

@@ -1,5 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PortfolioType, Prisma, RecordSource, RecordType } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  PortfolioType,
+  Prisma,
+  RecordSource,
+  RecordType,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordsService } from '../records/records.service';
 import { BuyStockDto } from './dto/buy-stock.dto';
@@ -31,78 +40,87 @@ export class StockTransactionsService {
     const symbol = dto.stock_symbol.trim().toUpperCase();
     const date = dto.purchase_date ? new Date(dto.purchase_date) : new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      const portfolio = await this.lockInvestorPortfolio(tx, portfolioId, userId);
-      const transactionCurrency = (
-        dto.currency?.trim().toUpperCase() ?? portfolio.currency ?? 'USD'
-      ).toUpperCase();
-      const portfolioCurrency = (portfolio.currency ?? 'USD').toUpperCase();
-
-      if (transactionCurrency !== portfolioCurrency) {
-        throw new BadRequestException(
-          `สกุลเงินรายการ (${transactionCurrency}) ต้องตรงกับสกุลเงินพอร์ต (${portfolioCurrency})`,
-        );
-      }
-      if (portfolio.current_balance.lessThan(total)) {
-        throw new BadRequestException('ยอดเงินสดไม่เพียงพอ');
-      }
-
-      const purchase = await tx.stock_purchases.create({
-        data: {
-          portfolio_id: portfolioId,
-          stock_symbol: symbol,
-          stock_name: dto.stock_name?.trim() || null,
-          shares_count: shares,
-          remaining_shares: shares,
-          purchase_price: price,
-          total_amount: total,
-          fees,
-          currency: transactionCurrency,
-          notes: dto.notes ?? null,
-          strategy: dto.strategy ?? null,
-          emotion: dto.emotion ?? null,
-          target_price:
-            dto.target_price === undefined
-              ? null
-              : new Prisma.Decimal(dto.target_price),
-          stop_loss:
-            dto.stop_loss === undefined
-              ? null
-              : new Prisma.Decimal(dto.stop_loss),
-          folder_name: dto.folder_name?.trim() || null,
-          purchase_reason: dto.purchase_reason?.trim() || null,
-          expectation: dto.expectation?.trim() || null,
-          status: 'OPEN',
-          purchase_date: date,
-        },
-      });
-
-      const record = await this.records.createSystem(
-        {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const portfolio = await this.lockInvestorPortfolio(
+          tx,
           portfolioId,
-          type: RecordType.STOCK_BUY,
-          source: RecordSource.STOCK_PURCHASE,
-          sourceId: purchase.id,
-          signedAmount: total.neg(),
-          currency: transactionCurrency,
-          description: `Buy ${symbol} ${shares.toString()} shares`,
-          occurredAt: date,
-          createdByUserId: userId,
-        },
-        tx,
-      );
+          userId,
+        );
+        const transactionCurrency = (
+          dto.currency?.trim().toUpperCase() ??
+          portfolio.currency ??
+          'USD'
+        ).toUpperCase();
+        const portfolioCurrency = (portfolio.currency ?? 'USD').toUpperCase();
 
-      const updatedPortfolio = await tx.portfolios.findUnique({
-        where: { id: portfolioId },
-        select: { current_balance: true },
-      });
+        if (transactionCurrency !== portfolioCurrency) {
+          throw new BadRequestException(
+            `สกุลเงินรายการ (${transactionCurrency}) ต้องตรงกับสกุลเงินพอร์ต (${portfolioCurrency})`,
+          );
+        }
+        if (portfolio.current_balance.lessThan(total)) {
+          throw new BadRequestException('ยอดเงินสดไม่เพียงพอ');
+        }
 
-      return {
-        purchase,
-        record,
-        current_balance: Number(updatedPortfolio?.current_balance ?? 0),
-      };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        const purchase = await tx.stock_purchases.create({
+          data: {
+            portfolio_id: portfolioId,
+            stock_symbol: symbol,
+            stock_name: dto.stock_name?.trim() || null,
+            shares_count: shares,
+            remaining_shares: shares,
+            purchase_price: price,
+            total_amount: total,
+            fees,
+            currency: transactionCurrency,
+            notes: dto.notes ?? null,
+            strategy: dto.strategy ?? null,
+            emotion: dto.emotion ?? null,
+            target_price:
+              dto.target_price === undefined
+                ? null
+                : new Prisma.Decimal(dto.target_price),
+            stop_loss:
+              dto.stop_loss === undefined
+                ? null
+                : new Prisma.Decimal(dto.stop_loss),
+            folder_name: dto.folder_name?.trim() || null,
+            purchase_reason: dto.purchase_reason?.trim() || null,
+            expectation: dto.expectation?.trim() || null,
+            status: 'OPEN',
+            purchase_date: date,
+          },
+        });
+
+        const record = await this.records.createSystem(
+          {
+            portfolioId,
+            type: RecordType.STOCK_BUY,
+            source: RecordSource.STOCK_PURCHASE,
+            sourceId: purchase.id,
+            signedAmount: total.neg(),
+            currency: transactionCurrency,
+            description: `Buy ${symbol} ${shares.toString()} shares`,
+            occurredAt: date,
+            createdByUserId: userId,
+          },
+          tx,
+        );
+
+        const updatedPortfolio = await tx.portfolios.findUnique({
+          where: { id: portfolioId },
+          select: { current_balance: true },
+        });
+
+        return {
+          purchase,
+          record,
+          current_balance: Number(updatedPortfolio?.current_balance ?? 0),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   async sell(portfolioId: number, userId: number, dto: SellStockDto) {
@@ -112,123 +130,144 @@ export class StockTransactionsService {
     const fees = new Prisma.Decimal(dto.fees ?? 0);
     const soldDate = dto.sold_date ? new Date(dto.sold_date) : new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      const portfolio = await this.lockInvestorPortfolio(tx, portfolioId, userId);
-      const method = dto.cost_method ?? portfolio.investor_cost_method ?? 'FIFO';
-      const orderBy = method === 'LIFO'
-        ? { purchase_date: 'desc' as const }
-        : { purchase_date: 'asc' as const };
-
-      const lots = await tx.stock_purchases.findMany({
-        where: {
-          portfolio_id: portfolioId,
-          stock_symbol: symbol,
-          status: 'OPEN',
-          remaining_shares: { gt: 0 },
-        },
-        orderBy: [orderBy, { id: method === 'LIFO' ? 'desc' : 'asc' }],
-      }) as unknown as Lot[];
-
-      const portfolioCurrency = (portfolio.currency ?? 'USD').toUpperCase();
-      const currencies = new Set(lots.map((lot) => lot.currency.toUpperCase()));
-      if (currencies.size > 1 || (currencies.size === 1 && !currencies.has(portfolioCurrency))) {
-        throw new BadRequestException('สกุลเงินของหุ้นต้องตรงกับสกุลเงินพอร์ต');
-      }
-
-      const available = lots.reduce(
-        (sum, lot) => sum.add(lot.remaining_shares),
-        new Prisma.Decimal(0),
-      );
-      if (available.lessThan(sharesToSell)) {
-        throw new BadRequestException(`จำนวนหุ้นไม่พอ มีอยู่ ${available.toString()} หุ้น`);
-      }
-
-      const allocations = method === 'AVERAGE'
-        ? this.allocateAverage(lots, sharesToSell)
-        : this.allocateSequential(lots, sharesToSell);
-
-      const costBasis = allocations.reduce(
-        (sum, allocation) => sum.add(allocation.cost_basis),
-        new Prisma.Decimal(0),
-      ).toDecimalPlaces(2);
-      const gross = sharesToSell.mul(soldPrice).toDecimalPlaces(2);
-      const net = gross.sub(fees).toDecimalPlaces(2);
-      const realized = net.sub(costBasis).toDecimalPlaces(2);
-
-      const sale = await tx.stock_sales.create({
-        data: {
-          portfolio_id: portfolioId,
-          stock_symbol: symbol,
-          shares_sold: sharesToSell,
-          sold_price: soldPrice,
-          gross_proceeds: gross,
-          fees,
-          net_proceeds: net,
-          cost_basis: costBasis,
-          realized_pnl: realized,
-          cost_method: method,
-          sold_date: soldDate,
-          notes: dto.notes ?? null,
-        },
-      });
-
-      for (const allocation of allocations) {
-        const lot = lots.find((item) => item.id === allocation.purchase_id)!;
-        const remaining = lot.remaining_shares.sub(allocation.shares);
-
-        await tx.stock_sale_allocations.create({
-          data: {
-            sale_id: sale.id,
-            ...allocation,
-          },
-        });
-
-        await tx.stock_purchases.update({
-          where: { id: lot.id },
-          data: {
-            remaining_shares: remaining,
-            status: remaining.isZero() ? 'CLOSED' : 'OPEN',
-            ...(remaining.isZero()
-              ? {
-                  closed_at: soldDate,
-                  sold_date: soldDate,
-                  sold_price: soldPrice,
-                }
-              : {}),
-          },
-        });
-      }
-
-      const record = await this.records.createSystem(
-        {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const portfolio = await this.lockInvestorPortfolio(
+          tx,
           portfolioId,
-          type: RecordType.STOCK_SELL,
-          source: RecordSource.STOCK_PURCHASE,
-          sourceId: sale.id,
-          signedAmount: net,
-          currency: portfolioCurrency,
-          description: `Sell ${symbol} ${sharesToSell.toString()} shares`,
-          occurredAt: soldDate,
-          createdByUserId: userId,
-        },
-        tx,
-      );
+          userId,
+        );
+        const method =
+          dto.cost_method ?? portfolio.investor_cost_method ?? 'FIFO';
+        const orderBy =
+          method === 'LIFO'
+            ? { purchase_date: 'desc' as const }
+            : { purchase_date: 'asc' as const };
 
-      const updatedPortfolio = await tx.portfolios.findUnique({
-        where: { id: portfolioId },
-        select: { current_balance: true },
-      });
+        const lots = (await tx.stock_purchases.findMany({
+          where: {
+            portfolio_id: portfolioId,
+            stock_symbol: symbol,
+            status: 'OPEN',
+            remaining_shares: { gt: 0 },
+          },
+          orderBy: [orderBy, { id: method === 'LIFO' ? 'desc' : 'asc' }],
+        })) as unknown as Lot[];
 
-      return {
-        sale,
-        allocations,
-        record,
-        current_balance: Number(updatedPortfolio?.current_balance ?? 0),
-        return_percent: costBasis.isZero()
-          ? 0
-          : Number(realized.div(costBasis).mul(100).toDecimalPlaces(2)),
-      };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        const portfolioCurrency = (portfolio.currency ?? 'USD').toUpperCase();
+        const currencies = new Set(
+          lots.map((lot) => lot.currency.toUpperCase()),
+        );
+        if (
+          currencies.size > 1 ||
+          (currencies.size === 1 && !currencies.has(portfolioCurrency))
+        ) {
+          throw new BadRequestException(
+            'สกุลเงินของหุ้นต้องตรงกับสกุลเงินพอร์ต',
+          );
+        }
+
+        const available = lots.reduce(
+          (sum, lot) => sum.add(lot.remaining_shares),
+          new Prisma.Decimal(0),
+        );
+        if (available.lessThan(sharesToSell)) {
+          throw new BadRequestException(
+            `จำนวนหุ้นไม่พอ มีอยู่ ${available.toString()} หุ้น`,
+          );
+        }
+
+        const allocations =
+          method === 'AVERAGE'
+            ? this.allocateAverage(lots, sharesToSell)
+            : this.allocateSequential(lots, sharesToSell);
+
+        const costBasis = allocations
+          .reduce(
+            (sum, allocation) => sum.add(allocation.cost_basis),
+            new Prisma.Decimal(0),
+          )
+          .toDecimalPlaces(2);
+        const gross = sharesToSell.mul(soldPrice).toDecimalPlaces(2);
+        const net = gross.sub(fees).toDecimalPlaces(2);
+        const realized = net.sub(costBasis).toDecimalPlaces(2);
+
+        const sale = await tx.stock_sales.create({
+          data: {
+            portfolio_id: portfolioId,
+            stock_symbol: symbol,
+            shares_sold: sharesToSell,
+            sold_price: soldPrice,
+            gross_proceeds: gross,
+            fees,
+            net_proceeds: net,
+            cost_basis: costBasis,
+            realized_pnl: realized,
+            cost_method: method,
+            sold_date: soldDate,
+            notes: dto.notes ?? null,
+          },
+        });
+
+        for (const allocation of allocations) {
+          const lot = lots.find((item) => item.id === allocation.purchase_id)!;
+          const remaining = lot.remaining_shares.sub(allocation.shares);
+
+          await tx.stock_sale_allocations.create({
+            data: {
+              sale_id: sale.id,
+              ...allocation,
+            },
+          });
+
+          await tx.stock_purchases.update({
+            where: { id: lot.id },
+            data: {
+              remaining_shares: remaining,
+              status: remaining.isZero() ? 'CLOSED' : 'OPEN',
+              ...(remaining.isZero()
+                ? {
+                    closed_at: soldDate,
+                    sold_date: soldDate,
+                    sold_price: soldPrice,
+                  }
+                : {}),
+            },
+          });
+        }
+
+        const record = await this.records.createSystem(
+          {
+            portfolioId,
+            type: RecordType.STOCK_SELL,
+            source: RecordSource.STOCK_PURCHASE,
+            sourceId: sale.id,
+            signedAmount: net,
+            currency: portfolioCurrency,
+            description: `Sell ${symbol} ${sharesToSell.toString()} shares`,
+            occurredAt: soldDate,
+            createdByUserId: userId,
+          },
+          tx,
+        );
+
+        const updatedPortfolio = await tx.portfolios.findUnique({
+          where: { id: portfolioId },
+          select: { current_balance: true },
+        });
+
+        return {
+          sale,
+          allocations,
+          record,
+          current_balance: Number(updatedPortfolio?.current_balance ?? 0),
+          return_percent: costBasis.isZero()
+            ? 0
+            : Number(realized.div(costBasis).mul(100).toDecimalPlaces(2)),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   /**
@@ -238,16 +277,21 @@ export class StockTransactionsService {
    * read-only, ไม่ lock แถวใดๆ — sell() จริงจะ re-validate เต็มรูปแบบใน transaction ของตัวเองอีกที
    * ดังนั้นต่อให้ preview เก่า (มีคนอื่นขายแทรกระหว่างนั้น) sell() จริงก็ยัง fail ด้วย error จริงตามปกติ
    */
-  async previewSell(portfolioId: number, userId: number, dto: PreviewSellStockDto) {
+  async previewSell(
+    portfolioId: number,
+    userId: number,
+    dto: PreviewSellStockDto,
+  ) {
     const portfolio = await this.assertInvestorPortfolio(portfolioId, userId);
     const symbol = dto.stock_symbol.trim().toUpperCase();
     const sharesToSell = new Prisma.Decimal(dto.shares_count);
     const method = dto.cost_method ?? portfolio.investor_cost_method ?? 'FIFO';
-    const orderBy = method === 'LIFO'
-      ? { purchase_date: 'desc' as const }
-      : { purchase_date: 'asc' as const };
+    const orderBy =
+      method === 'LIFO'
+        ? { purchase_date: 'desc' as const }
+        : { purchase_date: 'asc' as const };
 
-    const lots = await this.prisma.stock_purchases.findMany({
+    const lots = (await this.prisma.stock_purchases.findMany({
       where: {
         portfolio_id: portfolioId,
         stock_symbol: symbol,
@@ -255,7 +299,7 @@ export class StockTransactionsService {
         remaining_shares: { gt: 0 },
       },
       orderBy: [orderBy, { id: method === 'LIFO' ? 'desc' : 'asc' }],
-    }) as unknown as Lot[];
+    })) as unknown as Lot[];
 
     const available = lots.reduce(
       (sum, lot) => sum.add(lot.remaining_shares),
@@ -263,9 +307,10 @@ export class StockTransactionsService {
     );
 
     const requested = Prisma.Decimal.min(sharesToSell, available);
-    const allocations = method === 'AVERAGE'
-      ? this.allocateAverage(lots, requested)
-      : this.allocateSequential(lots, requested);
+    const allocations =
+      method === 'AVERAGE'
+        ? this.allocateAverage(lots, requested)
+        : this.allocateSequential(lots, requested);
 
     return {
       cost_method: method,
@@ -335,9 +380,13 @@ export class StockTransactionsService {
 
     return lots
       .map((lot, index) => {
-        const shares = index === lots.length - 1
-          ? requested.sub(assigned)
-          : requested.mul(lot.remaining_shares).div(totalShares).toDecimalPlaces(8);
+        const shares =
+          index === lots.length - 1
+            ? requested.sub(assigned)
+            : requested
+                .mul(lot.remaining_shares)
+                .div(totalShares)
+                .toDecimalPlaces(8);
         assigned = assigned.add(shares);
 
         const feePerShare = lot.shares_count.isZero()
@@ -370,7 +419,9 @@ export class StockTransactionsService {
     });
 
     if (!portfolio) {
-      throw new NotFoundException('ไม่พบ Investor portfolio หรือคุณไม่มีสิทธิ์เข้าถึง');
+      throw new NotFoundException(
+        'ไม่พบ Investor portfolio หรือคุณไม่มีสิทธิ์เข้าถึง',
+      );
     }
     return portfolio;
   }
@@ -385,7 +436,9 @@ export class StockTransactionsService {
     });
 
     if (!portfolio) {
-      throw new NotFoundException('ไม่พบ Investor portfolio หรือคุณไม่มีสิทธิ์เข้าถึง');
+      throw new NotFoundException(
+        'ไม่พบ Investor portfolio หรือคุณไม่มีสิทธิ์เข้าถึง',
+      );
     }
     return portfolio;
   }

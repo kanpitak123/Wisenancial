@@ -73,9 +73,7 @@ describe('assertCorsOriginsValid', () => {
   it('production ที่ไม่ได้ตั้ง -> โยน error ตั้งแต่ boot', () => {
     process.env.NODE_ENV = 'production';
 
-    expect(() => assertCorsOriginsValid()).toThrow(
-      /must be set in production/,
-    );
+    expect(() => assertCorsOriginsValid()).toThrow(/must be set in production/);
   });
 
   it("ตั้ง '*' -> โยน error เพราะใช้คู่กับ credentials ไม่ได้", () => {

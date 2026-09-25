@@ -1,15 +1,5 @@
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  Max,
-  Min,
-} from 'class-validator';
-import {
-  MissionFrequency,
-  MissionStatus,
-  PortfolioType,
-} from '@prisma/client';
+import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { MissionFrequency, MissionStatus, PortfolioType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class GamificationQueryDto {

@@ -38,7 +38,10 @@ export class MtIngestionController {
   }
 
   @Post('ingest')
-  ingest(@Req() request: BrokerAuthenticatedRequest, @Body() envelope: Mt5IngestEnvelopeDto) {
+  ingest(
+    @Req() request: BrokerAuthenticatedRequest,
+    @Body() envelope: Mt5IngestEnvelopeDto,
+  ) {
     return this.sync.ingest(request.brokerConnection, envelope);
   }
 }

@@ -108,10 +108,7 @@ export class AssetsService {
       name: stock.name,
       asset_type: 'STOCK',
       portfolio_type: PortfolioType.INVESTOR,
-      market_region: this.inferStockMarketRegion(
-        stock.symbol,
-        stock.country,
-      ),
+      market_region: this.inferStockMarketRegion(stock.symbol, stock.country),
       sector: stock.sector,
       exchange: stock.exchange,
       currency: stock.currency,
@@ -145,7 +142,8 @@ export class AssetsService {
       // (แนวทางเดียวกับ MarketDataService.getHistoricalData ฝั่ง stocks)
       const period1: Date | string = before
         ? new Date(
-            before.getTime() - CHART_WINDOW_DAYS[interval] * 24 * 60 * 60 * 1000,
+            before.getTime() -
+              CHART_WINDOW_DAYS[interval] * 24 * 60 * 60 * 1000,
           )
         : '2023-01-01';
 
@@ -278,18 +276,20 @@ export class AssetsService {
         name: portfolio.name,
         currency: portfolio.currency,
         current_balance: Number(portfolio.current_balance),
-        total_invested: stocks.reduce((sum, stock) => sum + stock.total_cost, 0),
-        total_value: stocks.reduce((sum, stock) => sum + stock.current_value, 0),
+        total_invested: stocks.reduce(
+          (sum, stock) => sum + stock.total_cost,
+          0,
+        ),
+        total_value: stocks.reduce(
+          (sum, stock) => sum + stock.current_value,
+          0,
+        ),
       },
       stocks,
     };
   }
 
-  async getStockNews(
-    userId: number,
-    portfolioId: number,
-    symbol: string,
-  ) {
+  async getStockNews(userId: number, portfolioId: number, symbol: string) {
     await this.requireInvestorAsset(userId, portfolioId, symbol);
     const normalized = this.normalizeSymbol(symbol);
 
@@ -502,9 +502,7 @@ export class AssetsService {
     });
 
     if (!portfolio) {
-      throw new NotFoundException(
-        'ไม่พบพอร์ตนี้ หรือคุณไม่มีสิทธิ์เข้าถึง',
-      );
+      throw new NotFoundException('ไม่พบพอร์ตนี้ หรือคุณไม่มีสิทธิ์เข้าถึง');
     }
 
     return portfolio;
@@ -583,10 +581,13 @@ export class AssetsService {
 
   private inferTraderCurrency(symbol: string): string | null {
     const parts = symbol.split('/');
-    return parts.length === 2 ? parts[1] ?? null : 'USD';
+    return parts.length === 2 ? (parts[1] ?? null) : 'USD';
   }
 
-  private inferStockMarketRegion(symbol: string, country: string | null): string {
+  private inferStockMarketRegion(
+    symbol: string,
+    country: string | null,
+  ): string {
     if (symbol.endsWith('.BK') || country?.toUpperCase() === 'THAILAND') {
       return 'TH';
     }

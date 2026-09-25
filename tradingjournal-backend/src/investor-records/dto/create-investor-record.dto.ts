@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export const MANUAL_RECORD_TYPES = ['DEPOSIT', 'WITHDRAW'] as const;
 export type ManualRecordType = (typeof MANUAL_RECORD_TYPES)[number];

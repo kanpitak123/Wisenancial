@@ -40,7 +40,7 @@ export function parseExpiresInSeconds(
     d: 24 * 60 * 60,
   };
 
-  const seconds = amount * multiplier[unit]!;
+  const seconds = amount * multiplier[unit];
 
   return seconds > 0 ? seconds : fallbackSeconds;
 }

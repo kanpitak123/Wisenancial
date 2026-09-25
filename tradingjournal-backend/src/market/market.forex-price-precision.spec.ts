@@ -21,7 +21,9 @@ function quotePayload(price: number) {
 }
 
 function stubYahoo(service: MarketService, impl: YahooQuoteStub) {
-  (service as unknown as { yahooFinance: { quote: YahooQuoteStub } }).yahooFinance = {
+  (
+    service as unknown as { yahooFinance: { quote: YahooQuoteStub } }
+  ).yahooFinance = {
     quote: impl,
   };
 }
@@ -35,7 +37,9 @@ describe('MarketService — Trader-symbol realtime price precision', () => {
   });
 
   it('EUR/USD ราคาสดปัดทศนิยม 5 ตำแหน่ง ไม่ใช่ 2 ตำแหน่งแบบหุ้น (ไม่งั้นราคาดูเหมือนไม่ขยับ)', async () => {
-    const quote: YahooQuoteStub = jest.fn().mockResolvedValue(quotePayload(1.138567));
+    const quote: YahooQuoteStub = jest
+      .fn()
+      .mockResolvedValue(quotePayload(1.138567));
 
     stubYahoo(service, quote);
 
@@ -45,7 +49,9 @@ describe('MarketService — Trader-symbol realtime price precision', () => {
   });
 
   it('หุ้นปกติ (AAPL) ยังปัด 2 ตำแหน่งเหมือนเดิม — roundTraderPrice ไม่แตะ round() เดิม', async () => {
-    const quote: YahooQuoteStub = jest.fn().mockResolvedValue(quotePayload(230.126));
+    const quote: YahooQuoteStub = jest
+      .fn()
+      .mockResolvedValue(quotePayload(230.126));
 
     stubYahoo(service, quote);
 

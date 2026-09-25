@@ -2,10 +2,7 @@ import { AdvancedAnalyticsService } from './advanced-analytics.service';
 
 describe('AdvancedAnalyticsService', () => {
   it('creates deterministic DCA scenarios', async () => {
-    const service = new AdvancedAnalyticsService(
-      {} as any,
-      {} as any,
-    );
+    const service = new AdvancedAnalyticsService({} as any, {} as any);
 
     const result = await service.simulateDca({
       symbol: 'VOO',

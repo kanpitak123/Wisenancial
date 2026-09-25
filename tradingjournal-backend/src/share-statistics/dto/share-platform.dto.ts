@@ -1,9 +1,4 @@
-import {
-  IsIn,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export const SHARE_PLATFORMS = [
   'twitter',
@@ -13,17 +8,11 @@ export const SHARE_PLATFORMS = [
   'copy_link',
 ] as const;
 
-export type SharePlatform =
-  (typeof SHARE_PLATFORMS)[number];
+export type SharePlatform = (typeof SHARE_PLATFORMS)[number];
 
-export const SHARE_CONTENT_TYPES = [
-  'MESSAGE',
-  'IMAGE',
-  'LINK',
-] as const;
+export const SHARE_CONTENT_TYPES = ['MESSAGE', 'IMAGE', 'LINK'] as const;
 
-export type ShareContentType =
-  (typeof SHARE_CONTENT_TYPES)[number];
+export type ShareContentType = (typeof SHARE_CONTENT_TYPES)[number];
 
 export class LogShareActivityDto {
   @IsString()

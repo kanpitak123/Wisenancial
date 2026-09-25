@@ -9,8 +9,7 @@
 
 /** parse ค่า env เป็นรายการ origin — ไม่โยน error เพื่อให้เรียกจากตอน import ได้ */
 export function resolveCorsOrigins(): string[] {
-  const configured =
-    process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL;
+  const configured = process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL;
 
   const isProduction = process.env.NODE_ENV === 'production';
   const raw = configured ?? (isProduction ? '' : 'http://localhost:9000');
@@ -30,8 +29,7 @@ export function resolveCorsOrigins(): string[] {
  * เห็นจะเป็น stack ตอน import แทนที่จะเป็นข้อความบอกสาเหตุที่เขียนไว้ให้อ่านง่าย
  */
 export function assertCorsOriginsValid(): string[] {
-  const configured =
-    process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL;
+  const configured = process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL;
 
   if (process.env.NODE_ENV === 'production' && !configured) {
     throw new Error(

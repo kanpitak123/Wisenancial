@@ -1,16 +1,5 @@
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
-import {
-  PortfolioType,
-  PostReferenceType,
-  Sentiment,
-} from '@prisma/client';
+import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { PortfolioType, PostReferenceType, Sentiment } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class PostsQueryDto {

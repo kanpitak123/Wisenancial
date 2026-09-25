@@ -87,7 +87,9 @@ describe('NewsEnrichmentService — Chunk A Gemini fallback wiring', () => {
       'en',
     );
 
-    const [{ data }] = update.mock.calls[0] as [{ data: Record<string, unknown> }];
+    const [{ data }] = update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
     expect(data.ai_confidence).toBeNull();
     expect(data.ai_summary).toBe('Legacy-chain summary');
   });
@@ -102,7 +104,9 @@ describe('NewsEnrichmentService — Chunk A Gemini fallback wiring', () => {
     expect(classify).toHaveBeenCalledTimes(1);
     expect(enrichNewsArticle).not.toHaveBeenCalled();
 
-    const [{ data }] = update.mock.calls[0] as [{ data: Record<string, unknown> }];
+    const [{ data }] = update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
     expect(data.importance).toBe(NewsImportance.HIGH);
     expect(data.ai_confidence).toBe(0.88);
     expect(data.ai_summary).toBe('Gemini summary');
@@ -112,32 +116,8 @@ describe('NewsEnrichmentService — Chunk A Gemini fallback wiring', () => {
     process.env.GEMINI_NEWS_ENRICHMENT_ENABLED = 'true';
     const row = makeRow();
     const { service, update, enrichNewsArticle, classify } = makeService(row);
-    classify.mockRejectedValueOnce(new Error('Gemini request failed: network timeout'));
-
-    await service.enrichTraderNews(1, 'en');
-
-    expect(classify).toHaveBeenCalledTimes(1);
-    expect(enrichNewsArticle).toHaveBeenCalledTimes(1);
-    const [, , , , options] = enrichNewsArticle.mock.calls[0] as [
-      string,
-      string,
-      string,
-      string,
-      { excludeProviders?: string[] } | undefined,
-    ];
-    expect(options?.excludeProviders).toEqual(['gemini']);
-
-    const [{ data }] = update.mock.calls[0] as [{ data: Record<string, unknown> }];
-    expect(data.ai_confidence).toBeNull();
-    expect(data.ai_summary).toBe('Legacy-chain summary');
-  });
-
-  it('flag on, Gemini returns malformed/invalid output: falls back to the existing chain with Gemini excluded', async () => {
-    process.env.GEMINI_NEWS_ENRICHMENT_ENABLED = 'true';
-    const row = makeRow();
-    const { service, update, enrichNewsArticle, classify } = makeService(row);
     classify.mockRejectedValueOnce(
-      new Error('GeminiClassificationValidationError: importance "CRITICAL" is not one of HIGH/MEDIUM/LOW'),
+      new Error('Gemini request failed: network timeout'),
     );
 
     await service.enrichTraderNews(1, 'en');
@@ -153,7 +133,39 @@ describe('NewsEnrichmentService — Chunk A Gemini fallback wiring', () => {
     ];
     expect(options?.excludeProviders).toEqual(['gemini']);
 
-    const [{ data }] = update.mock.calls[0] as [{ data: Record<string, unknown> }];
+    const [{ data }] = update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
+    expect(data.ai_confidence).toBeNull();
+    expect(data.ai_summary).toBe('Legacy-chain summary');
+  });
+
+  it('flag on, Gemini returns malformed/invalid output: falls back to the existing chain with Gemini excluded', async () => {
+    process.env.GEMINI_NEWS_ENRICHMENT_ENABLED = 'true';
+    const row = makeRow();
+    const { service, update, enrichNewsArticle, classify } = makeService(row);
+    classify.mockRejectedValueOnce(
+      new Error(
+        'GeminiClassificationValidationError: importance "CRITICAL" is not one of HIGH/MEDIUM/LOW',
+      ),
+    );
+
+    await service.enrichTraderNews(1, 'en');
+
+    expect(classify).toHaveBeenCalledTimes(1);
+    expect(enrichNewsArticle).toHaveBeenCalledTimes(1);
+    const [, , , , options] = enrichNewsArticle.mock.calls[0] as [
+      string,
+      string,
+      string,
+      string,
+      { excludeProviders?: string[] } | undefined,
+    ];
+    expect(options?.excludeProviders).toEqual(['gemini']);
+
+    const [{ data }] = update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
     expect(data.ai_confidence).toBeNull();
   });
 

@@ -49,7 +49,9 @@ export class StockPurchasesService {
     });
 
     if (!purchase) {
-      throw new NotFoundException('ไม่พบรายการซื้อหุ้น หรือคุณไม่มีสิทธิ์เข้าถึง');
+      throw new NotFoundException(
+        'ไม่พบรายการซื้อหุ้น หรือคุณไม่มีสิทธิ์เข้าถึง',
+      );
     }
 
     return purchase;
@@ -114,7 +116,9 @@ export class StockPurchasesService {
       orderBy: [{ stock_symbol: 'asc' }, { purchase_date: 'asc' }],
     });
 
-    const symbols = [...new Set(lots.map((lot) => lot.stock_symbol.toUpperCase()))];
+    const symbols = [
+      ...new Set(lots.map((lot) => lot.stock_symbol.toUpperCase())),
+    ];
     const prices = await this.getCurrentPrices(symbols);
     const grouped = new Map<string, typeof lots>();
 
@@ -154,9 +158,10 @@ export class StockPurchasesService {
         current_price: currentPrice,
         market_value: Number(marketValue.toFixed(2)),
         unrealized_pnl: Number(unrealizedPnl.toFixed(2)),
-        unrealized_pnl_percent: costBasis > 0
-          ? Number(((unrealizedPnl / costBasis) * 100).toFixed(2))
-          : 0,
+        unrealized_pnl_percent:
+          costBasis > 0
+            ? Number(((unrealizedPnl / costBasis) * 100).toFixed(2))
+            : 0,
         lots_count: symbolLots.length,
         currency: symbolLots[0]?.currency ?? 'USD',
       };
@@ -170,8 +175,14 @@ export class StockPurchasesService {
       this.getSummary(portfolioId, userId),
     ]);
 
-    const holdingsValue = holdings.reduce((sum, item) => sum + item.market_value, 0);
-    const unrealizedPnl = holdings.reduce((sum, item) => sum + item.unrealized_pnl, 0);
+    const holdingsValue = holdings.reduce(
+      (sum, item) => sum + item.market_value,
+      0,
+    );
+    const unrealizedPnl = holdings.reduce(
+      (sum, item) => sum + item.unrealized_pnl,
+      0,
+    );
     const totalEquity = Number(portfolio.current_balance) + holdingsValue;
 
     return {
@@ -221,7 +232,8 @@ export class StockPurchasesService {
     if ('strategy' in dto) data.strategy = dto.strategy ?? null;
     if ('emotion' in dto) data.emotion = dto.emotion ?? null;
     if ('notes' in dto) data.notes = dto.notes ?? null;
-    if ('purchase_reason' in dto) data.purchase_reason = dto.purchase_reason ?? null;
+    if ('purchase_reason' in dto)
+      data.purchase_reason = dto.purchase_reason ?? null;
     if ('expectation' in dto) data.expectation = dto.expectation ?? null;
 
     return this.prisma.stock_purchases.update({
@@ -241,7 +253,8 @@ export class StockPurchasesService {
   async remove(id: number, userId: number) {
     const purchase = await this.findOne(id, userId);
 
-    const soldShares = Number(purchase.shares_count) - Number(purchase.remaining_shares);
+    const soldShares =
+      Number(purchase.shares_count) - Number(purchase.remaining_shares);
 
     if (soldShares > 0) {
       throw new ConflictException(
@@ -273,7 +286,9 @@ export class StockPurchasesService {
     });
 
     if (!portfolio) {
-      throw new NotFoundException('ไม่พบ Investor portfolio หรือคุณไม่มีสิทธิ์เข้าถึง');
+      throw new NotFoundException(
+        'ไม่พบ Investor portfolio หรือคุณไม่มีสิทธิ์เข้าถึง',
+      );
     }
 
     return portfolio;

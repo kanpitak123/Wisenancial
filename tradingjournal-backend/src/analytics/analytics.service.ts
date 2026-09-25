@@ -26,22 +26,11 @@ export class AnalyticsService {
     from?: string,
     to?: string,
   ) {
-    const type = await this.portfolioType(
-      portfolioId,
-      userId,
-    );
+    const type = await this.portfolioType(portfolioId, userId);
 
     return type === PortfolioType.TRADER
-      ? this.trader.overview(
-          portfolioId,
-          userId,
-          from,
-          to,
-        )
-      : this.investor.overview(
-          portfolioId,
-          userId,
-        );
+      ? this.trader.overview(portfolioId, userId, from, to)
+      : this.investor.overview(portfolioId, userId);
   }
 
   async performance(
@@ -49,22 +38,11 @@ export class AnalyticsService {
     portfolioId: number,
     timeframe: AnalyticsTimeframe,
   ) {
-    const type = await this.portfolioType(
-      portfolioId,
-      userId,
-    );
+    const type = await this.portfolioType(portfolioId, userId);
 
     return type === PortfolioType.TRADER
-      ? this.trader.performance(
-          portfolioId,
-          userId,
-          timeframe,
-        )
-      : this.investor.performance(
-          portfolioId,
-          userId,
-          timeframe,
-        );
+      ? this.trader.performance(portfolioId, userId, timeframe)
+      : this.investor.performance(portfolioId, userId, timeframe);
   }
 
   async dailyPnl(
@@ -73,18 +51,9 @@ export class AnalyticsService {
     from?: string,
     to?: string,
   ) {
-    await this.assertType(
-      portfolioId,
-      userId,
-      PortfolioType.TRADER,
-    );
+    await this.assertType(portfolioId, userId, PortfolioType.TRADER);
 
-    return this.trader.dailyPnl(
-      portfolioId,
-      userId,
-      from,
-      to,
-    );
+    return this.trader.dailyPnl(portfolioId, userId, from, to);
   }
 
   async monthlyGrowth(
@@ -93,18 +62,9 @@ export class AnalyticsService {
     from?: string,
     to?: string,
   ) {
-    await this.assertType(
-      portfolioId,
-      userId,
-      PortfolioType.TRADER,
-    );
+    await this.assertType(portfolioId, userId, PortfolioType.TRADER);
 
-    return this.trader.monthlyGrowth(
-      portfolioId,
-      userId,
-      from,
-      to,
-    );
+    return this.trader.monthlyGrowth(portfolioId, userId, from, to);
   }
 
   async behavioral(
@@ -113,18 +73,9 @@ export class AnalyticsService {
     from?: string,
     to?: string,
   ) {
-    await this.assertType(
-      portfolioId,
-      userId,
-      PortfolioType.TRADER,
-    );
+    await this.assertType(portfolioId, userId, PortfolioType.TRADER);
 
-    return this.trader.behavioral(
-      portfolioId,
-      userId,
-      from,
-      to,
-    );
+    return this.trader.behavioral(portfolioId, userId, from, to);
   }
 
   async winRateBreakdown(
@@ -133,18 +84,9 @@ export class AnalyticsService {
     from?: string,
     to?: string,
   ) {
-    await this.assertType(
-      portfolioId,
-      userId,
-      PortfolioType.TRADER,
-    );
+    await this.assertType(portfolioId, userId, PortfolioType.TRADER);
 
-    return this.trader.winRateBreakdown(
-      portfolioId,
-      userId,
-      from,
-      to,
-    );
+    return this.trader.winRateBreakdown(portfolioId, userId, from, to);
   }
 
   async timeline(
@@ -153,47 +95,19 @@ export class AnalyticsService {
     from?: string,
     to?: string,
   ) {
-    await this.assertType(
-      portfolioId,
-      userId,
-      PortfolioType.INVESTOR,
-    );
+    await this.assertType(portfolioId, userId, PortfolioType.INVESTOR);
 
-    return this.investor.timeline(
-      portfolioId,
-      userId,
-      from,
-      to,
-    );
+    return this.investor.timeline(portfolioId, userId, from, to);
   }
 
-  async allocation(
-    userId: number,
-    portfolioId: number,
-  ) {
-    await this.assertType(
-      portfolioId,
-      userId,
-      PortfolioType.INVESTOR,
-    );
+  async allocation(userId: number, portfolioId: number) {
+    await this.assertType(portfolioId, userId, PortfolioType.INVESTOR);
 
-    return this.investor.allocation(
-      portfolioId,
-      userId,
-    );
+    return this.investor.allocation(portfolioId, userId);
   }
 
-
-  returnVsBenchmark(
-    userId: number,
-    portfolioId: number,
-    benchmark?: string,
-  ) {
-    return this.advanced.returnVsBenchmark(
-      userId,
-      portfolioId,
-      benchmark,
-    );
+  returnVsBenchmark(userId: number, portfolioId: number, benchmark?: string) {
+    return this.advanced.returnVsBenchmark(userId, portfolioId, benchmark);
   }
 
   timeWeightedReturn(userId: number, portfolioId: number) {
@@ -220,23 +134,17 @@ export class AnalyticsService {
     return this.advanced.simulateDca(request);
   }
 
-  private async portfolioType(
-    portfolioId: number,
-    userId: number,
-  ) {
-    const portfolio =
-      await this.prisma.portfolios.findFirst({
-        where: {
-          id: portfolioId,
-          user_id: userId,
-        },
-        select: { portfolio_type: true },
-      });
+  private async portfolioType(portfolioId: number, userId: number) {
+    const portfolio = await this.prisma.portfolios.findFirst({
+      where: {
+        id: portfolioId,
+        user_id: userId,
+      },
+      select: { portfolio_type: true },
+    });
 
     if (!portfolio) {
-      throw new NotFoundException(
-        'ไม่พบ portfolio หรือคุณไม่มีสิทธิ์เข้าถึง',
-      );
+      throw new NotFoundException('ไม่พบ portfolio หรือคุณไม่มีสิทธิ์เข้าถึง');
     }
 
     return portfolio.portfolio_type;
@@ -247,10 +155,7 @@ export class AnalyticsService {
     userId: number,
     expected: PortfolioType,
   ) {
-    const actual = await this.portfolioType(
-      portfolioId,
-      userId,
-    );
+    const actual = await this.portfolioType(portfolioId, userId);
 
     if (actual !== expected) {
       throw new BadRequestException(

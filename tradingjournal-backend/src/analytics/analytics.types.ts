@@ -1,12 +1,6 @@
 export type AnalyticsPortfolioType = 'TRADER' | 'INVESTOR';
 export type AnalyticsTimeframe =
-  | '1W'
-  | '1M'
-  | '3M'
-  | '6M'
-  | '9M'
-  | '1Y'
-  | 'ALL';
+  '1W' | '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL';
 
 export interface AnalyticsContext {
   portfolioId: number;

@@ -80,9 +80,7 @@ export function resolveApiKey(
   const key = rawKey?.trim();
 
   if (!key) {
-    logger.warn(
-      `${format.envName} not set; these models are unavailable`,
-    );
+    logger.warn(`${format.envName} not set; these models are unavailable`);
     return undefined;
   }
 

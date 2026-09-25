@@ -50,10 +50,7 @@ export class AiController {
   }
 
   @Post('analyze')
-  analyzeChart(
-    @Request() req: any,
-    @Body() dto: AnalyzeChartDto,
-  ) {
+  analyzeChart(@Request() req: any, @Body() dto: AnalyzeChartDto) {
     return this.ai.analyzeChart(req.user.userId, dto);
   }
 
@@ -74,10 +71,7 @@ export class AiController {
   }
 
   @Post('portfolio/risk-analysis')
-  riskAnalysis(
-    @Request() req: any,
-    @Body() dto: RiskAnalysisDto,
-  ) {
+  riskAnalysis(@Request() req: any, @Body() dto: RiskAnalysisDto) {
     return this.risk.analyze(
       req.user.userId,
       dto.holdings,
@@ -102,10 +96,7 @@ export class AiController {
   }
 
   @Post('education/quiz')
-  generateQuiz(
-    @Request() req: any,
-    @Body() dto: QuizDto,
-  ) {
+  generateQuiz(@Request() req: any, @Body() dto: QuizDto) {
     return this.education.generateQuiz(
       req.user.userId,
       dto.lessonTitle,
@@ -115,10 +106,7 @@ export class AiController {
   }
 
   @Post('news/enrich')
-  enrichNews(
-    @Request() req: any,
-    @Body() dto: EnrichNewsDto,
-  ) {
+  enrichNews(@Request() req: any, @Body() dto: EnrichNewsDto) {
     if (!dto.modelId) {
       return this.ai.enrichNewsArticle(
         dto.headline,

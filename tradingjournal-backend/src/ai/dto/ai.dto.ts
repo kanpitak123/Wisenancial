@@ -84,7 +84,6 @@ export class EnrichNewsDto {
   modelId?: string;
 }
 
-
 export class RiskAnalysisDto {
   @IsArray()
   holdings!: Array<{

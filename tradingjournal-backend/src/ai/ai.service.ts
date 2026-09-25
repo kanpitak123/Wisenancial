@@ -127,9 +127,7 @@ export class AiService {
     });
 
     if (!portfolio) {
-      throw new NotFoundException(
-        'ไม่พบ portfolio หรือคุณไม่มีสิทธิ์เข้าถึง',
-      );
+      throw new NotFoundException('ไม่พบ portfolio หรือคุณไม่มีสิทธิ์เข้าถึง');
     }
 
     const outputLanguage = resolveOutputLanguage(requestedLanguage);
@@ -137,37 +135,33 @@ export class AiService {
     if (portfolio.portfolio_type === PortfolioType.TRADER) {
       const analytics =
         suppliedAnalytics ??
-        ((await this.analytics.overview(
-          userId,
-          portfolioId,
-        )) as Record<string, unknown>);
+        (await this.analytics.overview(userId, portfolioId));
 
-      const result =
-        await this.manager.executeAiRequest<TraderReviewResult>({
-          userId,
-          modelId,
-          systemPrompt: [
-            'You are a disciplined trading coach.',
-            outputLanguageRule(outputLanguage),
-            investmentGuardrail(),
-            concisenessRule(),
-            'Return valid JSON only.',
-          ].join('\n'),
-          prompt: JSON.stringify({
-            task: 'Review trader performance and journal behavior',
-            requiredShape: {
-              summary: 'string',
-              strengths: ['string'],
-              weaknesses: ['string'],
-              riskWarnings: ['string'],
-              actionableRecommendations: ['string'],
-              disciplineScore: 'number 0-100',
-            },
-            trades: suppliedItems ?? [],
-            analytics,
-          }),
-          maxOutputTokens: 1800,
-        });
+      const result = await this.manager.executeAiRequest<TraderReviewResult>({
+        userId,
+        modelId,
+        systemPrompt: [
+          'You are a disciplined trading coach.',
+          outputLanguageRule(outputLanguage),
+          investmentGuardrail(),
+          concisenessRule(),
+          'Return valid JSON only.',
+        ].join('\n'),
+        prompt: JSON.stringify({
+          task: 'Review trader performance and journal behavior',
+          requiredShape: {
+            summary: 'string',
+            strengths: ['string'],
+            weaknesses: ['string'],
+            riskWarnings: ['string'],
+            actionableRecommendations: ['string'],
+            disciplineScore: 'number 0-100',
+          },
+          trades: suppliedItems ?? [],
+          analytics,
+        }),
+        maxOutputTokens: 1800,
+      });
 
       return {
         portfolioType: 'TRADER',
@@ -183,41 +177,35 @@ export class AiService {
     }
 
     const holdings =
-      suppliedItems ??
-      (await this.holdings.getHoldings(portfolioId, userId));
+      suppliedItems ?? (await this.holdings.getHoldings(portfolioId, userId));
     const analytics =
-      suppliedAnalytics ??
-      ((await this.analytics.overview(
-        userId,
-        portfolioId,
-      )) as Record<string, unknown>);
+      suppliedAnalytics ?? (await this.analytics.overview(userId, portfolioId));
 
-    const result =
-      await this.manager.executeAiRequest<InvestorReviewResult>({
-        userId,
-        modelId,
-        systemPrompt: [
-          'You are a professional portfolio advisor. Do not predict prices.',
-          outputLanguageRule(outputLanguage),
-          investmentGuardrail(),
-          concisenessRule(),
-          'Return valid JSON only.',
-        ].join('\n'),
-        prompt: JSON.stringify({
-          task: 'Review investor portfolio health, diversification, and risk',
-          requiredShape: {
-            summary: 'string',
-            diversificationScore: 'number 0-100',
-            riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
-            concentrationRisks: ['string'],
-            strengths: ['string'],
-            actionableRecommendations: ['string'],
-          },
-          holdings,
-          analytics,
-        }),
-        maxOutputTokens: 1800,
-      });
+    const result = await this.manager.executeAiRequest<InvestorReviewResult>({
+      userId,
+      modelId,
+      systemPrompt: [
+        'You are a professional portfolio advisor. Do not predict prices.',
+        outputLanguageRule(outputLanguage),
+        investmentGuardrail(),
+        concisenessRule(),
+        'Return valid JSON only.',
+      ].join('\n'),
+      prompt: JSON.stringify({
+        task: 'Review investor portfolio health, diversification, and risk',
+        requiredShape: {
+          summary: 'string',
+          diversificationScore: 'number 0-100',
+          riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
+          concentrationRisks: ['string'],
+          strengths: ['string'],
+          actionableRecommendations: ['string'],
+        },
+        holdings,
+        analytics,
+      }),
+      maxOutputTokens: 1800,
+    });
 
     return {
       portfolioType: 'INVESTOR',
@@ -242,20 +230,19 @@ export class AiService {
     const fallback = this.buildFallback(headline, language);
 
     try {
-      const result =
-        await this.manager.executeSystemAiRequest<
-          Omit<NewsEnrichmentResult, 'fromFallback'>
-        >({
-          prompt: JSON.stringify({
-            language,
-            headline: headline.slice(0, 300),
-            summary: summary.slice(0, 800),
-            content: content.slice(0, 1500),
-          }),
-          systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
-          maxOutputTokens: 1400,
-          excludeProviders: options?.excludeProviders,
-        });
+      const result = await this.manager.executeSystemAiRequest<
+        Omit<NewsEnrichmentResult, 'fromFallback'>
+      >({
+        prompt: JSON.stringify({
+          language,
+          headline: headline.slice(0, 300),
+          summary: summary.slice(0, 800),
+          content: content.slice(0, 1500),
+        }),
+        systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
+        maxOutputTokens: 1400,
+        excludeProviders: options?.excludeProviders,
+      });
 
       return this.normalizeNewsResult(result.data, fallback);
     } catch {
@@ -330,7 +317,10 @@ export class AiService {
           ? data.aiTrend
           : fallback.aiTrend,
       aiImpactProbability: Number.isFinite(probability)
-        ? Math.max(0, Math.min(100, probability <= 1 ? probability * 100 : probability))
+        ? Math.max(
+            0,
+            Math.min(100, probability <= 1 ? probability * 100 : probability),
+          )
         : fallback.aiImpactProbability,
       stockImpactAnalysis: String(
         data?.stockImpactAnalysis ?? fallback.stockImpactAnalysis,

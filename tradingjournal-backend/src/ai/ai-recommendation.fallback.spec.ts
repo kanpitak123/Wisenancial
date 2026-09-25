@@ -1,13 +1,7 @@
-import {
-  HttpException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { HttpException, ServiceUnavailableException } from '@nestjs/common';
 import { AiRecommendationService } from './ai-recommendation.service';
 import type { AiManagerService } from './ai-manager.service';
-import type {
-  GrowthCandidate,
-  StocksService,
-} from '../stocks/stocks.service';
+import type { GrowthCandidate, StocksService } from '../stocks/stocks.service';
 
 /**
  * AI Picks (GET /ai/recommendations/growth) ไม่รับ modelId — เซิร์ฟเวอร์เลือกให้
@@ -87,10 +81,7 @@ const providerUnavailable = (modelId: string) =>
   });
 
 const insufficientCredits = () =>
-  new HttpException(
-    { error: 'INSUFFICIENT_AI_CREDITS' },
-    402,
-  );
+  new HttpException({ error: 'INSUFFICIENT_AI_CREDITS' }, 402);
 
 /** manager ปลอมที่บันทึกลำดับโมเดลที่ถูกเรียกไว้ใน calls */
 function makeService(
@@ -102,41 +93,34 @@ function makeService(
 
   const manager = {
     listAvailableModels: () => models,
-    executeAiRequest: jest.fn(
-      ({ modelId }: { modelId: string }) => {
-        calls.push(modelId);
+    executeAiRequest: jest.fn(({ modelId }: { modelId: string }) => {
+      calls.push(modelId);
 
-        const failure = behaviour[modelId];
-        if (failure) {
-          return Promise.reject(failure);
-        }
+      const failure = behaviour[modelId];
+      if (failure) {
+        return Promise.reject(failure);
+      }
 
-        return Promise.resolve({
-          data: PICKS,
-          model: modelId,
-          usage: {
-            inputTokens: 10,
-            outputTokens: 20,
-          },
-          creditsCharged: 1,
-          creditsRemaining: 99,
-        });
-      },
-    ),
+      return Promise.resolve({
+        data: PICKS,
+        model: modelId,
+        usage: {
+          inputTokens: 10,
+          outputTokens: 20,
+        },
+        creditsCharged: 1,
+        creditsRemaining: 99,
+      });
+    }),
   } as unknown as AiManagerService;
 
-  const getGrowthCandidates = jest
-    .fn()
-    .mockResolvedValue(candidates);
+  const getGrowthCandidates = jest.fn().mockResolvedValue(candidates);
   const stocks = {
     getGrowthCandidates,
   } as unknown as StocksService;
 
   return {
-    service: new AiRecommendationService(
-      manager,
-      stocks,
-    ),
+    service: new AiRecommendationService(manager, stocks),
     calls,
     manager,
     getGrowthCandidates,
@@ -145,13 +129,9 @@ function makeService(
 
 describe('AiRecommendationService — เลือกและถอยโมเดล', () => {
   it('โมเดลแรกใช้ได้ -> ไม่ถอย และบอกว่าไม่ได้ถูกสลับ', async () => {
-    const { service, calls } = makeService([
-      GEMINI,
-      GROQ,
-    ]);
+    const { service, calls } = makeService([GEMINI, GROQ]);
 
-    const result =
-      await service.getGrowthRecommendations(1);
+    const result = await service.getGrowthRecommendations(1);
 
     expect(calls).toEqual(['gemini-2.5-flash']);
     expect(result.model).toBe('gemini-2.5-flash');
@@ -160,57 +140,37 @@ describe('AiRecommendationService — เลือกและถอยโมเ
   });
 
   it('โมเดลแรกชน rate limit -> ถอยไปตัวที่ถูกกว่าแล้วไปต่อได้', async () => {
-    const { service, calls } = makeService(
-      [GEMINI, GROQ],
-      {
-        'gemini-2.5-flash': providerUnavailable(
-          'gemini-2.5-flash',
-        ),
-      },
-    );
+    const { service, calls } = makeService([GEMINI, GROQ], {
+      'gemini-2.5-flash': providerUnavailable('gemini-2.5-flash'),
+    });
 
-    const result =
-      await service.getGrowthRecommendations(1);
+    const result = await service.getGrowthRecommendations(1);
 
-    expect(calls).toEqual([
-      'gemini-2.5-flash',
-      'groq-llama3',
-    ]);
+    expect(calls).toEqual(['gemini-2.5-flash', 'groq-llama3']);
     expect(result.model).toBe('groq-llama3');
     // ผู้ใช้ควรมีทางรู้ว่าคำตอบไม่ได้มาจากโมเดลที่ตั้งใจไว้
-    expect(result.fallbackFrom).toBe(
-      'gemini-2.5-flash',
-    );
+    expect(result.fallbackFrom).toBe('gemini-2.5-flash');
   });
 
   it('เครดิตไม่พอ -> ไม่ถอยไปตัวอื่น เพราะลองกี่ตัวก็ตายเหมือนกัน', async () => {
-    const { service, calls } = makeService(
-      [GEMINI, GROQ],
-      {
-        'gemini-2.5-flash': insufficientCredits(),
-      },
-    );
+    const { service, calls } = makeService([GEMINI, GROQ], {
+      'gemini-2.5-flash': insufficientCredits(),
+    });
 
-    await expect(
-      service.getGrowthRecommendations(1),
-    ).rejects.toBeInstanceOf(HttpException);
+    await expect(service.getGrowthRecommendations(1)).rejects.toBeInstanceOf(
+      HttpException,
+    );
 
     expect(calls).toEqual(['gemini-2.5-flash']);
   });
 
   it('ตัวสำรองแพงกว่าตัวแรก -> ไม่ถอยไปหา จะได้ไม่คิดเงินผู้ใช้เกิน', async () => {
     // เหลือแค่ groq (1/1) กับ claude (60/300) — groq เป็นตัวแรกที่เจอในลำดับ
-    const { service, calls } = makeService(
-      [GROQ, CLAUDE],
-      {
-        'groq-llama3':
-          providerUnavailable('groq-llama3'),
-      },
-    );
+    const { service, calls } = makeService([GROQ, CLAUDE], {
+      'groq-llama3': providerUnavailable('groq-llama3'),
+    });
 
-    await expect(
-      service.getGrowthRecommendations(1),
-    ).rejects.toBeInstanceOf(
+    await expect(service.getGrowthRecommendations(1)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
 
@@ -218,35 +178,22 @@ describe('AiRecommendationService — เลือกและถอยโมเ
   });
 
   it('ทุกตัวใน chain ล่ม -> โยน error ของตัวสุดท้ายออกไป ไม่กลืนเงียบ', async () => {
-    const { service, calls } = makeService(
-      [GEMINI, GROQ],
-      {
-        'gemini-2.5-flash': providerUnavailable(
-          'gemini-2.5-flash',
-        ),
-        'groq-llama3':
-          providerUnavailable('groq-llama3'),
-      },
-    );
+    const { service, calls } = makeService([GEMINI, GROQ], {
+      'gemini-2.5-flash': providerUnavailable('gemini-2.5-flash'),
+      'groq-llama3': providerUnavailable('groq-llama3'),
+    });
 
-    await expect(
-      service.getGrowthRecommendations(1),
-    ).rejects.toMatchObject({
+    await expect(service.getGrowthRecommendations(1)).rejects.toMatchObject({
       response: { model: 'groq-llama3' },
     });
 
-    expect(calls).toEqual([
-      'gemini-2.5-flash',
-      'groq-llama3',
-    ]);
+    expect(calls).toEqual(['gemini-2.5-flash', 'groq-llama3']);
   });
 
   it('ไม่มี provider ที่ตั้งค่าไว้เลย -> บอกให้ชัด ไม่ใช่ crash แปลกๆ', async () => {
     const { service } = makeService([]);
 
-    await expect(
-      service.getGrowthRecommendations(1),
-    ).rejects.toBeInstanceOf(
+    await expect(service.getGrowthRecommendations(1)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
   });
@@ -260,9 +207,8 @@ describe('AiRecommendationService — เลือกและถอยโมเ
 
     await service.getGrowthRecommendations(1);
 
-    const { systemPrompt } = (
-      manager.executeAiRequest as unknown as jest.Mock
-    ).mock.calls[0][0];
+    const { systemPrompt } = (manager.executeAiRequest as unknown as jest.Mock)
+      .mock.calls[0][0];
 
     expect(systemPrompt).toContain('Never use words like "buy", "sell"');
     expect(systemPrompt).toContain(

@@ -43,12 +43,10 @@ export class PnlCalculatorService {
       );
     }
 
-    const direction: 1 | -1 =
-      input.trade_type === TradeSide.BUY ? 1 : -1;
+    const direction: 1 | -1 = input.trade_type === TradeSide.BUY ? 1 : -1;
 
     const priceDifference = closePrice - openPrice;
-    const grossPnl =
-      priceDifference * volume * contractSize * direction;
+    const grossPnl = priceDifference * volume * contractSize * direction;
     const netPnl = grossPnl - commissionCost + swap;
 
     return {
@@ -60,8 +58,7 @@ export class PnlCalculatorService {
       commission_cost: this.round(commissionCost),
       swap: this.round(swap),
       net_pnl: this.round(netPnl),
-      result_status:
-        netPnl > 0 ? 'WIN' : netPnl < 0 ? 'LOSS' : 'BREAKEVEN',
+      result_status: netPnl > 0 ? 'WIN' : netPnl < 0 ? 'LOSS' : 'BREAKEVEN',
     };
   }
 

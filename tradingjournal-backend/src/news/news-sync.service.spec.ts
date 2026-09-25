@@ -10,11 +10,7 @@ import { NewsScope } from './dto/news-query.dto';
 type SyncResult = { fetched: number; persisted: number; skipped?: boolean };
 
 function makeService(investorSync: jest.Mock) {
-  const service = new NewsSyncService(
-    {} as never,
-    {} as never,
-    {} as never,
-  );
+  const service = new NewsSyncService({} as never, {} as never, {} as never);
 
   // syncInvestorMarketNews เป็น private และยิง HTTP จริง — แทนที่ด้วยตัวคุมเวลาได้
   Object.defineProperty(service, 'syncInvestorMarketNews', {
@@ -41,7 +37,10 @@ describe('NewsSyncService — investor sync overlap guard', () => {
     await Promise.resolve();
 
     // รอบที่สองเข้ามาระหว่างรอบแรกยังค้าง
-    const second = (await service.sync(NewsScope.INVESTOR, 'th')) as unknown as {
+    const second = (await service.sync(
+      NewsScope.INVESTOR,
+      'th',
+    )) as unknown as {
       investor: SyncResult & { reason?: string };
     };
 
@@ -54,7 +53,9 @@ describe('NewsSyncService — investor sync overlap guard', () => {
   });
 
   it('รอบก่อนจบแล้ว -> รอบถัดไปเริ่มได้ตามปกติ', async () => {
-    const investorSync = jest.fn().mockResolvedValue({ fetched: 20, persisted: 20 });
+    const investorSync = jest
+      .fn()
+      .mockResolvedValue({ fetched: 20, persisted: 20 });
     const service = makeService(investorSync);
 
     await service.scheduledInvestorSync();
@@ -84,7 +85,9 @@ describe('NewsSyncService — investor sync overlap guard', () => {
   });
 
   it('scope TRADER ไม่แตะ investor sync', async () => {
-    const investorSync = jest.fn().mockResolvedValue({ fetched: 0, persisted: 0 });
+    const investorSync = jest
+      .fn()
+      .mockResolvedValue({ fetched: 0, persisted: 0 });
     const service = makeService(investorSync);
 
     Object.defineProperty(service, 'syncForexCalendar', {

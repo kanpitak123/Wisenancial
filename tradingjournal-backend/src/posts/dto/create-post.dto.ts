@@ -8,10 +8,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import {
-  PostReferenceType,
-  Sentiment,
-} from '@prisma/client';
+import { PostReferenceType, Sentiment } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class CreatePostDto {
@@ -51,8 +48,7 @@ export class CreatePostDto {
   @ValidateIf(
     (dto: CreatePostDto) =>
       dto.reference_type !== undefined &&
-      dto.reference_type !==
-        PostReferenceType.NONE,
+      dto.reference_type !== PostReferenceType.NONE,
   )
   @Type(() => Number)
   @IsInt()

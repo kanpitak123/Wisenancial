@@ -45,11 +45,9 @@ describe('GoalsController', () => {
   });
 
   it('setGoal ส่ง userId จาก token เข้า service ไม่ใช่ undefined', () => {
-    controller.setGoal(
-      5,
-      { year: 2026, month: 8, target: 5000 },
-      { userId: 7 } as never,
-    );
+    controller.setGoal(5, { year: 2026, month: 8, target: 5000 }, {
+      userId: 7,
+    } as never);
 
     expect(goalsServiceMock.setGoal).toHaveBeenCalledWith(7, 5, 2026, 8, 5000);
   });

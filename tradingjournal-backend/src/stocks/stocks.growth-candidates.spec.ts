@@ -98,9 +98,7 @@ describe('StocksService.getGrowthCandidates', () => {
       dbRow(`S${i}`, i % 2 === 0 ? 'SET' : 'NASDAQ'),
     );
     findMany.mockResolvedValue(rows);
-    respondWith(
-      Object.fromEntries(rows.map((r) => [r.symbol, metric()])),
-    );
+    respondWith(Object.fromEntries(rows.map((r) => [r.symbol, metric()])));
 
     const service = await buildService();
     const result = await service.getGrowthCandidates(12);
@@ -209,9 +207,7 @@ describe('StocksService.getGrowthCandidates', () => {
   it('ต่อ DB ไม่ได้ -> ใช้ seed list แทน ไม่คืนลิสต์ว่าง', async () => {
     findMany.mockRejectedValue(new Error('db down'));
     getListingMetrics.mockImplementation((symbols: string[]) =>
-      Promise.resolve(
-        new Map(symbols.map((symbol) => [symbol, metric()])),
-      ),
+      Promise.resolve(new Map(symbols.map((symbol) => [symbol, metric()]))),
     );
     getGrowthFundamentals.mockImplementation((symbols: string[]) =>
       Promise.resolve(

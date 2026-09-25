@@ -44,12 +44,7 @@ export class AnalyticsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.analytics.overview(
-      user.userId,
-      portfolioId,
-      from,
-      to,
-    );
+    return this.analytics.overview(user.userId, portfolioId, from, to);
   }
 
   @Get('portfolio/:portfolioId/performance')
@@ -58,11 +53,7 @@ export class AnalyticsController {
     @CurrentUser() user: AuthUser,
     @Query('timeframe') timeframe: AnalyticsTimeframe = '1M',
   ) {
-    return this.analytics.performance(
-      user.userId,
-      portfolioId,
-      timeframe,
-    );
+    return this.analytics.performance(user.userId, portfolioId, timeframe);
   }
 
   @Get('portfolio/:portfolioId/daily-pnl')
@@ -82,12 +73,7 @@ export class AnalyticsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.analytics.monthlyGrowth(
-      user.userId,
-      portfolioId,
-      from,
-      to,
-    );
+    return this.analytics.monthlyGrowth(user.userId, portfolioId, from, to);
   }
 
   @UseGuards(PaidTierGuard)
@@ -108,12 +94,7 @@ export class AnalyticsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.analytics.winRateBreakdown(
-      user.userId,
-      portfolioId,
-      from,
-      to,
-    );
+    return this.analytics.winRateBreakdown(user.userId, portfolioId, from, to);
   }
 
   @Get('portfolio/:portfolioId/timeline')
@@ -231,11 +212,7 @@ export class AnalyticsController {
     @CurrentUser() user: AuthUser,
     @Query('timeframe') timeframe: AnalyticsTimeframe = '1M',
   ) {
-    return this.analytics.performance(
-      user.userId,
-      portfolioId,
-      timeframe,
-    );
+    return this.analytics.performance(user.userId, portfolioId, timeframe);
   }
 
   // Compatibility: old winrate

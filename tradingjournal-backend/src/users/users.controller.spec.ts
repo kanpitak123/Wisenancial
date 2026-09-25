@@ -42,10 +42,7 @@ describe('UsersController', () => {
   it('getPublicProfile ส่งทั้ง username ที่ขอ และ id ของคนที่กำลังดูไปให้ service', () => {
     // id ของผู้ดูคือสิ่งที่ service ใช้ตัดสินว่าเป็นเจ้าของโปรไฟล์หรือไม่
     // ถ้าลืมส่ง เจ้าของจะเปิดโปรไฟล์ตัวเองตอนตั้งเป็นส่วนตัวไม่ได้
-    controller.getPublicProfile(
-      { userId: 7 } as never,
-      'trader01',
-    );
+    controller.getPublicProfile({ userId: 7 } as never, 'trader01');
 
     expect(usersServiceMock.getPublicProfile).toHaveBeenCalledWith(
       'trader01',

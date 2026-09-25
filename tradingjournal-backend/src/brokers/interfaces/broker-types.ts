@@ -13,7 +13,9 @@ export { BrokerConnectionStatus, BrokerType };
  */
 export type BrokerConnectionMode = 'PUSH' | 'PULL';
 
-export function resolveConnectionMode(brokerType: BrokerType): BrokerConnectionMode {
+export function resolveConnectionMode(
+  brokerType: BrokerType,
+): BrokerConnectionMode {
   switch (brokerType) {
     case BrokerType.MT4:
     case BrokerType.MT5:

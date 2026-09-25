@@ -32,9 +32,7 @@ export class PortfoliosService {
    * ถ้าเป็น null ค่อยดูตาราง subscriptions ที่ยัง ACTIVE อยู่ ไม่งั้นสมาชิกที่ถูกเพิ่ม
    * ด้วยมือ (ซึ่ง PaidTierGuard ยอมให้ผ่าน) จะโดนตัดเหลือโควต้า free
    */
-  private async resolveTier(
-    userId: number,
-  ): Promise<SubscriptionTier | null> {
+  private async resolveTier(userId: number): Promise<SubscriptionTier | null> {
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
       select: {

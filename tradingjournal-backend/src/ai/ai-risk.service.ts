@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
 import {
   concisenessRule,
@@ -27,40 +24,39 @@ export class AiRiskService {
     const normalized = this.normalizeWeights(holdings);
     const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
-    const result =
-      await this.manager.executeAiRequest<PortfolioRiskAnalysis>({
-        userId,
-        modelId,
-        systemPrompt: [
-          'You are a portfolio risk analyst. Rely only on supplied data.',
-          outputLanguageRule(outputLanguage),
-          investmentGuardrail(),
-          concisenessRule(),
-          // กันหลอน: ก่อนหน้านี้ทุกฟิลด์ปัจจัยพื้นฐานเป็น null เสมอ (หน้าบ้านไม่เคยส่งมา)
-          // โมเดลจึงเดาค่าจากชื่อหุ้นในความจำเก่าแล้วอ้างว่าประเมินตามกติกาที่ให้ไป
-          'A null field means the data is unavailable — never infer, recall, or estimate it from your own knowledge of the company.',
-          'When a field is null, exclude that holding from that rule and state the gap in analysisSummary instead of guessing.',
-          'Return valid JSON only.',
-        ].join('\n'),
-        prompt: JSON.stringify({
-          task: 'Assess portfolio risk',
-          requiredShape: {
-            riskLevel: 'Low|Moderate|Aggressive',
-            riskScore: 'number 0-100',
-            analysisSummary: 'string',
-            keyRiskFactors: ['string'],
-          },
-          rules: {
-            highBeta: '>1.2',
-            highDebtToEquity: '>1.0',
-            highPe: '>30',
-            // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
-            concentration: 'single holding weight >25%',
-          },
-          holdings: normalized,
-        }),
-        maxOutputTokens: 1600,
-      });
+    const result = await this.manager.executeAiRequest<PortfolioRiskAnalysis>({
+      userId,
+      modelId,
+      systemPrompt: [
+        'You are a portfolio risk analyst. Rely only on supplied data.',
+        outputLanguageRule(outputLanguage),
+        investmentGuardrail(),
+        concisenessRule(),
+        // กันหลอน: ก่อนหน้านี้ทุกฟิลด์ปัจจัยพื้นฐานเป็น null เสมอ (หน้าบ้านไม่เคยส่งมา)
+        // โมเดลจึงเดาค่าจากชื่อหุ้นในความจำเก่าแล้วอ้างว่าประเมินตามกติกาที่ให้ไป
+        'A null field means the data is unavailable — never infer, recall, or estimate it from your own knowledge of the company.',
+        'When a field is null, exclude that holding from that rule and state the gap in analysisSummary instead of guessing.',
+        'Return valid JSON only.',
+      ].join('\n'),
+      prompt: JSON.stringify({
+        task: 'Assess portfolio risk',
+        requiredShape: {
+          riskLevel: 'Low|Moderate|Aggressive',
+          riskScore: 'number 0-100',
+          analysisSummary: 'string',
+          keyRiskFactors: ['string'],
+        },
+        rules: {
+          highBeta: '>1.2',
+          highDebtToEquity: '>1.0',
+          highPe: '>30',
+          // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
+          concentration: 'single holding weight >25%',
+        },
+        holdings: normalized,
+      }),
+      maxOutputTokens: 1600,
+    });
 
     const data = result.data;
     if (

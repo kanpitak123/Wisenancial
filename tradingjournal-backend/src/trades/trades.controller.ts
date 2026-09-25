@@ -61,10 +61,7 @@ export class TradesController {
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.tradesService.findAllByPortfolio(
-      portfolioId,
-      user.userId,
-    );
+    return this.tradesService.findAllByPortfolio(portfolioId, user.userId);
   }
 
   @Post('portfolio/:portfolioId/active')
@@ -73,11 +70,7 @@ export class TradesController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateTradeDto,
   ) {
-    return this.tradesService.createOpenTrade(
-      user.userId,
-      portfolioId,
-      body,
-    );
+    return this.tradesService.createOpenTrade(user.userId, portfolioId, body);
   }
 
   @Post('portfolio/:portfolioId')
@@ -86,11 +79,7 @@ export class TradesController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateTradeDto,
   ) {
-    return this.tradesService.createClosedTrade(
-      user.userId,
-      portfolioId,
-      body,
-    );
+    return this.tradesService.createClosedTrade(user.userId, portfolioId, body);
   }
 
   @Patch(':id')
@@ -99,11 +88,7 @@ export class TradesController {
     @CurrentUser() user: AuthUser,
     @Body() body: UpdateTradeDto,
   ) {
-    return this.tradesService.updateOpenTrade(
-      id,
-      user.userId,
-      body,
-    );
+    return this.tradesService.updateOpenTrade(id, user.userId, body);
   }
 
   @Patch(':id/close')
@@ -112,11 +97,7 @@ export class TradesController {
     @CurrentUser() user: AuthUser,
     @Body() body: CloseTradeDto,
   ) {
-    return this.tradesService.closeTrade(
-      id,
-      user.userId,
-      body,
-    );
+    return this.tradesService.closeTrade(id, user.userId, body);
   }
 
   @Post('portfolio/:portfolioId/import')
@@ -132,15 +113,11 @@ export class TradesController {
     @Body() body: ImportTradesDto,
   ) {
     if (!file) {
-      throw new BadRequestException(
-        'กรุณาอัปโหลดไฟล์ประวัติการเทรด',
-      );
+      throw new BadRequestException('กรุณาอัปโหลดไฟล์ประวัติการเทรด');
     }
 
     if (!file.originalname.toLowerCase().endsWith('.csv')) {
-      throw new BadRequestException(
-        'รองรับเฉพาะไฟล์ CSV เท่านั้น',
-      );
+      throw new BadRequestException('รองรับเฉพาะไฟล์ CSV เท่านั้น');
     }
 
     return this.tradesImportService.importBrokerData(
@@ -154,10 +131,7 @@ export class TradesController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: AuthUser,
-  ) {
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
     return this.tradesService.remove(id, user.userId);
   }
 }

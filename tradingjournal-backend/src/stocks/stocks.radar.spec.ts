@@ -47,7 +47,10 @@ describe('StocksService.getRadar — universe selection', () => {
   });
 
   it('ดึงหุ้นจาก DB ไม่ใช่ลิสต์ตายตัวในโค้ด', async () => {
-    findMany.mockResolvedValue([dbRow('SEEDED.BK', 'SET'), dbRow('ONLYDB', 'NASDAQ')]);
+    findMany.mockResolvedValue([
+      dbRow('SEEDED.BK', 'SET'),
+      dbRow('ONLYDB', 'NASDAQ'),
+    ]);
 
     const service = await buildService();
     const result = await service.getRadar();
@@ -103,7 +106,9 @@ describe('StocksService.getRadar — universe selection', () => {
 
   it('เลือกแบบกระจายทั้งลิสต์ ไม่ใช่ตัดหัวมาเรียงตามตัวอักษร', async () => {
     findMany.mockResolvedValue(
-      Array.from({ length: 100 }, (_, i) => dbRow(`US${String(i).padStart(3, '0')}`, 'NASDAQ')),
+      Array.from({ length: 100 }, (_, i) =>
+        dbRow(`US${String(i).padStart(3, '0')}`, 'NASDAQ'),
+      ),
     );
 
     const service = await buildService();

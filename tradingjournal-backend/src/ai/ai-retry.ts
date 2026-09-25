@@ -8,12 +8,8 @@
 
 import { AiResponseParseError } from './providers/ai-provider.interface';
 
-
 export type AiFailureKind =
-  | 'rate-limit'
-  | 'upstream-error'
-  | 'network'
-  | 'permanent';
+  'rate-limit' | 'upstream-error' | 'network' | 'permanent';
 
 interface ErrorLike {
   status?: unknown;

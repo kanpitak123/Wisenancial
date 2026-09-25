@@ -6,19 +6,9 @@ import { ShareStatisticsController } from './share-statistics.controller';
 import { ShareStatisticsService } from './share-statistics.service';
 
 @Module({
-  imports: [
-    PrismaModule,
-    AuthModule,
-  ],
-  controllers: [
-    ShareStatisticsController,
-  ],
-  providers: [
-    ShareStatisticsService,
-    PaidTierGuard,
-  ],
-  exports: [
-    ShareStatisticsService,
-  ],
+  imports: [PrismaModule, AuthModule],
+  controllers: [ShareStatisticsController],
+  providers: [ShareStatisticsService, PaidTierGuard],
+  exports: [ShareStatisticsService],
 })
 export class ShareStatisticsModule {}

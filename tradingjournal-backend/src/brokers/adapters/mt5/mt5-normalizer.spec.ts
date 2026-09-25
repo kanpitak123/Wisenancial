@@ -70,7 +70,9 @@ describe('normalizeAccountSnapshot', () => {
   });
 
   it('uppercases currency', () => {
-    expect(normalizeAccountSnapshot({ ...accountFixture, currency: 'eur' }).currency).toBe('EUR');
+    expect(
+      normalizeAccountSnapshot({ ...accountFixture, currency: 'eur' }).currency,
+    ).toBe('EUR');
   });
 
   it('allows marginLevel/leverage to be null (MT5 reports 0/undefined when no open positions)', () => {
@@ -86,8 +88,10 @@ describe('normalizeAccountSnapshot', () => {
   it.each(['balance', 'equity', 'margin', 'marginFree', 'credit'] as const)(
     'throws Mt5NormalizationError when %s is missing',
     (field) => {
-      const broken = { ...accountFixture, [field]: undefined } as unknown as Mt5AccountSnapshotWire;
-      expect(() => normalizeAccountSnapshot(broken)).toThrow(Mt5NormalizationError);
+      const broken = { ...accountFixture, [field]: undefined };
+      expect(() => normalizeAccountSnapshot(broken)).toThrow(
+        Mt5NormalizationError,
+      );
     },
   );
 
@@ -96,7 +100,10 @@ describe('normalizeAccountSnapshot', () => {
       normalizeAccountSnapshot({ ...accountFixture, balance: Number.NaN }),
     ).toThrow(Mt5NormalizationError);
     expect(() =>
-      normalizeAccountSnapshot({ ...accountFixture, equity: Number.POSITIVE_INFINITY }),
+      normalizeAccountSnapshot({
+        ...accountFixture,
+        equity: Number.POSITIVE_INFINITY,
+      }),
     ).toThrow(Mt5NormalizationError);
   });
 
@@ -134,7 +141,9 @@ describe('normalizePosition', () => {
   });
 
   it('maps SHORT direction', () => {
-    expect(normalizePosition({ ...positionFixture, direction: 'SHORT' }).direction).toBe('SHORT');
+    expect(
+      normalizePosition({ ...positionFixture, direction: 'SHORT' }).direction,
+    ).toBe('SHORT');
   });
 
   it('allows sl/tp/currentPrice/profit to be null (no stop set / market closed)', () => {
@@ -159,7 +168,10 @@ describe('normalizePosition', () => {
 
   it('throws when direction is not LONG/SHORT', () => {
     expect(() =>
-      normalizePosition({ ...positionFixture, direction: 'BUY' as unknown as 'LONG' }),
+      normalizePosition({
+        ...positionFixture,
+        direction: 'BUY' as unknown as 'LONG',
+      }),
     ).toThrow(Mt5NormalizationError);
   });
 
@@ -168,7 +180,10 @@ describe('normalizePosition', () => {
       normalizePosition({ ...positionFixture, volume: Number.NaN }),
     ).toThrow(Mt5NormalizationError);
     expect(() =>
-      normalizePosition({ ...positionFixture, openPrice: 'bad' as unknown as number }),
+      normalizePosition({
+        ...positionFixture,
+        openPrice: 'bad' as unknown as number,
+      }),
     ).toThrow(Mt5NormalizationError);
   });
 
@@ -182,7 +197,9 @@ describe('normalizePosition', () => {
   });
 
   it('uppercases symbol', () => {
-    expect(normalizePosition({ ...positionFixture, symbol: 'eurusd' }).symbol).toBe('EURUSD');
+    expect(
+      normalizePosition({ ...positionFixture, symbol: 'eurusd' }).symbol,
+    ).toBe('EURUSD');
   });
 });
 
@@ -206,22 +223,31 @@ describe('normalizeDeal', () => {
     });
   });
 
-  it.each(['IN', 'OUT', 'INOUT', 'OUT_BY'] as const)('accepts entryType %s', (entryType) => {
-    expect(normalizeDeal({ ...dealFixture, entryType }).entryType).toBe(entryType);
-  });
+  it.each(['IN', 'OUT', 'INOUT', 'OUT_BY'] as const)(
+    'accepts entryType %s',
+    (entryType) => {
+      expect(normalizeDeal({ ...dealFixture, entryType }).entryType).toBe(
+        entryType,
+      );
+    },
+  );
 
   it('allows orderTicket to be null (some closing deals have no originating order)', () => {
-    expect(normalizeDeal({ ...dealFixture, orderTicket: null }).externalOrderId).toBeNull();
+    expect(
+      normalizeDeal({ ...dealFixture, orderTicket: null }).externalOrderId,
+    ).toBeNull();
   });
 
   it('throws when dealTicket is missing', () => {
-    expect(() => normalizeDeal({ ...dealFixture, dealTicket: '' })).toThrow(Mt5NormalizationError);
+    expect(() => normalizeDeal({ ...dealFixture, dealTicket: '' })).toThrow(
+      Mt5NormalizationError,
+    );
   });
 
   it('throws when positionTicket is missing', () => {
-    expect(() =>
-      normalizeDeal({ ...dealFixture, positionTicket: '' }),
-    ).toThrow(Mt5NormalizationError);
+    expect(() => normalizeDeal({ ...dealFixture, positionTicket: '' })).toThrow(
+      Mt5NormalizationError,
+    );
   });
 
   it('throws when entryType is not one of IN/OUT/INOUT/OUT_BY', () => {

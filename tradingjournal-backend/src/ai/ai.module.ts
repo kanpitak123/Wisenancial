@@ -18,16 +18,8 @@ import { GroqProvider } from './providers/groq.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
 @Module({
-  imports: [
-    PrismaModule,
-    AnalyticsModule,
-    StockPurchasesModule,
-    StocksModule,
-  ],
-  controllers: [
-    AiController,
-    AiCompatibilityController,
-  ],
+  imports: [PrismaModule, AnalyticsModule, StockPurchasesModule, StocksModule],
+  controllers: [AiController, AiCompatibilityController],
   providers: [
     AiService,
     AiManagerService,

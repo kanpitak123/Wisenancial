@@ -32,15 +32,14 @@ describe('TradesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    const module: TestingModule =
-      await Test.createTestingModule({
-        providers: [
-          TradesService,
-          PnlCalculatorService,
-          { provide: PrismaService, useValue: prismaMock },
-          { provide: RecordsService, useValue: recordsMock },
-        ],
-      }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        TradesService,
+        PnlCalculatorService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: RecordsService, useValue: recordsMock },
+      ],
+    }).compile();
 
     service = module.get<TradesService>(TradesService);
   });
@@ -52,9 +51,7 @@ describe('TradesService', () => {
   it('should reject non-owned trader portfolio', async () => {
     prismaMock.portfolios.findFirst.mockResolvedValue(null);
 
-    await expect(
-      service.findAllByPortfolio(1, 99),
-    ).rejects.toThrow(
+    await expect(service.findAllByPortfolio(1, 99)).rejects.toThrow(
       'ไม่พบพอร์ตเทรดนี้ หรือคุณไม่มีสิทธิ์เข้าถึง',
     );
   });
@@ -76,22 +73,30 @@ describe('TradesService', () => {
     }
 
     it('ปฏิเสธการแก้ field การเงิน (เช่น volume) ถ้าไม้ปิดไปแล้ว', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ result_status: 'WIN' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ result_status: 'WIN' }),
+      );
 
-      await expect(service.updateOpenTrade(1, 1, { volume: 0.5 })).rejects.toThrow(
+      await expect(
+        service.updateOpenTrade(1, 1, { volume: 0.5 }),
+      ).rejects.toThrow(
         'แก้ไขข้อมูลการเงิน/ตัวตนของไม้ได้เฉพาะออเดอร์ที่ยังเปิดอยู่',
       );
       expect(prismaMock.trades.update).not.toHaveBeenCalled();
     });
 
     it('อนุญาตแก้ field การเงินถ้าไม้ยัง OPEN อยู่ (พฤติกรรมเดิม)', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ result_status: 'OPEN' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ result_status: 'OPEN' }),
+      );
       prismaMock.trades.update.mockResolvedValue(tradeRow());
 
       await service.updateOpenTrade(1, 1, { volume: 0.5 });
 
       expect(prismaMock.trades.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ volume: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ volume: expect.anything() }),
+        }),
       );
     });
 
@@ -111,10 +116,15 @@ describe('TradesService', () => {
       expect(prismaMock.trades.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 1 },
-          data: expect.objectContaining({ strategy: 'breakout', note: 'good entry' }),
+          data: expect.objectContaining({
+            strategy: 'breakout',
+            note: 'good entry',
+          }),
         }),
       );
-      const updateCall = prismaMock.trades.update.mock.calls[0]![0] as { data: Record<string, unknown> };
+      const updateCall = prismaMock.trades.update.mock.calls[0]![0] as {
+        data: Record<string, unknown>;
+      };
       // sl/tp เป็น risk annotation ไม่ใช่ field การเงินที่กระทบ pnl — แก้ได้แม้ไม้ปิดแล้ว
       expect(updateCall.data).toHaveProperty('stop_loss');
       expect(updateCall.data).toHaveProperty('take_profit');
@@ -125,11 +135,18 @@ describe('TradesService', () => {
     });
 
     it('บล็อกทันทีที่มี field การเงินแม้จะส่ง field บันทึกมาด้วยพร้อมกัน', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ result_status: 'LOSS' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ result_status: 'LOSS' }),
+      );
 
       await expect(
-        service.updateOpenTrade(1, 1, { note: 'try to sneak in a price edit', open_price: 999 }),
-      ).rejects.toThrow('แก้ไขข้อมูลการเงิน/ตัวตนของไม้ได้เฉพาะออเดอร์ที่ยังเปิดอยู่');
+        service.updateOpenTrade(1, 1, {
+          note: 'try to sneak in a price edit',
+          open_price: 999,
+        }),
+      ).rejects.toThrow(
+        'แก้ไขข้อมูลการเงิน/ตัวตนของไม้ได้เฉพาะออเดอร์ที่ยังเปิดอยู่',
+      );
       expect(prismaMock.trades.update).not.toHaveBeenCalled();
     });
   });
@@ -151,7 +168,9 @@ describe('TradesService', () => {
     }
 
     it('ลบไม้ manual ที่ปิดแล้วได้ และ reverse Cash Record ที่ผูกอยู่', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ source: 'MANUAL' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ source: 'MANUAL' }),
+      );
       recordsMock.reverseSystem.mockResolvedValue({ id: 99 });
 
       const result = await service.remove(1, 1);
@@ -169,7 +188,9 @@ describe('TradesService', () => {
     });
 
     it('ลบไม้ CSV import ที่ปิดแล้วได้ และ reverse Cash Record ที่ผูกอยู่', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ source: 'IMPORT' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ source: 'IMPORT' }),
+      );
       recordsMock.reverseSystem.mockResolvedValue({ id: 100 });
 
       const result = await service.remove(1, 1);
@@ -180,8 +201,12 @@ describe('TradesService', () => {
     });
 
     it('ไม่มี Active Record ผูกอยู่ (ข้อมูลเก่า) ก็ยังลบไม้ manual/import ที่ปิดแล้วได้ตามปกติ', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ source: 'MANUAL' }));
-      recordsMock.reverseSystem.mockRejectedValue(new NotFoundException('ไม่พบ Active Record ของรายการต้นทาง'));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ source: 'MANUAL' }),
+      );
+      recordsMock.reverseSystem.mockRejectedValue(
+        new NotFoundException('ไม่พบ Active Record ของรายการต้นทาง'),
+      );
 
       const result = await service.remove(1, 1);
 
@@ -190,7 +215,9 @@ describe('TradesService', () => {
     });
 
     it('ปฏิเสธการลบไม้ที่ sync มาจาก broker (MT5_SYNC) แม้ปิดแล้ว', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ source: 'MT5_SYNC' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ source: 'MT5_SYNC' }),
+      );
 
       await expect(service.remove(1, 1)).rejects.toThrow(
         'ไม่สามารถลบไม้ที่ sync มาจาก broker ได้โดยตรง หากต้องการนำออก กรุณายกเลิกการเชื่อมต่อ broker แทน',
@@ -200,12 +227,18 @@ describe('TradesService', () => {
     });
 
     it('อนุญาตลบไม้ OPEN ได้ตามปกติ (พฤติกรรมเดิม ไม่ต้อง reverse Cash Record)', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ result_status: 'OPEN' }));
-      prismaMock.trades.delete.mockResolvedValue(tradeRow({ result_status: 'OPEN' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ result_status: 'OPEN' }),
+      );
+      prismaMock.trades.delete.mockResolvedValue(
+        tradeRow({ result_status: 'OPEN' }),
+      );
 
       const result = await service.remove(1, 1);
 
-      expect(prismaMock.trades.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(prismaMock.trades.delete).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
       expect(recordsMock.reverseSystem).not.toHaveBeenCalled();
       expect(result.deleted_id).toBe(1);
     });
@@ -221,16 +254,22 @@ describe('TradesService', () => {
     });
 
     it('atomicity: reverse + delete อยู่ใน $transaction เดียวกัน (tx client เดียวกันทั้งคู่) ด้วย isolation level Serializable — ถ้า delete ล้มเหลวหลัง reverse สำเร็จ ทั้งคู่ต้อง rollback', async () => {
-      prismaMock.trades.findFirst.mockResolvedValue(tradeRow({ source: 'MANUAL' }));
+      prismaMock.trades.findFirst.mockResolvedValue(
+        tradeRow({ source: 'MANUAL' }),
+      );
       recordsMock.reverseSystem.mockResolvedValue({ id: 99 });
-      txMock.trades.delete.mockRejectedValueOnce(new Error('DB connection dropped mid-delete'));
+      txMock.trades.delete.mockRejectedValueOnce(
+        new Error('DB connection dropped mid-delete'),
+      );
 
       // reverseSystem ถูกเรียกด้วย `tx` (ตัวเดียวกับที่ $transaction ส่งให้ callback) ไม่ใช่ prisma root client —
       // นี่คือสิ่งที่ทำให้ reverse + delete เป็น atomic operation เดียวกันจริง: ถ้า delete throw ภายใน callback,
       // Prisma จะไม่ COMMIT อะไรเลยทั้งการ reverse record และการลบไม้ (Postgres rolls back the whole interactive
       // transaction) แม้ reverseSystem จะ resolve สำเร็จไปแล้วก่อนหน้าก็ตาม — unit test นี้ยืนยันว่า error จาก
       // ครึ่งหลังของ callback ยัง propagate ออกมาเป็น rejection ของทั้ง remove() ไม่ใช่ silently swallowed
-      await expect(service.remove(1, 1)).rejects.toThrow('DB connection dropped mid-delete');
+      await expect(service.remove(1, 1)).rejects.toThrow(
+        'DB connection dropped mid-delete',
+      );
 
       expect(recordsMock.reverseSystem).toHaveBeenCalledWith(
         3,
@@ -240,7 +279,8 @@ describe('TradesService', () => {
         expect.any(String),
         txMock,
       );
-      const transactionCall = prismaMock.$transaction.mock.calls[0] as unknown[];
+      const transactionCall = prismaMock.$transaction.mock
+        .calls[0] as unknown[];
       expect(transactionCall[1]).toEqual(
         expect.objectContaining({ isolationLevel: 'Serializable' }),
       );
@@ -248,7 +288,9 @@ describe('TradesService', () => {
 
     it('double-delete: ลบไม้ตัวเดิมซ้ำ (double-click/retry) ต้อง throw NotFoundException (404) สะอาดๆ โดยไม่แตะ reverseSystem/balance ซ้ำ', async () => {
       // ครั้งแรก: ลบสำเร็จตามปกติ
-      prismaMock.trades.findFirst.mockResolvedValueOnce(tradeRow({ source: 'MANUAL' }));
+      prismaMock.trades.findFirst.mockResolvedValueOnce(
+        tradeRow({ source: 'MANUAL' }),
+      );
       recordsMock.reverseSystem.mockResolvedValue({ id: 99 });
       const first = await service.remove(1, 1);
       expect(first.deleted_id).toBe(1);

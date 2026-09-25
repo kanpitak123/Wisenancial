@@ -1,10 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  IsDateString,
-  IsNumber,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CloseTradeDto {
   @Type(() => Number)

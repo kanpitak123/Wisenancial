@@ -44,7 +44,9 @@ export class AssetsController {
       portfolioId,
       symbol,
       interval,
-      beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : undefined,
+      beforeDate && !Number.isNaN(beforeDate.getTime())
+        ? beforeDate
+        : undefined,
     );
   }
 

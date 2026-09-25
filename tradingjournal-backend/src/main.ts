@@ -6,7 +6,10 @@ import { ValidationPipe } from '@nestjs/common'; // 👈 เพิ่ม Import 
 import { NestExpressApplication } from '@nestjs/platform-express'; // 👈 1. Import ตัวนี้
 import { join } from 'path';
 import { assertCorsOriginsValid } from './config/cors-origins.util';
-import { MT5_INGEST_ROUTE_PATH, createMt5IngestBodyParser } from './brokers/ingestion/mt5-ingest-body-limit';
+import {
+  MT5_INGEST_ROUTE_PATH,
+  createMt5IngestBodyParser,
+} from './brokers/ingestion/mt5-ingest-body-limit';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

@@ -64,9 +64,9 @@ describe('StockPurchasesService', () => {
     it('lot ของคนอื่น -> 404 ไม่ให้แก้ข้ามบัญชี', async () => {
       prismaMock.stock_purchases.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.update(1, 99, { notes: 'hack' }),
-      ).rejects.toThrow('ไม่พบรายการซื้อหุ้น หรือคุณไม่มีสิทธิ์เข้าถึง');
+      await expect(service.update(1, 99, { notes: 'hack' })).rejects.toThrow(
+        'ไม่พบรายการซื้อหุ้น หรือคุณไม่มีสิทธิ์เข้าถึง',
+      );
 
       expect(prismaMock.stock_purchases.update).not.toHaveBeenCalled();
     });

@@ -46,7 +46,13 @@ function makeService(row: ReturnType<typeof makeRow>) {
     { broadcastNewsUpdate } as never,
   );
 
-  return { service, findUnique, update, enrichNewsArticle, broadcastNewsUpdate };
+  return {
+    service,
+    findUnique,
+    update,
+    enrichNewsArticle,
+    broadcastNewsUpdate,
+  };
 }
 
 describe('NewsEnrichmentService — enrichTraderNews ไม่เขียน prompt ลง content (§4)', () => {
@@ -57,7 +63,9 @@ describe('NewsEnrichmentService — enrichTraderNews ไม่เขียน pr
     await service.enrichTraderNews(1, 'en');
 
     expect(update).toHaveBeenCalledTimes(1);
-    const [{ data }] = update.mock.calls[0] as [{ data: Record<string, unknown> }];
+    const [{ data }] = update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
 
     expect(data).not.toHaveProperty('content');
   });
@@ -68,10 +76,14 @@ describe('NewsEnrichmentService — enrichTraderNews ไม่เขียน pr
 
     await service.enrichTraderNews(1, 'en');
 
-    const [{ data }] = update.mock.calls[0] as [{ data: Record<string, unknown> }];
+    const [{ data }] = update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
 
     expect(data.ai_summary).toBe('AI-generated summary text');
-    expect(data.ai_summary).not.toContain('Do not provide investment instructions');
+    expect(data.ai_summary).not.toContain(
+      'Do not provide investment instructions',
+    );
     expect(data.ai_summary).not.toContain('Economic event:');
   });
 });

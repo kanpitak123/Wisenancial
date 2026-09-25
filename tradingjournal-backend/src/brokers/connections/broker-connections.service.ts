@@ -1,9 +1,21 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { BrokerConnectionStatus, BrokerType, broker_connections } from '@prisma/client';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  BrokerConnectionStatus,
+  BrokerType,
+  broker_connections,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveConnectionMode } from '../interfaces/broker-types';
 import { BrokerApiKeyService } from './broker-api-key.service';
-import { PublicBrokerConnection, toPublicConnection } from './broker-connection.presenter';
+import {
+  PublicBrokerConnection,
+  toPublicConnection,
+} from './broker-connection.presenter';
 
 export interface CreatedBrokerConnection {
   connection: PublicBrokerConnection;
@@ -90,7 +102,10 @@ export class BrokerConnectionsService {
    * ไปแล้วอยากกลับมาใช้ใหม่ การ rotate เป็นการกระทำที่ผู้ใช้ตั้งใจทำเองผ่าน JWT (ต่างจาก
    * heartbeat ที่ถือ key เดิมมาเรียก) จึงอนุญาตให้ปลุกจาก REVOKED กลับมา ACTIVE ได้
    */
-  async rotateKey(id: number, userId: number): Promise<RotatedBrokerConnection> {
+  async rotateKey(
+    id: number,
+    userId: number,
+  ): Promise<RotatedBrokerConnection> {
     const existing = await this.findOwnedOrThrow(id, userId);
 
     if (existing.api_key_hash === null) {
@@ -188,7 +203,11 @@ export class BrokerConnectionsService {
    * the call site so a failure to *record* the error never masks or replaces the
    * original error response the EA/frontend actually needs to see.
    */
-  async recordError(connectionId: number, code: string, message: string): Promise<void> {
+  async recordError(
+    connectionId: number,
+    code: string,
+    message: string,
+  ): Promise<void> {
     await this.prisma.broker_connections.update({
       where: { id: connectionId },
       data: {
@@ -229,7 +248,12 @@ export class BrokerConnectionsService {
       where: {
         id: connectionId,
         AND: [
-          { OR: [{ external_account_id: null }, { external_account_id: accountLogin }] },
+          {
+            OR: [
+              { external_account_id: null },
+              { external_account_id: accountLogin },
+            ],
+          },
           { OR: [{ broker_server: null }, { broker_server: accountServer }] },
         ],
       },
@@ -242,7 +266,10 @@ export class BrokerConnectionsService {
     return result.count === 1;
   }
 
-  private async findOwnedOrThrow(id: number, userId: number): Promise<broker_connections> {
+  private async findOwnedOrThrow(
+    id: number,
+    userId: number,
+  ): Promise<broker_connections> {
     const row = await this.prisma.broker_connections.findFirst({
       where: { id, user_id: userId, deleted_at: null },
     });
@@ -286,7 +313,10 @@ export class BrokerConnectionsService {
     }
   }
 
-  private async assertOwnedPortfolio(portfolioId: number, userId: number): Promise<void> {
+  private async assertOwnedPortfolio(
+    portfolioId: number,
+    userId: number,
+  ): Promise<void> {
     const portfolio = await this.prisma.portfolios.findFirst({
       where: { id: portfolioId, user_id: userId },
       select: { id: true },

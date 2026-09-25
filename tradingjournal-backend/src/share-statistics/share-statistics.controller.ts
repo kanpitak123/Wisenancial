@@ -21,38 +21,22 @@ import {
 import { ShareStatisticsService } from './share-statistics.service';
 
 @Controller('share-statistics')
-@UseGuards(
-  JwtAuthGuard,
-  PaidTierGuard,
-)
+@UseGuards(JwtAuthGuard, PaidTierGuard)
 export class ShareStatisticsController {
-  constructor(
-    private readonly service: ShareStatisticsService,
-  ) {}
+  constructor(private readonly service: ShareStatisticsService) {}
 
   @Get('portfolio/:portfolioId')
   getShareStatistics(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.getShareStatistics(
-      user.userId,
-      portfolioId,
-    );
+    return this.service.getShareStatistics(user.userId, portfolioId);
   }
 
-  @Get(
-    'portfolio/:portfolioId/message/:platform',
-  )
+  @Get('portfolio/:portfolioId/message/:platform')
   generateShareMessage(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @Param('platform')
     platform: string,
@@ -67,25 +51,16 @@ export class ShareStatisticsController {
 
   @Get('portfolio/:portfolioId/image')
   generateShareImage(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.generateShareImage(
-      user.userId,
-      portfolioId,
-    );
+    return this.service.generateShareImage(user.userId, portfolioId);
   }
 
   @Post('portfolio/:portfolioId/log')
   logShareActivity(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @Body()
     body: LogShareActivityDto,
@@ -102,62 +77,37 @@ export class ShareStatisticsController {
     );
   }
 
-  @Get(
-    'portfolio/:portfolioId/logs',
-  )
+  @Get('portfolio/:portfolioId/logs')
   getShareLogs(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @Query('limit')
     limit: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
-    const parsedLimit =
-      Number(limit);
+    const parsedLimit = Number(limit);
 
     return this.service.getShareLogs(
       user.userId,
       portfolioId,
-      Number.isInteger(parsedLimit)
-        ? parsedLimit
-        : 20,
+      Number.isInteger(parsedLimit) ? parsedLimit : 20,
     );
   }
 
-  @Get(
-    'portfolio/:portfolioId/social-data',
-  )
+  @Get('portfolio/:portfolioId/social-data')
   getSocialSharingData(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.getSocialSharingData(
-      user.userId,
-      portfolioId,
-    );
+    return this.service.getSocialSharingData(user.userId, portfolioId);
   }
 
-  private parsePlatform(
-    platform: string,
-  ): SharePlatform {
-    const normalized =
-      platform.toLowerCase();
+  private parsePlatform(platform: string): SharePlatform {
+    const normalized = platform.toLowerCase();
 
-    if (
-      !SHARE_PLATFORMS.includes(
-        normalized as SharePlatform,
-      )
-    ) {
-      throw new BadRequestException(
-        `Unsupported share platform: ${platform}`,
-      );
+    if (!SHARE_PLATFORMS.includes(normalized as SharePlatform)) {
+      throw new BadRequestException(`Unsupported share platform: ${platform}`);
     }
 
     return normalized as SharePlatform;

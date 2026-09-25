@@ -81,7 +81,9 @@ describe('AssetsService.getChartData — before cursor', () => {
 
     expect(options.period2).toEqual(before);
 
-    const expectedPeriod1 = new Date(before.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const expectedPeriod1 = new Date(
+      before.getTime() - 365 * 24 * 60 * 60 * 1000,
+    );
     expect(options.period1).toEqual(expectedPeriod1);
   });
 
@@ -109,7 +111,9 @@ describe('AssetsService.getChartData — before cursor', () => {
           .mockResolvedValue({ id: 1, portfolio_type: PortfolioType.INVESTOR }),
       },
       assets: { findFirst: jest.fn() },
-      stocks: { findFirst: jest.fn().mockResolvedValue({ id: 1, symbol: 'AAPL' }) },
+      stocks: {
+        findFirst: jest.fn().mockResolvedValue({ id: 1, symbol: 'AAPL' }),
+      },
     };
     const service = new AssetsService(prismaMock as never);
 

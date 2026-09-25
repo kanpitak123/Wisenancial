@@ -30,7 +30,9 @@ function quotePayload(symbol: string, price: number) {
 
 /** ยัด stub เข้าไปแทน yahoo-finance2 instance ที่ service สร้างเอง */
 function stubYahoo(service: MarketService, impl: YahooQuoteStub) {
-  (service as unknown as { yahooFinance: { quote: YahooQuoteStub } }).yahooFinance = {
+  (
+    service as unknown as { yahooFinance: { quote: YahooQuoteStub } }
+  ).yahooFinance = {
     quote: impl,
   };
 }

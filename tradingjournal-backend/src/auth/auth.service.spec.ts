@@ -148,9 +148,12 @@ describe('AuthService', () => {
         userAgent: 'jest',
       });
 
-      expect(refreshTokenMock.rotate).toHaveBeenCalledWith('old-refresh-token', {
-        userAgent: 'jest',
-      });
+      expect(refreshTokenMock.rotate).toHaveBeenCalledWith(
+        'old-refresh-token',
+        {
+          userAgent: 'jest',
+        },
+      );
       expect(result.access_token).toBe('new-access-token');
       expect(result.refresh_token).toBe('rotated-refresh-token');
       expect(result.user.id).toBe(1);

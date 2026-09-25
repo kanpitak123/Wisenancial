@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
 import { BrokerApiKeyService } from './broker-api-key.service';
 
-const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+const sha256 = (value: string) =>
+  createHash('sha256').update(value).digest('hex');
 
 describe('BrokerApiKeyService', () => {
   let service: BrokerApiKeyService;

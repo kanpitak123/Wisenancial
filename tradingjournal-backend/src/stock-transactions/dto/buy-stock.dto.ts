@@ -1,4 +1,12 @@
-import { IsDateString, IsNumber, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class BuyStockDto {
   @IsString() @MaxLength(50) stock_symbol!: string;

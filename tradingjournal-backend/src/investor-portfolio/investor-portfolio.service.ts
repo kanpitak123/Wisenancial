@@ -41,9 +41,18 @@ export class InvestorPortfolioService {
       ]);
 
     const cash = Number(portfolio.current_balance);
-    const investedCost = holdings.reduce((sum, item) => sum + item.cost_basis, 0);
-    const marketValue = holdings.reduce((sum, item) => sum + item.market_value, 0);
-    const unrealizedPnl = holdings.reduce((sum, item) => sum + item.unrealized_pnl, 0);
+    const investedCost = holdings.reduce(
+      (sum, item) => sum + item.cost_basis,
+      0,
+    );
+    const marketValue = holdings.reduce(
+      (sum, item) => sum + item.market_value,
+      0,
+    );
+    const unrealizedPnl = holdings.reduce(
+      (sum, item) => sum + item.unrealized_pnl,
+      0,
+    );
 
     const realizedPnl = purchaseSummary.realized_pnl;
     const dividendIncome = dividendSummary.net_amount;
@@ -108,7 +117,9 @@ export class InvestorPortfolioService {
     const points = await this.analytics.performance(
       portfolioId,
       userId,
-      (timeframe ?? 'ALL') as Parameters<InvestorAnalyticsService['performance']>[2],
+      (timeframe ?? 'ALL') as Parameters<
+        InvestorAnalyticsService['performance']
+      >[2],
     );
 
     // InvestorAnalyticsService ใส่ date เป็นสตริง 'START' สำหรับจุดตั้งต้นเมื่อ timeframe ไม่มีวันเริ่ม
@@ -143,7 +154,9 @@ export class InvestorPortfolioService {
     }));
   }
 
-  private async resolveSymbols(records: RecordRow[]): Promise<Map<number, string>> {
+  private async resolveSymbols(
+    records: RecordRow[],
+  ): Promise<Map<number, string>> {
     const purchaseIds: number[] = [];
     const saleIds: number[] = [];
     const dividendIds: number[] = [];
@@ -151,9 +164,12 @@ export class InvestorPortfolioService {
     for (const record of records) {
       if (record.source_id === null) continue;
 
-      if (record.type === RecordType.STOCK_BUY) purchaseIds.push(record.source_id);
-      else if (record.type === RecordType.STOCK_SELL) saleIds.push(record.source_id);
-      else if (record.type === RecordType.DIVIDEND) dividendIds.push(record.source_id);
+      if (record.type === RecordType.STOCK_BUY)
+        purchaseIds.push(record.source_id);
+      else if (record.type === RecordType.STOCK_SELL)
+        saleIds.push(record.source_id);
+      else if (record.type === RecordType.DIVIDEND)
+        dividendIds.push(record.source_id);
     }
 
     const emptyBySymbol: { id: number; stock_symbol: string }[] = [];

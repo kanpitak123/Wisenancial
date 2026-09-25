@@ -1,7 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import {
+  OnGatewayConnection,
+  WebSocketGateway,
+  WebSocketServer,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { verifySocketUser } from '../auth/utils/socket-auth.util';
 import { resolveCorsOrigins } from '../config/cors-origins.util';
@@ -18,7 +22,11 @@ import { Mt5EventType } from './ingestion/dto/mt5-ingest.dto';
  */
 export interface Mt5SyncUpdateEvent {
   connectionId: number;
-  eventType: Mt5EventType.ACCOUNT_SNAPSHOT | Mt5EventType.POSITIONS_SNAPSHOT | Mt5EventType.DEALS | Mt5EventType.RECONCILE;
+  eventType:
+    | Mt5EventType.ACCOUNT_SNAPSHOT
+    | Mt5EventType.POSITIONS_SNAPSHOT
+    | Mt5EventType.DEALS
+    | Mt5EventType.RECONCILE;
   portfolioId: number;
   upsertedCount?: number;
   closedByAbsenceCount?: number;

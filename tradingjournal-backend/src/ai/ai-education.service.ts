@@ -56,9 +56,7 @@ export class AiEducationService {
 
     const quiz = result.data;
     if (!Array.isArray(quiz?.questions) || quiz.questions.length !== 2) {
-      throw new InternalServerErrorException(
-        'AI returned an unusable quiz',
-      );
+      throw new InternalServerErrorException('AI returned an unusable quiz');
     }
 
     quiz.questions.forEach((question, index) => {

@@ -4,7 +4,10 @@
 // decorators need Reflect.getMetadata to exist at import time.
 import 'reflect-metadata';
 import { Readable } from 'stream';
-import { createMt5IngestBodyParser, MT5_INGEST_BODY_LIMIT } from './mt5-ingest-body-limit';
+import {
+  createMt5IngestBodyParser,
+  MT5_INGEST_BODY_LIMIT,
+} from './mt5-ingest-body-limit';
 import { Mt5EventType, MT5_PROTOCOL_VERSION } from './dto/mt5-ingest.dto';
 
 /**
@@ -23,7 +26,12 @@ function fakeJsonRequest(body: string) {
       this.push(buf);
       this.push(null);
     },
-  }) as Readable & { headers: Record<string, string>; method: string; url: string; body?: unknown };
+  }) as Readable & {
+    headers: Record<string, string>;
+    method: string;
+    url: string;
+    body?: unknown;
+  };
   req.headers = {
     'content-type': 'application/json',
     'content-length': String(buf.length),
@@ -33,7 +41,10 @@ function fakeJsonRequest(body: string) {
   return req;
 }
 
-function runParser(body: string): Promise<{ error: (Error & { status?: number }) | undefined; parsedBody: unknown }> {
+function runParser(body: string): Promise<{
+  error: (Error & { status?: number }) | undefined;
+  parsedBody: unknown;
+}> {
   const parser = createMt5IngestBodyParser();
   const req = fakeJsonRequest(body);
   return new Promise((resolve) => {
@@ -124,7 +135,9 @@ describe('MT5 ingest route body limit', () => {
   it('rejects a payload larger than the configured route limit with a 413', async () => {
     // Comfortably over 3mb regardless of exact per-field JSON overhead.
     const oversizedPayload = buildReconcilePayload(2000, 5000);
-    (oversizedPayload.payload as any).deals[0].symbol = 'X'.repeat(4 * 1024 * 1024);
+    (oversizedPayload.payload as any).deals[0].symbol = 'X'.repeat(
+      4 * 1024 * 1024,
+    );
     const body = JSON.stringify(oversizedPayload);
     expect(body.length).toBeGreaterThan(4 * 1024 * 1024);
 

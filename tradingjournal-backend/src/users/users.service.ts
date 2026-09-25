@@ -82,8 +82,7 @@ export class UsersService {
             id: activeSubscription.plans?.id ?? null,
             name: activeSubscription.plans?.name ?? 'Unknown',
             price: Number(activeSubscription.plans?.price ?? 0),
-            description:
-              activeSubscription.plans?.description ?? null,
+            description: activeSubscription.plans?.description ?? null,
             status: activeSubscription.status,
             start_date: activeSubscription.start_date,
             end_date: activeSubscription.end_date,

@@ -31,7 +31,10 @@ import { parseExpiresInSeconds } from './utils/expires-in.util';
 
         const expiresInSeconds = parseExpiresInSeconds(
           configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
-          parseExpiresInSeconds(AUTH_CONSTANTS.defaultAccessTokenExpiresIn, 900),
+          parseExpiresInSeconds(
+            AUTH_CONSTANTS.defaultAccessTokenExpiresIn,
+            900,
+          ),
         );
 
         return {

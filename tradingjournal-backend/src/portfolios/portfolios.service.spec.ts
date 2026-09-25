@@ -35,7 +35,10 @@ const prismaMock = {
 const USER_ID = 10;
 
 /** ผู้ใช้ที่ไม่มี subscription แถวไหนเลย */
-function mockUserTier(tier: SubscriptionTier | null, subscriptions: unknown[] = []) {
+function mockUserTier(
+  tier: SubscriptionTier | null,
+  subscriptions: unknown[] = [],
+) {
   prismaMock.users.findUnique.mockResolvedValue({
     subscription_tier: tier,
     subscriptions,
@@ -192,18 +195,18 @@ describe('PortfoliosService', () => {
       ]);
       mockPortfolioCounts(0, 0);
 
-      await expect(
-        service.getQuota(USER_ID).then((q) => q.max),
-      ).resolves.toBe(TIER_MAX_PORTFOLIOS.PACK_399);
+      await expect(service.getQuota(USER_ID).then((q) => q.max)).resolves.toBe(
+        TIER_MAX_PORTFOLIOS.PACK_399,
+      );
     });
 
     it('plans.name ที่ไม่ใช่ tier ที่รู้จัก -> ตกกลับไป free', async () => {
       mockUserTier(null, [{ plans: { name: 'LEGACY_TRIAL' } }]);
       mockPortfolioCounts(0, 0);
 
-      await expect(
-        service.getQuota(USER_ID).then((q) => q.max),
-      ).resolves.toBe(FREE_TIER_MAX_PORTFOLIOS);
+      await expect(service.getQuota(USER_ID).then((q) => q.max)).resolves.toBe(
+        FREE_TIER_MAX_PORTFOLIOS,
+      );
     });
   });
 
@@ -329,10 +332,7 @@ describe('PortfoliosService', () => {
     it.each(splits)(
       'มี TRADER %i + INVESTOR %i (รวม 4 จาก 5) -> ยังสร้างได้ทั้งสองประเภท',
       async (trader, investor) => {
-        for (const nextType of [
-          PortfolioType.TRADER,
-          PortfolioType.INVESTOR,
-        ]) {
+        for (const nextType of [PortfolioType.TRADER, PortfolioType.INVESTOR]) {
           jest.clearAllMocks();
           prismaMock.portfolios.findFirst.mockResolvedValue(null);
           prismaMock.portfolios.create.mockImplementation(
@@ -356,10 +356,7 @@ describe('PortfoliosService', () => {
     it.each(splits.map(([t, i]): [number, number] => [t + (5 - 4 - 0), i]))(
       'พอรวมครบ %i + %i = 5 แล้ว สร้างเพิ่มไม่ได้ทั้งสองประเภท',
       async (trader, investor) => {
-        for (const nextType of [
-          PortfolioType.TRADER,
-          PortfolioType.INVESTOR,
-        ]) {
+        for (const nextType of [PortfolioType.TRADER, PortfolioType.INVESTOR]) {
           jest.clearAllMocks();
           prismaMock.portfolios.findFirst.mockResolvedValue(null);
           mockUserTier(SubscriptionTier.PACK_399);

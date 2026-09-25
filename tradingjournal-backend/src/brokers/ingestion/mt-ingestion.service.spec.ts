@@ -11,7 +11,9 @@ describe('MtIngestionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new MtIngestionService(connectionsMock as unknown as BrokerConnectionsService);
+    service = new MtIngestionService(
+      connectionsMock as unknown as BrokerConnectionsService,
+    );
   });
 
   it('heartbeat() ส่งต่อไปที่ BrokerConnectionsService.recordHeartbeat() ด้วย id ของ connection ที่ guard แนบมาให้', async () => {

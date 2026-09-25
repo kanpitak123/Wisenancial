@@ -46,12 +46,16 @@ export class OpenAiProvider implements IAiProvider {
     return Boolean(this.apiKey);
   }
 
-  async generateJsonResponse<T>(options: AiGenerateOptions): Promise<AiJsonResult<T>> {
+  async generateJsonResponse<T>(
+    options: AiGenerateOptions,
+  ): Promise<AiJsonResult<T>> {
     if (!this.apiKey) {
       throw new Error('OpenAI client is not configured');
     }
 
-    const systemPrompt = options.systemPrompt ?? 'You are a helpful assistant. Reply with valid JSON only.';
+    const systemPrompt =
+      options.systemPrompt ??
+      'You are a helpful assistant. Reply with valid JSON only.';
 
     let payload: OpenAiChatResponse;
     try {
@@ -84,7 +88,9 @@ export class OpenAiProvider implements IAiProvider {
     return {
       data: parseJsonResponse<T>(text),
       usage: {
-        inputTokens: payload.usage?.prompt_tokens ?? estimateTokens(systemPrompt + options.prompt),
+        inputTokens:
+          payload.usage?.prompt_tokens ??
+          estimateTokens(systemPrompt + options.prompt),
         outputTokens: payload.usage?.completion_tokens ?? estimateTokens(text),
       },
     };
@@ -94,7 +100,8 @@ export class OpenAiProvider implements IAiProvider {
 function describeAxiosError(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ error?: { message?: string } }>;
-    const message = axiosError.response?.data?.error?.message ?? axiosError.message;
+    const message =
+      axiosError.response?.data?.error?.message ?? axiosError.message;
     return `${axiosError.response?.status ?? 'network'} ${message}`;
   }
   return error instanceof Error ? error.message : String(error);

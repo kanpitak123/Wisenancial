@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { NotImplementedBrokerAdapter } from '../not-implemented-broker-adapter.base';
-import { BrokerConnectionMode, BrokerType } from '../../interfaces/broker-types';
+import {
+  BrokerConnectionMode,
+  BrokerType,
+} from '../../interfaces/broker-types';
 
 /**
  * Structural placeholder เท่านั้น — ยังไม่เชื่อมต่อ MT5 จริง

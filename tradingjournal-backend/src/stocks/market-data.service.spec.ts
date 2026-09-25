@@ -53,7 +53,10 @@ describe('MarketDataService.getHistoricalData — before cursor', () => {
 
     await service.getHistoricalData('AAPL', { range: '1mo', before });
 
-    const [, options] = chart.mock.calls[0] as [string, { period1: Date; period2: Date }];
+    const [, options] = chart.mock.calls[0] as [
+      string,
+      { period1: Date; period2: Date },
+    ];
 
     expect(options.period2).toEqual(before);
 
@@ -80,7 +83,9 @@ describe('MarketDataService.getHistoricalData — before cursor', () => {
     chart.mockResolvedValue({ quotes: [] });
     const service = new MarketDataService();
 
-    await expect(service.getHistoricalData('AAPL', { range: '1mo' })).rejects.toThrow();
+    await expect(
+      service.getHistoricalData('AAPL', { range: '1mo' }),
+    ).rejects.toThrow();
   });
 
   it('ส่ง before -> ข้อมูลที่คืนมายังถูกแปลงร่างตามปกติ', async () => {

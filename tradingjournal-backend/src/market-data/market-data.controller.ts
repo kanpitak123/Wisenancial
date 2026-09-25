@@ -14,33 +14,22 @@ import { FinnhubMarketDataService } from './finnhub-market-data.service';
 @UseGuards(JwtAuthGuard)
 @Controller('market-data')
 export class MarketDataController {
-  constructor(
-    private readonly marketData: FinnhubMarketDataService,
-  ) {}
+  constructor(private readonly marketData: FinnhubMarketDataService) {}
 
   @Post('sync/symbol/:symbol')
   syncSymbol(
     @Param('symbol') symbol: string,
     @Query('currency') currency = 'USD',
   ) {
-    return this.marketData.syncSymbol(
-      symbol,
-      currency,
-    );
+    return this.marketData.syncSymbol(symbol, currency);
   }
 
   @Post('sync/portfolio/:portfolioId')
   syncPortfolio(
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.marketData.syncPortfolio(
-      portfolioId,
-      user.userId,
-    );
+    return this.marketData.syncPortfolio(portfolioId, user.userId);
   }
 }

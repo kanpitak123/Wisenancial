@@ -62,7 +62,10 @@ export class Mt5SyncService {
     private readonly syncGateway: BrokerSyncGateway,
   ) {}
 
-  async ingest(connection: broker_connections, envelope: Mt5IngestEnvelopeDto): Promise<Mt5IngestResult> {
+  async ingest(
+    connection: broker_connections,
+    envelope: Mt5IngestEnvelopeDto,
+  ): Promise<Mt5IngestResult> {
     try {
       return await this.ingestOrThrow(connection, envelope);
     } catch (error) {
@@ -101,7 +104,11 @@ export class Mt5SyncService {
       // ใช้อยู่แล้ว แทนที่จะประดิษฐ์ shapeใหม่ขึ้นมาอีกอัน (มี id/status/portfolio_id/
       // last_snapshot_sequence/last_sync_at ครบตามที่ต้องการ บวก field อื่นที่ไม่ใช่ secret)
       const updated = await this.connections.recordHeartbeat(connection.id);
-      return { eventType: envelope.eventType, applied: true, connection: updated };
+      return {
+        eventType: envelope.eventType,
+        applied: true,
+        connection: updated,
+      };
     }
 
     this.assertPortfolioBound(connection);
@@ -109,15 +116,25 @@ export class Mt5SyncService {
 
     switch (envelope.eventType) {
       case Mt5EventType.ACCOUNT_SNAPSHOT: {
-        const payload = await this.validatePayload(Mt5AccountSnapshotPayloadDto, envelope.payload);
+        const payload = await this.validatePayload(
+          Mt5AccountSnapshotPayloadDto,
+          envelope.payload,
+        );
         normalizeAccountSnapshotOrThrow(payload);
         await this.connections.recordSync(connection.id);
         return { eventType: envelope.eventType, applied: true };
       }
 
       case Mt5EventType.POSITIONS_SNAPSHOT: {
-        const payload = await this.validatePayload(Mt5PositionsSnapshotPayloadDto, envelope.payload);
-        const result = await this.applyPositionsSnapshot(connection, portfolioId, payload);
+        const payload = await this.validatePayload(
+          Mt5PositionsSnapshotPayloadDto,
+          envelope.payload,
+        );
+        const result = await this.applyPositionsSnapshot(
+          connection,
+          portfolioId,
+          payload,
+        );
         await this.connections.recordSync(connection.id);
         // Phase 3L — only notify when the snapshot actually applied (accepted:true).
         // A stale/duplicate snapshot (accepted:false) changed nothing, so there is
@@ -135,8 +152,15 @@ export class Mt5SyncService {
       }
 
       case Mt5EventType.DEALS: {
-        const payload = await this.validatePayload(Mt5DealsPayloadDto, envelope.payload);
-        const result = await this.applyDeals(connection, portfolioId, payload.deals);
+        const payload = await this.validatePayload(
+          Mt5DealsPayloadDto,
+          envelope.payload,
+        );
+        const result = await this.applyDeals(
+          connection,
+          portfolioId,
+          payload.deals,
+        );
         await this.connections.recordSync(connection.id);
         // Phase 3L — only notify when at least one deal was newly applied; a
         // duplicate-only batch (appliedCount:0) didn't change anything.
@@ -152,12 +176,19 @@ export class Mt5SyncService {
       }
 
       case Mt5EventType.RECONCILE: {
-        const payload = await this.validatePayload(Mt5ReconcilePayloadDto, envelope.payload);
+        const payload = await this.validatePayload(
+          Mt5ReconcilePayloadDto,
+          envelope.payload,
+        );
         normalizeAccountSnapshotOrThrow(payload.accountSnapshot);
         // ลำดับตั้งใจ: apply deals ก่อน แล้วค่อยทำ positions snapshot (closing-by-absence)
         // ทีหลัง — เพื่อให้แถวที่ถูกปิดด้วย closing-by-absence สะท้อน realized pnl ล่าสุด
         // จาก deal history ที่เพิ่งได้รับในรอบเดียวกันนี้แล้ว (ดู Phase 3 design review §16)
-        const dealsResult = await this.applyDeals(connection, portfolioId, payload.deals);
+        const dealsResult = await this.applyDeals(
+          connection,
+          portfolioId,
+          payload.deals,
+        );
         const positionsResult = await this.applyPositionsSnapshot(
           connection,
           portfolioId,
@@ -176,7 +207,11 @@ export class Mt5SyncService {
             appliedDealsCount: dealsResult.appliedCount,
           });
         }
-        return { eventType: envelope.eventType, deals: dealsResult, positions: positionsResult };
+        return {
+          eventType: envelope.eventType,
+          deals: dealsResult,
+          positions: positionsResult,
+        };
       }
     }
   }
@@ -204,8 +239,12 @@ export class Mt5SyncService {
       );
     }
 
-    const normalizedPositions = payload.positions.map((p) => normalizePositionOrThrow(p));
-    const openTickets = new Set(normalizedPositions.map((p) => p.externalPositionId));
+    const normalizedPositions = payload.positions.map((p) =>
+      normalizePositionOrThrow(p),
+    );
+    const openTickets = new Set(
+      normalizedPositions.map((p) => p.externalPositionId),
+    );
 
     const result = await this.prisma.$transaction(
       async (tx) => {
@@ -214,7 +253,10 @@ export class Mt5SyncService {
           select: { last_snapshot_sequence: true },
         });
 
-        if (current?.last_snapshot_sequence != null && payload.snapshotSequence <= current.last_snapshot_sequence) {
+        if (
+          current?.last_snapshot_sequence != null &&
+          payload.snapshotSequence <= current.last_snapshot_sequence
+        ) {
           return {
             snapshotId: payload.snapshotId,
             snapshotSequence: payload.snapshotSequence,
@@ -233,7 +275,11 @@ export class Mt5SyncService {
           });
         }
 
-        const closedTradeIds = await this.trades.closeMt5PositionsByAbsence(tx, connection.id, openTickets);
+        const closedTradeIds = await this.trades.closeMt5PositionsByAbsence(
+          tx,
+          connection.id,
+          openTickets,
+        );
 
         await tx.broker_connections.update({
           where: { id: connection.id },
@@ -259,7 +305,11 @@ export class Mt5SyncService {
     return result;
   }
 
-  private async applyDeals(connection: broker_connections, portfolioId: number, dealDtos: Mt5DealDto[]) {
+  private async applyDeals(
+    connection: broker_connections,
+    portfolioId: number,
+    dealDtos: Mt5DealDto[],
+  ) {
     const normalizedDeals = dealDtos.map((d) => normalizeDealOrThrow(d));
 
     const result = await this.prisma.$transaction(
@@ -278,7 +328,11 @@ export class Mt5SyncService {
           else duplicateCount++;
         }
 
-        return { totalCount: normalizedDeals.length, appliedCount, duplicateCount };
+        return {
+          totalCount: normalizedDeals.length,
+          appliedCount,
+          duplicateCount,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -296,7 +350,10 @@ export class Mt5SyncService {
     payload: Record<string, unknown>,
   ): Promise<T> {
     const instance = plainToInstance(cls, payload ?? {});
-    const errors = await validate(instance, { whitelist: true, forbidNonWhitelisted: true });
+    const errors = await validate(instance, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
 
     if (errors.length > 0) {
       throw new BadRequestException(this.flattenValidationErrors(errors));
@@ -305,12 +362,17 @@ export class Mt5SyncService {
     return instance;
   }
 
-  private flattenValidationErrors(errors: ValidationError[], prefix = ''): string[] {
+  private flattenValidationErrors(
+    errors: ValidationError[],
+    prefix = '',
+  ): string[] {
     const messages: string[] = [];
     for (const error of errors) {
       const path = prefix ? `${prefix}.${error.property}` : error.property;
       if (error.constraints) {
-        messages.push(...Object.values(error.constraints).map((m) => `${path}: ${m}`));
+        messages.push(
+          ...Object.values(error.constraints).map((m) => `${path}: ${m}`),
+        );
       }
       if (error.children && error.children.length > 0) {
         messages.push(...this.flattenValidationErrors(error.children, path));
@@ -319,7 +381,10 @@ export class Mt5SyncService {
     return messages;
   }
 
-  private assertPlatformMatches(connection: broker_connections, envelope: Mt5IngestEnvelopeDto): void {
+  private assertPlatformMatches(
+    connection: broker_connections,
+    envelope: Mt5IngestEnvelopeDto,
+  ): void {
     if (connection.broker_type !== BrokerType.MT5) {
       throw new BadRequestException(
         'Connection นี้ไม่ใช่ MT5 — POST /brokers/mt/ingest รองรับเฉพาะ broker_type = MT5 ใน Phase 3',
@@ -333,7 +398,11 @@ export class Mt5SyncService {
   }
 
   private assertSupportedProtocolVersion(envelope: Mt5IngestEnvelopeDto): void {
-    if (!Mt5SyncService.SUPPORTED_PROTOCOL_VERSIONS.includes(envelope.protocolVersion)) {
+    if (
+      !Mt5SyncService.SUPPORTED_PROTOCOL_VERSIONS.includes(
+        envelope.protocolVersion,
+      )
+    ) {
       throw new BadRequestException(
         `protocolVersion ${envelope.protocolVersion} ไม่รองรับ (รองรับ: ${Mt5SyncService.SUPPORTED_PROTOCOL_VERSIONS.join(', ')})`,
       );
@@ -365,7 +434,10 @@ export class Mt5SyncService {
    * unrecorded rather than guessed at, since a wrong/misleading last_error would be worse
    * than none at all.
    */
-  private async recordIngestError(connectionId: number, error: unknown): Promise<void> {
+  private async recordIngestError(
+    connectionId: number,
+    error: unknown,
+  ): Promise<void> {
     const code = this.classifyIngestError(error);
     if (code === null) return;
 
@@ -374,15 +446,18 @@ export class Mt5SyncService {
   }
 
   private classifyIngestError(error: unknown): Mt5IngestErrorCode | null {
-    if (error instanceof Mt5AccountMismatchException) return Mt5IngestErrorCode.ACCOUNT_MISMATCH;
-    if (error instanceof Mt5PortfolioNotBoundException) return Mt5IngestErrorCode.PORTFOLIO_NOT_BOUND;
+    if (error instanceof Mt5AccountMismatchException)
+      return Mt5IngestErrorCode.ACCOUNT_MISMATCH;
+    if (error instanceof Mt5PortfolioNotBoundException)
+      return Mt5IngestErrorCode.PORTFOLIO_NOT_BOUND;
     // Generic bucket for every other rejected-but-expected request (bad payload,
     // unsupported protocol version, clock skew, platform mismatch) — all thrown as a
     // plain BadRequestException elsewhere in this file. Checked last, and only matches
     // BadRequestException itself/subclasses that AREN'T already one of the specific
     // cases above (both specific exceptions extend BadRequestException too, but the
     // instanceof checks above already returned for those).
-    if (error instanceof BadRequestException) return Mt5IngestErrorCode.CONFIG_ERROR;
+    if (error instanceof BadRequestException)
+      return Mt5IngestErrorCode.CONFIG_ERROR;
     return null;
   }
 
@@ -411,23 +486,34 @@ export class Mt5SyncService {
     const pinnedAccountLogin = connection.external_account_id ?? null;
     const pinnedAccountServer = connection.broker_server ?? null;
 
-    const loginMismatch = pinnedAccountLogin !== null && pinnedAccountLogin !== accountLogin;
-    const serverMismatch = pinnedAccountServer !== null && pinnedAccountServer !== accountServer;
+    const loginMismatch =
+      pinnedAccountLogin !== null && pinnedAccountLogin !== accountLogin;
+    const serverMismatch =
+      pinnedAccountServer !== null && pinnedAccountServer !== accountServer;
 
     if (loginMismatch || serverMismatch) {
-      throw new Mt5AccountMismatchException(this.accountIdentityMismatchMessage());
+      throw new Mt5AccountMismatchException(
+        this.accountIdentityMismatchMessage(),
+      );
     }
 
-    const alreadyFullyPinned = pinnedAccountLogin !== null && pinnedAccountServer !== null;
+    const alreadyFullyPinned =
+      pinnedAccountLogin !== null && pinnedAccountServer !== null;
     if (alreadyFullyPinned) {
       return;
     }
 
-    const consistent = await this.connections.pinOrVerifyMt5Identity(connection.id, accountLogin, accountServer);
+    const consistent = await this.connections.pinOrVerifyMt5Identity(
+      connection.id,
+      accountLogin,
+      accountServer,
+    );
     if (!consistent) {
       // เกิดจากแพ้ race ของ concurrent first-use (อีก request คู่แข่งชนะไปแล้วด้วยค่าที่ต่างกัน)
       // หรือ state เปลี่ยนไปแล้วระหว่าง read กับ write — ทั้งสองกรณีปฏิเสธเหมือนกัน ไม่เดา
-      throw new Mt5AccountMismatchException(this.accountIdentityMismatchMessage());
+      throw new Mt5AccountMismatchException(
+        this.accountIdentityMismatchMessage(),
+      );
     }
   }
 
@@ -437,7 +523,9 @@ export class Mt5SyncService {
   }
 }
 
-function normalizeAccountSnapshotOrThrow(payload: Mt5AccountSnapshotPayloadDto) {
+function normalizeAccountSnapshotOrThrow(
+  payload: Mt5AccountSnapshotPayloadDto,
+) {
   const wire: Mt5AccountSnapshotWire = {
     accountLogin: payload.accountLogin,
     balance: payload.balance,

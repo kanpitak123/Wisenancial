@@ -3,10 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  PortfolioType,
-  RecordStatus,
-} from '@prisma/client';
+import { PortfolioType, RecordStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MarketService } from '../market/market.service';
 import type {
@@ -40,7 +37,10 @@ export class AdvancedAnalyticsService {
     benchmark = 'SET',
   ): Promise<ReturnVsBenchmarkResponse> {
     const portfolio = await this.getOwnedPortfolio(userId, portfolioId);
-    const events = await this.realizedEvents(portfolioId, portfolio.portfolio_type);
+    const events = await this.realizedEvents(
+      portfolioId,
+      portfolio.portfolio_type,
+    );
     const initial = Number(portfolio.initial_balance);
 
     let value = initial;
@@ -49,7 +49,8 @@ export class AdvancedAnalyticsService {
       return {
         date: event.date.toISOString(),
         value: this.round(value),
-        return: initial > 0 ? this.round(((value - initial) / initial) * 100) : 0,
+        return:
+          initial > 0 ? this.round(((value - initial) / initial) * 100) : 0,
       };
     });
 
@@ -91,7 +92,10 @@ export class AdvancedAnalyticsService {
     portfolioId: number,
   ): Promise<TimeWeightedReturnResponse> {
     const portfolio = await this.getOwnedPortfolio(userId, portfolioId);
-    const events = await this.realizedEvents(portfolioId, portfolio.portfolio_type);
+    const events = await this.realizedEvents(
+      portfolioId,
+      portfolio.portfolio_type,
+    );
 
     let factor = 1;
     let periodStart = Number(portfolio.initial_balance);
@@ -104,14 +108,12 @@ export class AdvancedAnalyticsService {
 
     const initial = Number(portfolio.initial_balance);
     const current = Number(portfolio.current_balance);
-    const totalReturn =
-      initial > 0 ? ((current - initial) / initial) * 100 : 0;
+    const totalReturn = initial > 0 ? ((current - initial) / initial) * 100 : 0;
 
     return {
       timeWeightedReturn: this.round((factor - 1) * 100),
       totalReturn: this.round(totalReturn),
-      note:
-        'TWR นี้อิง realized events ตามระบบเดิม; ผลตอบแทนพอร์ตย้อนหลังที่แม่นยำควรใช้ portfolio snapshots และ external cash-flow segmentation',
+      note: 'TWR นี้อิง realized events ตามระบบเดิม; ผลตอบแทนพอร์ตย้อนหลังที่แม่นยำควรใช้ portfolio snapshots และ external cash-flow segmentation',
     };
   }
 
@@ -120,7 +122,10 @@ export class AdvancedAnalyticsService {
     portfolioId: number,
   ): Promise<HeatmapPoint[]> {
     const portfolio = await this.getOwnedPortfolio(userId, portfolioId);
-    const events = await this.realizedEvents(portfolioId, portfolio.portfolio_type);
+    const events = await this.realizedEvents(
+      portfolioId,
+      portfolio.portfolio_type,
+    );
     const grouped = new Map<string, number>();
 
     for (const event of events) {
@@ -135,8 +140,7 @@ export class AdvancedAnalyticsService {
       .map(([month, pnl]) => ({
         month,
         pnl: this.round(pnl),
-        percentage:
-          pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral',
+        percentage: pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral',
       }));
   }
 
@@ -145,7 +149,10 @@ export class AdvancedAnalyticsService {
     portfolioId: number,
   ): Promise<{ best: PerformerItem[]; worst: PerformerItem[] }> {
     const portfolio = await this.getOwnedPortfolio(userId, portfolioId);
-    const events = await this.realizedEvents(portfolioId, portfolio.portfolio_type);
+    const events = await this.realizedEvents(
+      portfolioId,
+      portfolio.portfolio_type,
+    );
 
     const rows = events.map((event) => ({
       symbol: event.symbol,
@@ -184,16 +191,15 @@ export class AdvancedAnalyticsService {
       });
 
       const days = trades.map((trade) =>
-        this.daysBetween(
-          trade.opened_at ?? today,
-          trade.closed_at ?? today,
-        ),
+        this.daysBetween(trade.opened_at ?? today, trade.closed_at ?? today),
       );
 
       return {
         averageDays:
           days.length > 0
-            ? Math.round(days.reduce((sum, value) => sum + value, 0) / days.length)
+            ? Math.round(
+                days.reduce((sum, value) => sum + value, 0) / days.length,
+              )
             : 0,
         totalHoldings: days.length,
       };
@@ -220,7 +226,9 @@ export class AdvancedAnalyticsService {
     return {
       averageDays:
         days.length > 0
-          ? Math.round(days.reduce((sum, value) => sum + value, 0) / days.length)
+          ? Math.round(
+              days.reduce((sum, value) => sum + value, 0) / days.length,
+            )
           : 0,
       totalHoldings: days.length,
     };
@@ -390,12 +398,8 @@ export class AdvancedAnalyticsService {
       });
 
       return rows.map((row) => ({
-        date:
-          row.closed_at ??
-          row.created_at ??
-          new Date(0),
-        symbol:
-          row.pair ?? 'UNKNOWN',
+        date: row.closed_at ?? row.created_at ?? new Date(0),
+        symbol: row.pair ?? 'UNKNOWN',
         pnl: Number(row.pnl ?? 0),
         costBasis: 0,
       }));
@@ -414,15 +418,10 @@ export class AdvancedAnalyticsService {
     });
 
     return rows.map((row) => ({
-      date:
-        row.sold_date ??
-        row.created_at ??
-        new Date(0),
+      date: row.sold_date ?? row.created_at ?? new Date(0),
       symbol: row.stock_symbol,
-      pnl:
-        Number(row.realized_pnl ?? 0),
-      costBasis:
-        Number(row.cost_basis ?? 0),
+      pnl: Number(row.realized_pnl ?? 0),
+      costBasis: Number(row.cost_basis ?? 0),
     }));
   }
 
@@ -435,9 +434,7 @@ export class AdvancedAnalyticsService {
     });
 
     if (!portfolio) {
-      throw new NotFoundException(
-        'ไม่พบ portfolio หรือคุณไม่มีสิทธิ์เข้าถึง',
-      );
+      throw new NotFoundException('ไม่พบ portfolio หรือคุณไม่มีสิทธิ์เข้าถึง');
     }
 
     return portfolio;

@@ -16,37 +16,21 @@ import { UsersService } from './users.service';
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(
-    private readonly usersService: UsersService,
-  ) {}
+  constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  getMe(
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.usersService.getMe(
-      user.userId,
-    );
+  getMe(@CurrentUser() user: AuthUser) {
+    return this.usersService.getMe(user.userId);
   }
 
   @Patch('me')
-  updateMe(
-    @CurrentUser() user: AuthUser,
-    @Body() body: UpdateUserDto,
-  ) {
-    return this.usersService.updateProfile(
-      user.userId,
-      body,
-    );
+  updateMe(@CurrentUser() user: AuthUser, @Body() body: UpdateUserDto) {
+    return this.usersService.updateProfile(user.userId, body);
   }
 
   @Delete('me/avatar')
-  removeAvatar(
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.usersService.removeAvatar(
-      user.userId,
-    );
+  removeAvatar(@CurrentUser() user: AuthUser) {
+    return this.usersService.removeAvatar(user.userId);
   }
 
   /**
@@ -63,9 +47,6 @@ export class UsersController {
     @CurrentUser() user: AuthUser,
     @Param('username') username: string,
   ) {
-    return this.usersService.getPublicProfile(
-      username,
-      user.userId,
-    );
+    return this.usersService.getPublicProfile(username, user.userId);
   }
 }

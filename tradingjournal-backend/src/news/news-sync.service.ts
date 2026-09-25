@@ -144,9 +144,7 @@ export class NewsSyncService {
 
   private async runInvestorSync(language: 'en' | 'th') {
     if (this.investorSyncRunning) {
-      this.logger.warn(
-        'Investor news sync already running; skipping this run',
-      );
+      this.logger.warn('Investor news sync already running; skipping this run');
 
       return {
         fetched: 0,
@@ -170,7 +168,9 @@ export class NewsSyncService {
 
   async syncForexCalendar(language: 'en' | 'th' = 'th') {
     if (this.forexSyncRunning) {
-      this.logger.warn('Forex calendar sync already running; skipping this run');
+      this.logger.warn(
+        'Forex calendar sync already running; skipping this run',
+      );
 
       return { created: 0, updated: 0, enriched: 0, skipped: true };
     }
@@ -283,7 +283,11 @@ export class NewsSyncService {
 
   private async syncInvestorMarketNews(language: 'en' | 'th') {
     if (!this.finnhubApiKey && !this.newsApiKey) {
-      return { fetched: 0, persisted: 0, warning: 'No news API key configured' };
+      return {
+        fetched: 0,
+        persisted: 0,
+        warning: 'No news API key configured',
+      };
     }
 
     const raw: any[] = [];
@@ -326,7 +330,9 @@ export class NewsSyncService {
             summary: article.description,
             source: article.source?.name,
             url: article.url,
-            datetime: Math.floor(new Date(article.publishedAt).getTime() / 1000),
+            datetime: Math.floor(
+              new Date(article.publishedAt).getTime() / 1000,
+            ),
             related: [],
           });
         }
@@ -338,7 +344,9 @@ export class NewsSyncService {
     }
 
     if (raw.length === 0) {
-      this.logger.warn('Investor news sync fetched 0 articles from all sources');
+      this.logger.warn(
+        'Investor news sync fetched 0 articles from all sources',
+      );
       return { fetched: 0, persisted: 0, warning: 'All news sources failed' };
     }
 
@@ -357,23 +365,15 @@ export class NewsSyncService {
         language,
       });
 
-      const relatedValues: unknown[] =
-        Array.isArray(article.related)
-          ? article.related
-          : [];
+      const relatedValues: unknown[] = Array.isArray(article.related)
+        ? article.related
+        : [];
 
       const stockSymbols = [
         ...new Set<string>(
           relatedValues
-            .map((value) =>
-              String(value)
-                .trim()
-                .toUpperCase(),
-            )
-            .filter(
-              (value): value is string =>
-                value.length > 0,
-            ),
+            .map((value) => String(value).trim().toUpperCase())
+            .filter((value): value is string => value.length > 0),
         ),
       ];
 
@@ -382,23 +382,17 @@ export class NewsSyncService {
         content: summary || null,
         source: String(article.source || 'Unknown').slice(0, 100),
         url,
-        importance:
-          (analysis.importance as NewsImportance) ?? NewsImportance.MEDIUM,
-        sentiment:
-          (analysis.sentiment as NewsSentiment) ?? NewsSentiment.NEUTRAL,
+        importance: analysis.importance ?? NewsImportance.MEDIUM,
+        sentiment: analysis.sentiment ?? NewsSentiment.NEUTRAL,
         ai_summary: analysis.aiSummary || title,
         stock_impact_analysis: analysis.stockImpactAnalysis || null,
         ai_trend: analysis.aiTrend ?? null,
         ai_impact_probability: analysis.aiImpactProbability ?? null,
         ai_confidence: analysis.confidence,
-        ai_translated_summary:
-          (analysis.aiTranslatedSummary as Prisma.InputJsonValue) ??
-          Prisma.JsonNull,
+        ai_translated_summary: analysis.aiTranslatedSummary ?? Prisma.JsonNull,
         sector: analysis.sector || null,
         stock_symbols: stockSymbols,
-        published_at: new Date(
-          (article.datetime || Date.now() / 1000) * 1000,
-        ),
+        published_at: new Date((article.datetime || Date.now() / 1000) * 1000),
       };
 
       const existing = await this.prisma.market_news.findFirst({

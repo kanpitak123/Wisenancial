@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { BrokerConnectionStatus, broker_connections } from '@prisma/client';
 import { Request } from 'express';
 import { BrokerConnectionsService } from './broker-connections.service';
@@ -23,7 +28,9 @@ export class BrokerApiKeyGuard implements CanActivate {
   constructor(private readonly connections: BrokerConnectionsService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<BrokerAuthenticatedRequest>();
+    const request = context
+      .switchToHttp()
+      .getRequest<BrokerAuthenticatedRequest>();
     const rawKey = this.extractKey(request);
 
     if (!rawKey) {
@@ -46,7 +53,8 @@ export class BrokerApiKeyGuard implements CanActivate {
   }
 
   private extractKey(request: Request): string | undefined {
-    const [type, token] = request.headers.authorization?.trim().split(/\s+/) ?? [];
+    const [type, token] =
+      request.headers.authorization?.trim().split(/\s+/) ?? [];
 
     return type === 'Bearer' && token ? token : undefined;
   }

@@ -137,8 +137,7 @@ describe('AiRiskService — ปัจจัยพื้นฐานที่ส�
 
     await service.analyze(1, [{ symbol: 'AAPL', quantity: 1 }], 'groq-llama3');
 
-    const { systemPrompt, maxOutputTokens } =
-      executeAiRequest.mock.calls[0][0];
+    const { systemPrompt, maxOutputTokens } = executeAiRequest.mock.calls[0][0];
 
     expect(systemPrompt).toContain('applies to every field on its own');
     expect(maxOutputTokens).toBeGreaterThanOrEqual(1600);

@@ -10,12 +10,7 @@ import { AdvancedAnalyticsService } from './advanced-analytics.service';
 import { MarketModule } from '../market/market.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    RecordsModule,
-    StockPurchasesModule,
-    MarketModule,
-  ],
+  imports: [PrismaModule, RecordsModule, StockPurchasesModule, MarketModule],
   controllers: [AnalyticsController],
   providers: [
     AnalyticsService,

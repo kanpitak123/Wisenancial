@@ -1,10 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  IsDateString,
-  IsNumber,
-  IsOptional,
-  Min,
-} from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, Min } from 'class-validator';
 
 /**
  * ⚠️ DTO นี้ไม่ได้ถูกใช้งานที่ไหนเลย (audit 2026-08-20)

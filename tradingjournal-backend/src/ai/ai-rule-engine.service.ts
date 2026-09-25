@@ -42,17 +42,12 @@ export class AiRuleEngineService {
       summary?.start_balance ?? summary?.start ?? series[0] ?? 0,
     );
     const end = Number(
-      summary?.end_balance ??
-        summary?.end ??
-        series[series.length - 1] ??
-        0,
+      summary?.end_balance ?? summary?.end ?? series[series.length - 1] ?? 0,
     );
     const peak = series.length ? Math.max(...series) : Math.max(start, end);
     const trough = series.length ? Math.min(...series) : Math.min(start, end);
     const drawdown = Number(
-      summary?.max_drawdown_estimate ??
-        summary?.max_drawdown ??
-        peak - trough,
+      summary?.max_drawdown_estimate ?? summary?.max_drawdown ?? peak - trough,
     );
     const net = end - start;
     const percent = start !== 0 ? (net / start) * 100 : 0;
@@ -93,17 +88,11 @@ export class AiRuleEngineService {
     if (!rows.length) return `${icon} ยังมีข้อมูลไม่เพียงพอสำหรับวิเคราะห์`;
 
     const score = (row: any) =>
-      Number(
-        row.net ??
-          row.total_pnl ??
-          row.pnl ??
-          row.win_rate ??
-          0,
-      );
+      Number(row.net ?? row.total_pnl ?? row.pnl ?? row.win_rate ?? 0);
 
     const sorted = [...rows].sort((a, b) => score(b) - score(a));
-    const best = sorted[0] as any;
-    const worst = sorted[sorted.length - 1] as any;
+    const best = sorted[0];
+    const worst = sorted[sorted.length - 1];
     const label = (row: any) =>
       row?.[key] ?? row?.label ?? row?.slot ?? row?.day ?? 'N/A';
 
@@ -119,10 +108,9 @@ export class AiRuleEngineService {
     if (!rows.length) return '📊 ยังไม่มีข้อมูล Allocation';
 
     const sorted = [...rows].sort(
-      (a: any, b: any) =>
-        Number(b.weight ?? 0) - Number(a.weight ?? 0),
+      (a: any, b: any) => Number(b.weight ?? 0) - Number(a.weight ?? 0),
     );
-    const top = sorted[0] as any;
+    const top = sorted[0];
     const topWeight = Number(top.weight ?? 0);
     const warning =
       topWeight >= 40

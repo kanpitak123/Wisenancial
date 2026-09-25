@@ -33,10 +33,8 @@ export class NewsEnrichmentService {
     const updated = await this.prisma.news.update({
       where: { id },
       data: {
-        importance:
-          (analysis.importance as NewsImportance) ?? NewsImportance.MEDIUM,
-        sentiment:
-          (analysis.sentiment as NewsSentiment) ?? NewsSentiment.NEUTRAL,
+        importance: analysis.importance ?? NewsImportance.MEDIUM,
+        sentiment: analysis.sentiment ?? NewsSentiment.NEUTRAL,
         ai_summary: analysis.aiSummary || row.title,
         market_impact_analysis: analysis.stockImpactAnalysis || null,
         ai_trend: analysis.aiTrend ?? null,
@@ -149,7 +147,16 @@ export class NewsEnrichmentService {
   private inferTraderSymbols(country: string | null): string[] {
     const code = country?.trim().toUpperCase();
     const map: Record<string, string[]> = {
-      USD: ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD', 'NAS100', 'SPX500', 'US30'],
+      USD: [
+        'XAU/USD',
+        'EUR/USD',
+        'GBP/USD',
+        'USD/JPY',
+        'BTC/USD',
+        'NAS100',
+        'SPX500',
+        'US30',
+      ],
       EUR: ['EUR/USD'],
       GBP: ['GBP/USD'],
       JPY: ['USD/JPY'],

@@ -58,11 +58,20 @@ describe('PortfoliosController', () => {
 
   it('เส้นทาง quota ต้องถูกประกาศก่อน :id ไม่งั้นโดน ParseIntPipe จับ', () => {
     const paths = Reflect.ownKeys(PortfoliosController.prototype)
-      .filter((key): key is string => typeof key === 'string' && key !== 'constructor')
+      .filter(
+        (key): key is string =>
+          typeof key === 'string' && key !== 'constructor',
+      )
       .map((key) => ({
         key,
-        path: Reflect.getMetadata('path', PortfoliosController.prototype[key]) as string,
-        method: Reflect.getMetadata('method', PortfoliosController.prototype[key]) as number,
+        path: Reflect.getMetadata(
+          'path',
+          PortfoliosController.prototype[key],
+        ) as string,
+        method: Reflect.getMetadata(
+          'method',
+          PortfoliosController.prototype[key],
+        ) as number,
       }))
       .filter((route) => route.path !== undefined);
 

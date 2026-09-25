@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AiTrend, NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsQueryDto, NewsScope } from './dto/news-query.dto';
@@ -106,7 +110,9 @@ export class NewsFeedService {
       },
     });
     if (pin) {
-      await this.prisma.user_pinned_market_news.delete({ where: { id: pin.id } });
+      await this.prisma.user_pinned_market_news.delete({
+        where: { id: pin.id },
+      });
       return { pinned: false };
     }
     await this.prisma.user_pinned_market_news.create({
@@ -115,17 +121,54 @@ export class NewsFeedService {
     return { pinned: true };
   }
 
-  private async getTraderFeed(userId: number, query: NewsQueryDto, page: number, limit: number) {
-    const result = await this.getTraderItems(userId, query, limit, (page - 1) * limit);
-    return this.wrapResponse(result.items, result.total, page, limit, NewsScope.TRADER);
+  private async getTraderFeed(
+    userId: number,
+    query: NewsQueryDto,
+    page: number,
+    limit: number,
+  ) {
+    const result = await this.getTraderItems(
+      userId,
+      query,
+      limit,
+      (page - 1) * limit,
+    );
+    return this.wrapResponse(
+      result.items,
+      result.total,
+      page,
+      limit,
+      NewsScope.TRADER,
+    );
   }
 
-  private async getInvestorFeed(userId: number, query: NewsQueryDto, page: number, limit: number) {
-    const result = await this.getInvestorItems(userId, query, limit, (page - 1) * limit);
-    return this.wrapResponse(result.items, result.total, page, limit, NewsScope.INVESTOR);
+  private async getInvestorFeed(
+    userId: number,
+    query: NewsQueryDto,
+    page: number,
+    limit: number,
+  ) {
+    const result = await this.getInvestorItems(
+      userId,
+      query,
+      limit,
+      (page - 1) * limit,
+    );
+    return this.wrapResponse(
+      result.items,
+      result.total,
+      page,
+      limit,
+      NewsScope.INVESTOR,
+    );
   }
 
-  private async getTraderItems(userId: number, query: NewsQueryDto, take: number, skip = 0) {
+  private async getTraderItems(
+    userId: number,
+    query: NewsQueryDto,
+    take: number,
+    skip = 0,
+  ) {
     const where: Prisma.newsWhereInput = {
       ...(query.country && { country: query.country.toUpperCase() }),
       ...(query.impact && { impact: query.impact }),
@@ -183,7 +226,12 @@ export class NewsFeedService {
     };
   }
 
-  private async getInvestorItems(userId: number, query: NewsQueryDto, take: number, skip = 0) {
+  private async getInvestorItems(
+    userId: number,
+    query: NewsQueryDto,
+    take: number,
+    skip = 0,
+  ) {
     const where: Prisma.market_newsWhereInput = {
       ...(query.sector && { sector: query.sector }),
       ...(query.sentiment && {

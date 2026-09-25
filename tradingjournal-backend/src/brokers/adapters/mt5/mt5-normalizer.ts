@@ -109,14 +109,18 @@ function requireDate(value: unknown, field: string): Date {
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new Mt5NormalizationError(`${field} is not a valid ISO timestamp: ${value}`);
+    throw new Mt5NormalizationError(
+      `${field} is not a valid ISO timestamp: ${value}`,
+    );
   }
   return date;
 }
 
 function requireDirection(value: unknown): 'LONG' | 'SHORT' {
   if (typeof value !== 'string' || !VALID_DIRECTIONS.has(value)) {
-    throw new Mt5NormalizationError(`direction must be one of LONG, SHORT (got ${JSON.stringify(value)})`);
+    throw new Mt5NormalizationError(
+      `direction must be one of LONG, SHORT (got ${JSON.stringify(value)})`,
+    );
   }
   return value as 'LONG' | 'SHORT';
 }
@@ -134,7 +138,9 @@ function requireEntryType(value: unknown): BrokerDealEntryType {
 // Normalizers
 // ---------------------------------------------------------------------------
 
-export function normalizeAccountSnapshot(wire: Mt5AccountSnapshotWire): BrokerAccountSnapshot {
+export function normalizeAccountSnapshot(
+  wire: Mt5AccountSnapshotWire,
+): BrokerAccountSnapshot {
   return {
     externalAccountId: requireTicket(wire.accountLogin, 'accountLogin'),
     broker: BrokerType.MT5,
@@ -171,7 +177,9 @@ export function normalizeDeal(wire: Mt5DealWire): BrokerDeal {
   return {
     externalDealId: requireTicket(wire.dealTicket, 'dealTicket'),
     externalOrderId:
-      wire.orderTicket === null || wire.orderTicket === undefined || wire.orderTicket === ''
+      wire.orderTicket === null ||
+      wire.orderTicket === undefined ||
+      wire.orderTicket === ''
         ? null
         : requireTicket(wire.orderTicket, 'orderTicket'),
     externalPositionId: requireTicket(wire.positionTicket, 'positionTicket'),

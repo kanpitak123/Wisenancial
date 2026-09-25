@@ -70,8 +70,7 @@ export class StocksController {
 
     if (requested.length === 0) return [];
 
-    const found =
-      await this.marketDataService.getRiskFundamentals(requested);
+    const found = await this.marketDataService.getRiskFundamentals(requested);
 
     return requested.map((symbol) => ({
       symbol,
@@ -122,9 +121,12 @@ export class StocksController {
         },
       );
     } catch (error) {
-      throw new Error(`Failed to get analysis for ${symbol}: ${error.message}`, {
-        cause: error,
-      });
+      throw new Error(
+        `Failed to get analysis for ${symbol}: ${error.message}`,
+        {
+          cause: error,
+        },
+      );
     }
   }
 

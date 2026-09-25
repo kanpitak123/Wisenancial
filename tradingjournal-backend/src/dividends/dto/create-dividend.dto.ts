@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateDividendDto {
   @IsString() @MaxLength(50) symbol!: string;
@@ -7,5 +15,10 @@ export class CreateDividendDto {
   @IsDateString() payment_date!: string;
   @Type(() => Number) @IsNumber() @Min(0.00000001) shares!: number;
   @Type(() => Number) @IsNumber() @Min(0) dividend_per_share!: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) wht_rate?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  wht_rate?: number;
 }

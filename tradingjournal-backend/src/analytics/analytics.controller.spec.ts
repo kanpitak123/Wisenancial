@@ -42,7 +42,8 @@ const PAID_HANDLERS = [
   'simulateDca',
 ] as const;
 
-type HandlerName = (typeof FREE_HANDLERS)[number] | (typeof PAID_HANDLERS)[number];
+type HandlerName =
+  (typeof FREE_HANDLERS)[number] | (typeof PAID_HANDLERS)[number];
 
 /** guard ที่มีผลจริงกับ handler = ของระดับ method + ของระดับ class รวมกัน */
 function effectiveGuards(handler: HandlerName): unknown[] {
@@ -91,7 +92,10 @@ describe('AnalyticsController', () => {
     // ตัวนี้ระบุสาเหตุให้ชัดว่าพังเพราะอะไร
     it('ระดับ controller ต้องไม่มี PaidTierGuard', () => {
       const classGuards =
-        (Reflect.getMetadata(GUARDS_METADATA, AnalyticsController) as unknown[]) ?? [];
+        (Reflect.getMetadata(
+          GUARDS_METADATA,
+          AnalyticsController,
+        ) as unknown[]) ?? [];
 
       expect(classGuards).toContain(JwtAuthGuard);
       expect(classGuards).not.toContain(PaidTierGuard);
@@ -105,13 +109,19 @@ describe('AnalyticsController', () => {
       } as never);
 
     it('มี subscription_tier -> ผ่าน', async () => {
-      const guard = makeGuard({ subscription_tier: 'PACK_279', subscriptions: [] });
+      const guard = makeGuard({
+        subscription_tier: 'PACK_279',
+        subscriptions: [],
+      });
 
       await expect(guard.canActivate(contextForUser(6))).resolves.toBe(true);
     });
 
     it('ไม่มี tier แต่มี subscription ที่ยัง ACTIVE -> ผ่าน', async () => {
-      const guard = makeGuard({ subscription_tier: null, subscriptions: [{ id: 1 }] });
+      const guard = makeGuard({
+        subscription_tier: null,
+        subscriptions: [{ id: 1 }],
+      });
 
       await expect(guard.canActivate(contextForUser(6))).resolves.toBe(true);
     });
@@ -127,9 +137,9 @@ describe('AnalyticsController', () => {
     it('ไม่มี user ใน request -> 403', async () => {
       const guard = makeGuard(null);
 
-      await expect(guard.canActivate(contextForUser(undefined))).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(
+        guard.canActivate(contextForUser(undefined)),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

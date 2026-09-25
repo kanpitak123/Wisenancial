@@ -48,10 +48,7 @@ export class PortfoliosController {
   }
 
   @Post()
-  create(
-    @CurrentUser() user: AuthUser,
-    @Body() body: CreatePortfolioDto,
-  ) {
+  create(@CurrentUser() user: AuthUser, @Body() body: CreatePortfolioDto) {
     return this.portfoliosService.create(user.userId, body);
   }
 
@@ -65,10 +62,7 @@ export class PortfoliosController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: AuthUser,
-  ) {
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
     return this.portfoliosService.remove(id, user.userId);
   }
 }

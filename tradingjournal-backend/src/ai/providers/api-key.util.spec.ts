@@ -32,18 +32,18 @@ describe('matchesApiKeyFormat — คีย์ที่ถูกต้องต�
   );
 
   it('มีช่องว่างหน้า/หลังจากการก๊อปวาง -> ยังผ่าน', () => {
-    expect(
-      matchesApiKeyFormat(`  ${VALID.groq}\n`, API_KEY_FORMATS.groq),
-    ).toBe(true);
+    expect(matchesApiKeyFormat(`  ${VALID.groq}\n`, API_KEY_FORMATS.groq)).toBe(
+      true,
+    );
   });
 });
 
 describe('คีย์ผิด provider ต้องไม่ผ่าน', () => {
   /** นี่คือบั๊กตัวจริงที่เจอใน .env */
   it('เอาคีย์ Groq ไปใส่ช่อง Anthropic -> ไม่ผ่าน', () => {
-    expect(
-      matchesApiKeyFormat(VALID.groq, API_KEY_FORMATS.anthropic),
-    ).toBe(false);
+    expect(matchesApiKeyFormat(VALID.groq, API_KEY_FORMATS.anthropic)).toBe(
+      false,
+    );
   });
 
   /**
@@ -51,15 +51,15 @@ describe('คีย์ผิด provider ต้องไม่ผ่าน', () 
    * คีย์ Anthropic ที่วางผิดช่องจะผ่านการตรวจของ OpenAI ไปได้
    */
   it('เอาคีย์ Anthropic ไปใส่ช่อง OpenAI -> ไม่ผ่าน แม้จะขึ้นต้นด้วย sk- เหมือนกัน', () => {
-    expect(
-      matchesApiKeyFormat(VALID.anthropic, API_KEY_FORMATS.openai),
-    ).toBe(false);
+    expect(matchesApiKeyFormat(VALID.anthropic, API_KEY_FORMATS.openai)).toBe(
+      false,
+    );
   });
 
   it('เอาคีย์ OpenAI ไปใส่ช่อง Anthropic -> ไม่ผ่าน', () => {
-    expect(
-      matchesApiKeyFormat(VALID.openai, API_KEY_FORMATS.anthropic),
-    ).toBe(false);
+    expect(matchesApiKeyFormat(VALID.openai, API_KEY_FORMATS.anthropic)).toBe(
+      false,
+    );
   });
 
   it('เอาคีย์ Gemini ไปใส่ช่อง Groq -> ไม่ผ่าน', () => {
@@ -87,7 +87,11 @@ describe('resolveApiKey', () => {
 
   it('คีย์ถูกต้อง -> คืนค่าที่ trim แล้ว', () => {
     expect(
-      resolveApiKey(` ${VALID.gemini} `, API_KEY_FORMATS.gemini, silentLogger()),
+      resolveApiKey(
+        ` ${VALID.gemini} `,
+        API_KEY_FORMATS.gemini,
+        silentLogger(),
+      ),
     ).toBe(VALID.gemini);
   });
 

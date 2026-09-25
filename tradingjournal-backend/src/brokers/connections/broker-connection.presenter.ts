@@ -7,10 +7,14 @@ import { broker_connections } from '@prisma/client';
  */
 export type PublicBrokerConnection = Omit<
   broker_connections,
-  'api_key_hash' | 'oauth_access_token_encrypted' | 'oauth_refresh_token_encrypted'
+  | 'api_key_hash'
+  | 'oauth_access_token_encrypted'
+  | 'oauth_refresh_token_encrypted'
 >;
 
-export function toPublicConnection(row: broker_connections): PublicBrokerConnection {
+export function toPublicConnection(
+  row: broker_connections,
+): PublicBrokerConnection {
   const {
     api_key_hash: _apiKeyHash,
     oauth_access_token_encrypted: _accessToken,

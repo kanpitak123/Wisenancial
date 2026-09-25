@@ -31,9 +31,7 @@ export class LeaderboardService {
 
     return users
       .map((user) => {
-        const trades = user.portfolios.flatMap(
-          (portfolio) => portfolio.trades,
-        );
+        const trades = user.portfolios.flatMap((portfolio) => portfolio.trades);
         const totalTrades = trades.length;
         const winTrades = trades.filter(
           (trade) => trade.result_status === 'WIN',
@@ -43,19 +41,16 @@ export class LeaderboardService {
           0,
         );
         const initialBalance = user.portfolios.reduce(
-          (sum, portfolio) =>
-            sum + Number(portfolio.initial_balance),
+          (sum, portfolio) => sum + Number(portfolio.initial_balance),
           0,
         );
         const currentBalance = user.portfolios.reduce(
-          (sum, portfolio) =>
-            sum + Number(portfolio.current_balance),
+          (sum, portfolio) => sum + Number(portfolio.current_balance),
           0,
         );
 
         return {
-          username:
-            user.username || user.full_name || 'Anonymous Trader',
+          username: user.username || user.full_name || 'Anonymous Trader',
           initial_balance: initialBalance,
           current_balance: currentBalance,
           win_rate:

@@ -23,8 +23,12 @@ function createFakeTx() {
   return {
     tx: {
       trades: {
-        findFirst: jest.fn(async ({ where }: any) => rows.find((r) => matches(r, where)) ?? null),
-        findMany: jest.fn(async ({ where }: any) => rows.filter((r) => matches(r, where))),
+        findFirst: jest.fn(
+          async ({ where }: any) => rows.find((r) => matches(r, where)) ?? null,
+        ),
+        findMany: jest.fn(async ({ where }: any) =>
+          rows.filter((r) => matches(r, where)),
+        ),
         create: jest.fn(async ({ data }: any) => {
           const row = { id: nextId++, raw_data: {}, pnl: null, ...data };
           rows.push(row);
@@ -78,7 +82,10 @@ function deal(overrides: Partial<BrokerDeal> = {}): BrokerDeal {
 
 const recordsMock = {
   createSystem: jest.fn(),
-  replaceSystem: jest.fn(async (input: any) => ({ id: 999, amount: new Prisma.Decimal(input.signedAmount) })),
+  replaceSystem: jest.fn(async (input: any) => ({
+    id: 999,
+    amount: new Prisma.Decimal(input.signedAmount),
+  })),
 };
 
 describe('TradesService — MT5 sync (Phase 3)', () => {
@@ -110,7 +117,14 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 }),
+        deal: deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          commission: -5,
+          swap: 0,
+          profit: 0,
+        }),
       });
 
       expect(rows).toHaveLength(1);
@@ -122,7 +136,14 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
+        deal: deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 0.3,
+          commission: -1.5,
+          swap: -0.5,
+          profit: 30,
+        }),
       });
 
       expect(rows).toHaveLength(1); // still exactly one row — not a new trade
@@ -134,7 +155,14 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D3', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 45 }),
+        deal: deal({
+          externalDealId: 'D3',
+          entryType: 'OUT',
+          volume: 0.3,
+          commission: -1.5,
+          swap: -0.5,
+          profit: 45,
+        }),
       });
 
       expect(rows).toHaveLength(1);
@@ -146,7 +174,14 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D4', entryType: 'OUT', volume: 0.4, commission: -2, swap: -1, profit: 80 }),
+        deal: deal({
+          externalDealId: 'D4',
+          entryType: 'OUT',
+          volume: 0.4,
+          commission: -2,
+          swap: -1,
+          profit: 80,
+        }),
       });
 
       expect(rows).toHaveLength(1);
@@ -156,7 +191,12 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
       expect(Number(row.swap)).toBeCloseTo(-2); // 0 + -0.5 + -0.5 + -1, ไม่ double-count
       expect(Number(row.pnl)).toBeCloseTo(155); // 30 + 45 + 80, ไม่ double-count
       expect(row.raw_data.deals).toHaveLength(4);
-      expect(row.raw_data.deals.map((d: any) => d.dealTicket)).toEqual(['D1', 'D2', 'D3', 'D4']);
+      expect(row.raw_data.deals.map((d: any) => d.dealTicket)).toEqual([
+        'D1',
+        'D2',
+        'D3',
+        'D4',
+      ]);
       expect(Number(row.volume)).toBeCloseTo(0); // 1.0 in - (0.3+0.3+0.4) out
       expect(recordsMock.replaceSystem).toHaveBeenCalledTimes(3);
       expect(recordsMock.replaceSystem.mock.calls[2][0].signedAmount).toBe(155);
@@ -171,9 +211,24 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
 
       for (const d of [
         deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, profit: 0 }),
-        deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, profit: 30 }),
-        deal({ externalDealId: 'D3', entryType: 'OUT', volume: 0.3, profit: 45 }),
-        deal({ externalDealId: 'D4', entryType: 'OUT', volume: 0.4, profit: 80 }),
+        deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 0.3,
+          profit: 30,
+        }),
+        deal({
+          externalDealId: 'D3',
+          entryType: 'OUT',
+          volume: 0.3,
+          profit: 45,
+        }),
+        deal({
+          externalDealId: 'D4',
+          entryType: 'OUT',
+          volume: 0.4,
+          profit: 80,
+        }),
       ]) {
         await service.applyMt5Deal(tx, {
           connectionId: CONNECTION_ID,
@@ -183,7 +238,11 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         });
       }
 
-      const closedIds = await service.closeMt5PositionsByAbsence(tx, CONNECTION_ID, new Set<string>());
+      const closedIds = await service.closeMt5PositionsByAbsence(
+        tx,
+        CONNECTION_ID,
+        new Set<string>(),
+      );
 
       expect(closedIds).toEqual([rows[0].id]);
       expect(rows[0].result_status).toBe('WIN'); // pnl 155 > 0
@@ -197,13 +256,25 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, profit: 0 }),
+        deal: deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          profit: 0,
+        }),
       });
       await service.applyMt5Deal(tx, {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
+        deal: deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 0.3,
+          commission: -1.5,
+          swap: -0.5,
+          profit: 30,
+        }),
       });
 
       const before = { ...rows[0] };
@@ -213,7 +284,14 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }), // exact re-send of D2
+        deal: deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 0.3,
+          commission: -1.5,
+          swap: -0.5,
+          profit: 30,
+        }), // exact re-send of D2
       });
 
       expect(applied).toBe(false);
@@ -228,21 +306,64 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
     it('replaying the entire deal sequence a second time does not change the final financial result', async () => {
       const { tx, rows } = createFakeTx();
       const deals = [
-        deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 }),
-        deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
-        deal({ externalDealId: 'D3', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 45 }),
-        deal({ externalDealId: 'D4', entryType: 'OUT', volume: 0.4, commission: -2, swap: -1, profit: 80 }),
+        deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          commission: -5,
+          swap: 0,
+          profit: 0,
+        }),
+        deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 0.3,
+          commission: -1.5,
+          swap: -0.5,
+          profit: 30,
+        }),
+        deal({
+          externalDealId: 'D3',
+          entryType: 'OUT',
+          volume: 0.3,
+          commission: -1.5,
+          swap: -0.5,
+          profit: 45,
+        }),
+        deal({
+          externalDealId: 'D4',
+          entryType: 'OUT',
+          volume: 0.4,
+          commission: -2,
+          swap: -1,
+          profit: 80,
+        }),
       ];
 
       for (const d of deals) {
-        await service.applyMt5Deal(tx, { connectionId: CONNECTION_ID, portfolioId: PORTFOLIO_ID, userId: USER_ID, deal: d });
+        await service.applyMt5Deal(tx, {
+          connectionId: CONNECTION_ID,
+          portfolioId: PORTFOLIO_ID,
+          userId: USER_ID,
+          deal: d,
+        });
       }
-      const afterFirstRun = { pnl: Number(rows[0].pnl), commission: Number(rows[0].commission), swap: Number(rows[0].swap) };
-      const replaceSystemCallsAfterFirstRun = recordsMock.replaceSystem.mock.calls.length;
+      const afterFirstRun = {
+        pnl: Number(rows[0].pnl),
+        commission: Number(rows[0].commission),
+        swap: Number(rows[0].swap),
+      };
+      const replaceSystemCallsAfterFirstRun =
+        recordsMock.replaceSystem.mock.calls.length;
 
       // Simulate EA/backend restart replaying the identical payload from scratch
       for (const d of deals) {
-        await service.applyMt5Deal(tx, { connectionId: CONNECTION_ID, portfolioId: PORTFOLIO_ID, userId: USER_ID, deal: d });
+        await service.applyMt5Deal(tx, {
+          connectionId: CONNECTION_ID,
+          portfolioId: PORTFOLIO_ID,
+          userId: USER_ID,
+          deal: d,
+        });
       }
 
       expect(rows).toHaveLength(1);
@@ -250,27 +371,66 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
       expect(Number(rows[0].commission)).toBe(afterFirstRun.commission);
       expect(Number(rows[0].swap)).toBe(afterFirstRun.swap);
       expect(rows[0].raw_data.deals).toHaveLength(4);
-      expect(recordsMock.replaceSystem).toHaveBeenCalledTimes(replaceSystemCallsAfterFirstRun); // ไม่ถูกเรียกเพิ่มเลยในรอบ replay
+      expect(recordsMock.replaceSystem).toHaveBeenCalledTimes(
+        replaceSystemCallsAfterFirstRun,
+      ); // ไม่ถูกเรียกเพิ่มเลยในรอบ replay
     });
 
     it('deals applied out of order accumulate to the same final totals as in-order', async () => {
       const inOrder = createFakeTx();
       const outOfOrder = createFakeTx();
-      const d1 = deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 });
-      const d2 = deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 });
-      const d3 = deal({ externalDealId: 'D3', entryType: 'OUT', volume: 0.7, commission: -3.5, swap: -0.5, profit: 90 });
+      const d1 = deal({
+        externalDealId: 'D1',
+        entryType: 'IN',
+        volume: 1.0,
+        commission: -5,
+        swap: 0,
+        profit: 0,
+      });
+      const d2 = deal({
+        externalDealId: 'D2',
+        entryType: 'OUT',
+        volume: 0.3,
+        commission: -1.5,
+        swap: -0.5,
+        profit: 30,
+      });
+      const d3 = deal({
+        externalDealId: 'D3',
+        entryType: 'OUT',
+        volume: 0.7,
+        commission: -3.5,
+        swap: -0.5,
+        profit: 90,
+      });
 
       for (const d of [d1, d2, d3]) {
-        await service.applyMt5Deal(inOrder.tx, { connectionId: CONNECTION_ID, portfolioId: PORTFOLIO_ID, userId: USER_ID, deal: d });
+        await service.applyMt5Deal(inOrder.tx, {
+          connectionId: CONNECTION_ID,
+          portfolioId: PORTFOLIO_ID,
+          userId: USER_ID,
+          deal: d,
+        });
       }
       for (const d of [d3, d1, d2]) {
-        await service.applyMt5Deal(outOfOrder.tx, { connectionId: CONNECTION_ID, portfolioId: PORTFOLIO_ID, userId: USER_ID, deal: d });
+        await service.applyMt5Deal(outOfOrder.tx, {
+          connectionId: CONNECTION_ID,
+          portfolioId: PORTFOLIO_ID,
+          userId: USER_ID,
+          deal: d,
+        });
       }
 
       expect(Number(outOfOrder.rows[0].pnl)).toBe(Number(inOrder.rows[0].pnl));
-      expect(Number(outOfOrder.rows[0].commission)).toBe(Number(inOrder.rows[0].commission));
-      expect(Number(outOfOrder.rows[0].swap)).toBe(Number(inOrder.rows[0].swap));
-      expect(Number(outOfOrder.rows[0].volume)).toBe(Number(inOrder.rows[0].volume));
+      expect(Number(outOfOrder.rows[0].commission)).toBe(
+        Number(inOrder.rows[0].commission),
+      );
+      expect(Number(outOfOrder.rows[0].swap)).toBe(
+        Number(inOrder.rows[0].swap),
+      );
+      expect(Number(outOfOrder.rows[0].volume)).toBe(
+        Number(inOrder.rows[0].volume),
+      );
     });
   });
 
@@ -282,7 +442,13 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, price: 2350.55, profit: 0 }),
+        deal: deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          price: 2350.55,
+          profit: 0,
+        }),
       });
 
       expect(Number(rows[0].open_price)).toBe(2350.55);
@@ -299,16 +465,32 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, price: 4493.11, profit: 0 }),
+        deal: deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          price: 4493.11,
+          profit: 0,
+        }),
       });
       await service.applyMt5Deal(tx, {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D2', entryType: 'OUT', volume: 1.0, price: 4500, profit: 6.89 }),
+        deal: deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 1.0,
+          price: 4500,
+          profit: 6.89,
+        }),
       });
 
-      await service.closeMt5PositionsByAbsence(tx, CONNECTION_ID, new Set<string>());
+      await service.closeMt5PositionsByAbsence(
+        tx,
+        CONNECTION_ID,
+        new Set<string>(),
+      );
 
       expect(rows[0].result_status).not.toBe('OPEN');
       expect(Number(rows[0].open_price)).toBe(4493.11);
@@ -321,7 +503,13 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, price: 2350.55, profit: 0 }),
+        deal: deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          price: 2350.55,
+          profit: 0,
+        }),
       });
 
       await service.upsertMt5Position(tx, {
@@ -346,13 +534,27 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
           connectionId: CONNECTION_ID,
           portfolioId: PORTFOLIO_ID,
           userId: USER_ID,
-          deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 }),
+          deal: deal({
+            externalDealId: 'D1',
+            entryType: 'IN',
+            volume: 1.0,
+            commission: -5,
+            swap: 0,
+            profit: 0,
+          }),
         });
         const { applied } = await service.applyMt5Deal(tx, {
           connectionId: CONNECTION_ID,
           portfolioId: PORTFOLIO_ID,
           userId: USER_ID,
-          deal: deal({ externalDealId: 'D2', entryType, volume: 1.0, commission: -1.5, swap: -0.5, profit: 42 }),
+          deal: deal({
+            externalDealId: 'D2',
+            entryType,
+            volume: 1.0,
+            commission: -1.5,
+            swap: -0.5,
+            profit: 42,
+          }),
         });
 
         expect(applied).toBe(true);
@@ -371,13 +573,25 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'A1', externalPositionId: 'PA', entryType: 'IN', volume: 1.0, profit: 0 }),
+        deal: deal({
+          externalDealId: 'A1',
+          externalPositionId: 'PA',
+          entryType: 'IN',
+          volume: 1.0,
+          profit: 0,
+        }),
       });
       await service.applyMt5Deal(tx, {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'B1', externalPositionId: 'PB', entryType: 'IN', volume: 1.0, profit: 0 }),
+        deal: deal({
+          externalDealId: 'B1',
+          externalPositionId: 'PB',
+          entryType: 'IN',
+          volume: 1.0,
+          profit: 0,
+        }),
       });
 
       // MT5 reports the OUT_BY only against position PA (the leg it closed) — PB is
@@ -386,7 +600,13 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'A2', externalPositionId: 'PA', entryType: 'OUT_BY', volume: 1.0, profit: 15 }),
+        deal: deal({
+          externalDealId: 'A2',
+          externalPositionId: 'PA',
+          entryType: 'OUT_BY',
+          volume: 1.0,
+          profit: 15,
+        }),
       });
 
       expect(rows).toHaveLength(2);
@@ -406,13 +626,23 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D1', entryType: 'IN', volume: 1.0, profit: 0 }),
+        deal: deal({
+          externalDealId: 'D1',
+          entryType: 'IN',
+          volume: 1.0,
+          profit: 0,
+        }),
       });
       await service.applyMt5Deal(tx, {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        deal: deal({ externalDealId: 'D2', entryType: 'OUT', volume: 0.3, profit: 30 }),
+        deal: deal({
+          externalDealId: 'D2',
+          entryType: 'OUT',
+          volume: 0.3,
+          profit: 30,
+        }),
       });
       recordsMock.replaceSystem.mockClear();
 
@@ -420,7 +650,11 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
         connectionId: CONNECTION_ID,
         portfolioId: PORTFOLIO_ID,
         userId: USER_ID,
-        position: position({ stopLoss: 2320, takeProfit: 2420, currentPrice: 2370 }),
+        position: position({
+          stopLoss: 2320,
+          takeProfit: 2420,
+          currentPrice: 2370,
+        }),
       });
 
       expect(rows).toHaveLength(1);
@@ -450,8 +684,16 @@ describe('TradesService — MT5 sync (Phase 3)', () => {
 
       expect(rows).toHaveLength(1);
 
-      const closedFirst = await service.closeMt5PositionsByAbsence(tx, CONNECTION_ID, new Set(['P1']));
-      const closedSecond = await service.closeMt5PositionsByAbsence(tx, CONNECTION_ID, new Set(['P1']));
+      const closedFirst = await service.closeMt5PositionsByAbsence(
+        tx,
+        CONNECTION_ID,
+        new Set(['P1']),
+      );
+      const closedSecond = await service.closeMt5PositionsByAbsence(
+        tx,
+        CONNECTION_ID,
+        new Set(['P1']),
+      );
 
       expect(closedFirst).toEqual([]);
       expect(closedSecond).toEqual([]);

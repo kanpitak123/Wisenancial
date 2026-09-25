@@ -13,10 +13,7 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { AiRecommendationService } from './ai-recommendation.service';
 import type { AiManagerService } from './ai-manager.service';
-import type {
-  GrowthCandidate,
-  StocksService,
-} from '../stocks/stocks.service';
+import type { GrowthCandidate, StocksService } from '../stocks/stocks.service';
 
 const GEMINI = {
   id: 'gemini-2.5-flash',
@@ -140,9 +137,9 @@ describe('AiRecommendationService — candidate list ของจริง', () 
   it('โมเดลตอบนอกลิสต์ทั้งหมด -> โยน error ไม่เสิร์ฟของที่ตรวจสอบไม่ได้', async () => {
     const { service } = makeService([reply('TSLA'), reply('META')]);
 
-    await expect(
-      service.getGrowthRecommendations(1),
-    ).rejects.toThrow('AI returned no stock recommendations');
+    await expect(service.getGrowthRecommendations(1)).rejects.toThrow(
+      'AI returned no stock recommendations',
+    );
   });
 
   it('ตัวเลข/ชื่อ เอาจากเซิร์ฟเวอร์เสมอ ต่อให้โมเดลตอบมาผิด', async () => {
@@ -188,9 +185,9 @@ describe('AiRecommendationService — candidate list ของจริง', () 
       [candidate('NVDA'), candidate('AAPL')],
     );
 
-    await expect(
-      service.getGrowthRecommendations(1),
-    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(service.getGrowthRecommendations(1)).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
 
     expect(executeAiRequest).not.toHaveBeenCalled();
   });

@@ -29,15 +29,23 @@ import { Mt5SyncService } from './mt5-sync.service';
 function createFakeTx() {
   let nextId = 1;
   const tradeRows: Record<string, any>[] = [];
-  const connectionRows: Record<number, { last_snapshot_sequence: number | null }> = {};
+  const connectionRows: Record<
+    number,
+    { last_snapshot_sequence: number | null }
+  > = {};
 
   const matches = (row: Record<string, any>, where: Record<string, any>) =>
     Object.entries(where).every(([key, value]) => row[key] === value);
 
   const tx = {
     trades: {
-      findFirst: jest.fn(async ({ where }: any) => tradeRows.find((r) => matches(r, where)) ?? null),
-      findMany: jest.fn(async ({ where }: any) => tradeRows.filter((r) => matches(r, where))),
+      findFirst: jest.fn(
+        async ({ where }: any) =>
+          tradeRows.find((r) => matches(r, where)) ?? null,
+      ),
+      findMany: jest.fn(async ({ where }: any) =>
+        tradeRows.filter((r) => matches(r, where)),
+      ),
       create: jest.fn(async ({ data }: any) => {
         const row = { id: nextId++, raw_data: {}, pnl: null, ...data };
         tradeRows.push(row);
@@ -51,9 +59,14 @@ function createFakeTx() {
       }),
     },
     broker_connections: {
-      findUnique: jest.fn(async ({ where }: any) => connectionRows[where.id] ?? { last_snapshot_sequence: null }),
+      findUnique: jest.fn(
+        async ({ where }: any) =>
+          connectionRows[where.id] ?? { last_snapshot_sequence: null },
+      ),
       update: jest.fn(async ({ where, data }: any) => {
-        connectionRows[where.id] = { last_snapshot_sequence: data.last_snapshot_sequence };
+        connectionRows[where.id] = {
+          last_snapshot_sequence: data.last_snapshot_sequence,
+        };
         return {};
       }),
     },
@@ -64,7 +77,10 @@ function createFakeTx() {
 
 const recordsMock = {
   createSystem: jest.fn(),
-  replaceSystem: jest.fn(async (input: any) => ({ id: 999, amount: new Prisma.Decimal(input.signedAmount) })),
+  replaceSystem: jest.fn(async (input: any) => ({
+    id: 999,
+    amount: new Prisma.Decimal(input.signedAmount),
+  })),
 };
 
 const connectionsMock = {
@@ -150,16 +166,50 @@ describe('Mt5SyncService — DEALS spanning multiple requests (RECONCILE batchin
 
   it('multiple DEALS batches: a deal history split across two separate ingest() calls accumulates identically to one big batch', async () => {
     const batch1 = [
-      deal({ dealTicket: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 }),
-      deal({ dealTicket: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
+      deal({
+        dealTicket: 'D1',
+        entryType: 'IN',
+        volume: 1.0,
+        commission: -5,
+        swap: 0,
+        profit: 0,
+      }),
+      deal({
+        dealTicket: 'D2',
+        entryType: 'OUT',
+        volume: 0.3,
+        commission: -1.5,
+        swap: -0.5,
+        profit: 30,
+      }),
     ];
     const batch2 = [
-      deal({ dealTicket: 'D3', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 45 }),
-      deal({ dealTicket: 'D4', entryType: 'OUT', volume: 0.4, commission: -2, swap: -1, profit: 80 }),
+      deal({
+        dealTicket: 'D3',
+        entryType: 'OUT',
+        volume: 0.3,
+        commission: -1.5,
+        swap: -0.5,
+        profit: 45,
+      }),
+      deal({
+        dealTicket: 'D4',
+        entryType: 'OUT',
+        volume: 0.4,
+        commission: -2,
+        swap: -1,
+        profit: 80,
+      }),
     ];
 
-    const r1 = await service.ingest(connection(), envelope({ payload: { deals: batch1 } }));
-    const r2 = await service.ingest(connection(), envelope({ payload: { deals: batch2 } }));
+    const r1 = await service.ingest(
+      connection(),
+      envelope({ payload: { deals: batch1 } }),
+    );
+    const r2 = await service.ingest(
+      connection(),
+      envelope({ payload: { deals: batch2 } }),
+    );
 
     expect(r1.appliedCount).toBe(2);
     expect(r2.appliedCount).toBe(2);
@@ -169,23 +219,62 @@ describe('Mt5SyncService — DEALS spanning multiple requests (RECONCILE batchin
     expect(Number(row.commission)).toBeCloseTo(-10);
     expect(Number(row.swap)).toBeCloseTo(-2);
     expect(Number(row.pnl)).toBeCloseTo(155);
-    expect(row.raw_data.deals.map((d: any) => d.dealTicket)).toEqual(['D1', 'D2', 'D3', 'D4']);
+    expect(row.raw_data.deals.map((d: any) => d.dealTicket)).toEqual([
+      'D1',
+      'D2',
+      'D3',
+      'D4',
+    ]);
   });
 
   it('duplicate DEAL_TICKET across batches: resending an already-applied deal in a later batch is deduped, not double counted', async () => {
     const batch1 = [
-      deal({ dealTicket: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 }),
-      deal({ dealTicket: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
+      deal({
+        dealTicket: 'D1',
+        entryType: 'IN',
+        volume: 1.0,
+        commission: -5,
+        swap: 0,
+        profit: 0,
+      }),
+      deal({
+        dealTicket: 'D2',
+        entryType: 'OUT',
+        volume: 0.3,
+        commission: -1.5,
+        swap: -0.5,
+        profit: 30,
+      }),
     ];
     // batch2 re-sends D2 (already applied in batch1 — e.g. EA retried after a timeout
     // that actually succeeded server-side) alongside genuinely new deals
     const batch2 = [
-      deal({ dealTicket: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
-      deal({ dealTicket: 'D3', entryType: 'OUT', volume: 0.7, commission: -3.5, swap: -0.5, profit: 90 }),
+      deal({
+        dealTicket: 'D2',
+        entryType: 'OUT',
+        volume: 0.3,
+        commission: -1.5,
+        swap: -0.5,
+        profit: 30,
+      }),
+      deal({
+        dealTicket: 'D3',
+        entryType: 'OUT',
+        volume: 0.7,
+        commission: -3.5,
+        swap: -0.5,
+        profit: 90,
+      }),
     ];
 
-    await service.ingest(connection(), envelope({ payload: { deals: batch1 } }));
-    const r2 = await service.ingest(connection(), envelope({ payload: { deals: batch2 } }));
+    await service.ingest(
+      connection(),
+      envelope({ payload: { deals: batch1 } }),
+    );
+    const r2 = await service.ingest(
+      connection(),
+      envelope({ payload: { deals: batch2 } }),
+    );
 
     expect(r2.appliedCount).toBe(1); // only D3
     expect(r2.duplicateCount).toBe(1); // D2
@@ -198,17 +287,44 @@ describe('Mt5SyncService — DEALS spanning multiple requests (RECONCILE batchin
 
   it('out-of-order batches: a later batch (chronologically) arrives and is processed before an earlier one, final state still converges correctly', async () => {
     const earlyBatch = [
-      deal({ dealTicket: 'D1', entryType: 'IN', volume: 1.0, commission: -5, swap: 0, profit: 0 }),
-      deal({ dealTicket: 'D2', entryType: 'OUT', volume: 0.3, commission: -1.5, swap: -0.5, profit: 30 }),
+      deal({
+        dealTicket: 'D1',
+        entryType: 'IN',
+        volume: 1.0,
+        commission: -5,
+        swap: 0,
+        profit: 0,
+      }),
+      deal({
+        dealTicket: 'D2',
+        entryType: 'OUT',
+        volume: 0.3,
+        commission: -1.5,
+        swap: -0.5,
+        profit: 30,
+      }),
     ];
     const laterBatch = [
-      deal({ dealTicket: 'D3', entryType: 'OUT', volume: 0.7, commission: -3.5, swap: -0.5, profit: 90 }),
+      deal({
+        dealTicket: 'D3',
+        entryType: 'OUT',
+        volume: 0.7,
+        commission: -3.5,
+        swap: -0.5,
+        profit: 90,
+      }),
     ];
 
     // laterBatch (D3, which depends on the position D1 opened) arrives and is processed
     // first — e.g. network reordering between two independent EA requests
-    const r1 = await service.ingest(connection(), envelope({ payload: { deals: laterBatch } }));
-    const r2 = await service.ingest(connection(), envelope({ payload: { deals: earlyBatch } }));
+    const r1 = await service.ingest(
+      connection(),
+      envelope({ payload: { deals: laterBatch } }),
+    );
+    const r2 = await service.ingest(
+      connection(),
+      envelope({ payload: { deals: earlyBatch } }),
+    );
 
     expect(r1.appliedCount).toBe(1);
     expect(r2.appliedCount).toBe(2);

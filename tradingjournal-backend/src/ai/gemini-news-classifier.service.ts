@@ -57,15 +57,14 @@ export class GeminiNewsClassifierService {
   async classify(
     input: GeminiClassificationInput,
   ): Promise<GeminiEnrichmentResult> {
-    const result = await this.manager.executeSystemAiRequest<RawGeminiClassification>(
-      {
+    const result =
+      await this.manager.executeSystemAiRequest<RawGeminiClassification>({
         modelId: 'gemini-2.5-flash',
         preferredOnly: true,
         prompt: buildGeminiNewsClassificationPrompt(input),
         systemPrompt: GEMINI_NEWS_CLASSIFICATION_SYSTEM_PROMPT,
         maxOutputTokens: 1000,
-      },
-    );
+      });
 
     const normalized = this.validateAndNormalize(result.data);
     this.logger.debug(
@@ -84,9 +83,14 @@ export class GeminiNewsClassifierService {
     }
 
     if (typeof data.aiSummary !== 'string' || !data.aiSummary.trim()) {
-      throw new GeminiClassificationValidationError('aiSummary missing or empty');
+      throw new GeminiClassificationValidationError(
+        'aiSummary missing or empty',
+      );
     }
-    if (typeof data.stockImpactAnalysis !== 'string' || !data.stockImpactAnalysis.trim()) {
+    if (
+      typeof data.stockImpactAnalysis !== 'string' ||
+      !data.stockImpactAnalysis.trim()
+    ) {
       throw new GeminiClassificationValidationError(
         'stockImpactAnalysis missing or empty',
       );

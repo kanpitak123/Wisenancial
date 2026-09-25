@@ -20,7 +20,9 @@ function quotePayload(price: number) {
 }
 
 function stubYahoo(service: MarketService, impl: YahooQuoteStub) {
-  (service as unknown as { yahooFinance: { quote: YahooQuoteStub } }).yahooFinance = {
+  (
+    service as unknown as { yahooFinance: { quote: YahooQuoteStub } }
+  ).yahooFinance = {
     quote: impl,
   };
 }
@@ -34,7 +36,9 @@ describe('MarketService — Trader symbol mapping on realtime quotes', () => {
   });
 
   it('EUR/USD -> ยิง Yahoo ด้วย ticker จริง EURUSD=X แต่ response.symbol ยังเป็น EUR/USD เดิม', async () => {
-    const quote: YahooQuoteStub = jest.fn().mockResolvedValue(quotePayload(1.1385));
+    const quote: YahooQuoteStub = jest
+      .fn()
+      .mockResolvedValue(quotePayload(1.1385));
 
     stubYahoo(service, quote);
 
@@ -45,7 +49,9 @@ describe('MarketService — Trader symbol mapping on realtime quotes', () => {
   });
 
   it('XAU/USD -> ยิง Yahoo ด้วย GC=F', async () => {
-    const quote: YahooQuoteStub = jest.fn().mockResolvedValue(quotePayload(2650.5));
+    const quote: YahooQuoteStub = jest
+      .fn()
+      .mockResolvedValue(quotePayload(2650.5));
 
     stubYahoo(service, quote);
 
@@ -55,7 +61,9 @@ describe('MarketService — Trader symbol mapping on realtime quotes', () => {
   });
 
   it('ticker หุ้นปกติ (AAPL) -> ไม่ถูกแปลง ยิง Yahoo ด้วย symbol เดิม (no-op สำหรับ stock)', async () => {
-    const quote: YahooQuoteStub = jest.fn().mockResolvedValue(quotePayload(230.12));
+    const quote: YahooQuoteStub = jest
+      .fn()
+      .mockResolvedValue(quotePayload(230.12));
 
     stubYahoo(service, quote);
 

@@ -41,7 +41,9 @@ function fakeProvider(
 }
 
 function makeManager(
-  behaviours: Partial<Record<ProviderId, { fails?: Error; configured?: boolean }>>,
+  behaviours: Partial<
+    Record<ProviderId, { fails?: Error; configured?: boolean }>
+  >,
 ) {
   const calls: string[] = [];
   const provider = (id: ProviderId) =>
@@ -76,13 +78,15 @@ describe('classifyAiFailure', () => {
   });
 
   it('timeout / network = network (ลองเจ้าอื่นได้)', () => {
-    expect(classifyAiFailure(Object.assign(new Error('x'), { code: 'ETIMEDOUT' }))).toBe(
-      'network',
-    );
-    expect(classifyAiFailure(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(
-      'network',
-    );
-    expect(classifyAiFailure(new Error('Request timed out after 30000ms'))).toBe('network');
+    expect(
+      classifyAiFailure(Object.assign(new Error('x'), { code: 'ETIMEDOUT' })),
+    ).toBe('network');
+    expect(
+      classifyAiFailure(Object.assign(new Error('x'), { name: 'AbortError' })),
+    ).toBe('network');
+    expect(
+      classifyAiFailure(new Error('Request timed out after 30000ms')),
+    ).toBe('network');
   });
 
   it('4xx อื่นๆ = permanent (ลองเจ้าอื่นก็ได้ผลเดิม)', () => {
@@ -101,7 +105,9 @@ describe('classifyAiFailure', () => {
   });
 
   it('ข้อความ rate limit ที่ไม่มีสถานะแนบมา ก็จับได้', () => {
-    expect(classifyAiFailure(new Error('Rate limit reached for model'))).toBe('rate-limit');
+    expect(classifyAiFailure(new Error('Rate limit reached for model'))).toBe(
+      'rate-limit',
+    );
     expect(classifyAiFailure(new Error('quota exceeded'))).toBe('rate-limit');
   });
 
@@ -137,7 +143,9 @@ describe('executeSystemAiRequest — provider chain', () => {
     const { manager, calls } = makeManager({
       groq: { fails: httpError(429) },
       gemini: { fails: httpError(503) },
-      openai: { fails: Object.assign(new Error('socket'), { code: 'ETIMEDOUT' }) },
+      openai: {
+        fails: Object.assign(new Error('socket'), { code: 'ETIMEDOUT' }),
+      },
     });
 
     const result = await manager.executeSystemAiRequest(systemRequest);
@@ -154,9 +162,9 @@ describe('executeSystemAiRequest — provider chain', () => {
       anthropic: { fails: httpError(429) },
     });
 
-    await expect(manager.executeSystemAiRequest(systemRequest)).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    await expect(
+      manager.executeSystemAiRequest(systemRequest),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
     expect(calls).toEqual(['groq', 'gemini', 'openai', 'anthropic']);
 
@@ -166,11 +174,13 @@ describe('executeSystemAiRequest — provider chain', () => {
   });
 
   it('400 bad request -> หยุดทันที ไม่วนต่อ', async () => {
-    const { manager, calls } = makeManager({ groq: { fails: httpError(400, 'bad prompt') } });
+    const { manager, calls } = makeManager({
+      groq: { fails: httpError(400, 'bad prompt') },
+    });
 
-    await expect(manager.executeSystemAiRequest(systemRequest)).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    await expect(
+      manager.executeSystemAiRequest(systemRequest),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
     // ต้องเรียกแค่ groq เจ้าเดียว
     expect(calls).toEqual(['groq']);
@@ -217,7 +227,9 @@ describe('executeSystemAiRequest — provider chain', () => {
   });
 
   it('ระบุ modelId มา -> เริ่มจากตัวนั้น แล้วค่อยไล่ chain ที่เหลือ', async () => {
-    const { manager, calls } = makeManager({ openai: { fails: httpError(429) } });
+    const { manager, calls } = makeManager({
+      openai: { fails: httpError(429) },
+    });
 
     const result = await manager.executeSystemAiRequest({
       ...systemRequest,
@@ -237,7 +249,10 @@ describe('executeSystemAiRequest — provider chain', () => {
     });
 
     await expect(
-      manager.executeSystemAiRequest({ ...systemRequest, modelId: 'groq-llama3' }),
+      manager.executeSystemAiRequest({
+        ...systemRequest,
+        modelId: 'groq-llama3',
+      }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
     expect(calls).toEqual(['groq', 'gemini', 'openai', 'anthropic']);
@@ -247,7 +262,9 @@ describe('executeSystemAiRequest — provider chain', () => {
 describe('executeAiRequest — ฝั่งผู้ใช้ ต้องไม่ fallback ข้าม provider', () => {
   const prismaWithBalance = (balance: number) =>
     ({
-      users: { findUnique: jest.fn().mockResolvedValue({ ai_token_balance: balance }) },
+      users: {
+        findUnique: jest.fn().mockResolvedValue({ ai_token_balance: balance }),
+      },
       ai_usage_logs: { create: jest.fn().mockResolvedValue({}) },
     }) as never;
 

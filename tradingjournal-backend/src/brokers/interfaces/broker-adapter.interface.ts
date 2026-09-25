@@ -33,7 +33,10 @@ export interface BrokerAdapter {
   getAccount(connectionId: number): Promise<BrokerAccountSnapshot>;
   getPositions(connectionId: number): Promise<BrokerPosition[]>;
   getOrders(connectionId: number): Promise<BrokerOrder[]>;
-  getDeals(connectionId: number, range?: BrokerSyncRange): Promise<BrokerDeal[]>;
+  getDeals(
+    connectionId: number,
+    range?: BrokerSyncRange,
+  ): Promise<BrokerDeal[]>;
 
   /** trigger การ sync แบบเต็มรอบ — ใช้ตอน reconciliation/manual refresh */
   sync(connectionId: number): Promise<void>;

@@ -60,7 +60,9 @@ function socketWith(options: {
     rooms: new Set(['socket-1']),
     data: {},
     handshake: {
-      headers: options.authorization ? { authorization: options.authorization } : {},
+      headers: options.authorization
+        ? { authorization: options.authorization }
+        : {},
       auth: options.authToken === undefined ? {} : { token: options.authToken },
     },
     disconnect: jest.fn(),
@@ -87,7 +89,9 @@ describe('ChatGateway — websocket auth', () => {
     }).compile();
 
     gateway = module.get<ChatGateway>(ChatGateway);
-    gateway.server = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) } as never;
+    gateway.server = {
+      to: jest.fn().mockReturnValue({ emit: jest.fn() }),
+    } as never;
   });
 
   describe('handleConnection', () => {
@@ -215,7 +219,11 @@ describe('ChatGateway — websocket auth', () => {
         message: 'hello',
       });
 
-      expect(chatServiceMock.saveMessage).toHaveBeenCalledWith(10, 'General', 'hello');
+      expect(chatServiceMock.saveMessage).toHaveBeenCalledWith(
+        10,
+        'General',
+        'hello',
+      );
     });
 
     it('should drop the socket rather than write a message for an unauthenticated client', async () => {

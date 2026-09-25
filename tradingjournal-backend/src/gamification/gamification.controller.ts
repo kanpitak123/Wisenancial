@@ -19,19 +19,14 @@ import { GamificationService } from './gamification.service';
 @Controller('gamification')
 @UseGuards(JwtAuthGuard)
 export class GamificationController {
-  constructor(
-    private readonly service: GamificationService,
-  ) {}
+  constructor(private readonly service: GamificationService) {}
 
   @Get()
   getOverview(
     @CurrentUser() user: AuthUser,
     @Query() query: GamificationQueryDto,
   ) {
-    return this.service.getOverview(
-      user.userId,
-      query,
-    );
+    return this.service.getOverview(user.userId, query);
   }
 
   @Get('missions')
@@ -39,10 +34,7 @@ export class GamificationController {
     @CurrentUser() user: AuthUser,
     @Query() query: GamificationQueryDto,
   ) {
-    return this.service.getMissions(
-      user.userId,
-      query,
-    );
+    return this.service.getMissions(user.userId, query);
   }
 
   @Post('missions/:id/claim')
@@ -51,21 +43,12 @@ export class GamificationController {
     @Param('id', ParseIntPipe)
     missionId: number,
   ) {
-    return this.service.claimMission(
-      user.userId,
-      missionId,
-    );
+    return this.service.claimMission(user.userId, missionId);
   }
 
   @Post('redeem')
-  redeem(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: RedeemTokenDto,
-  ) {
-    return this.service.redeemPointsToTokens(
-      user.userId,
-      dto.tokensToRedeem,
-    );
+  redeem(@CurrentUser() user: AuthUser, @Body() dto: RedeemTokenDto) {
+    return this.service.redeemPointsToTokens(user.userId, dto.tokensToRedeem);
   }
 
   @Get('leaderboard')
@@ -73,13 +56,10 @@ export class GamificationController {
     @Query('limit')
     limit?: string,
   ) {
-    const parsed =
-      Number(limit);
+    const parsed = Number(limit);
 
     return this.service.getLeaderboard(
-      Number.isInteger(parsed)
-        ? parsed
-        : undefined,
+      Number.isInteger(parsed) ? parsed : undefined,
     );
   }
 

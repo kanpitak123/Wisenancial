@@ -57,7 +57,10 @@ afterEach(() => {
 
 describe('MtConnectionThrottleGuard', () => {
   it('allows requests up to the configured limit', async () => {
-    const guard = new MtConnectionThrottleGuard(newStorage(), configServiceWith(60, 3));
+    const guard = new MtConnectionThrottleGuard(
+      newStorage(),
+      configServiceWith(60, 3),
+    );
     const context = contextWithConnection(connection());
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
@@ -66,19 +69,27 @@ describe('MtConnectionThrottleGuard', () => {
   });
 
   it('rejects the request that exceeds the limit with a 429', async () => {
-    const guard = new MtConnectionThrottleGuard(newStorage(), configServiceWith(60, 3));
+    const guard = new MtConnectionThrottleGuard(
+      newStorage(),
+      configServiceWith(60, 3),
+    );
     const context = contextWithConnection(connection());
 
     await guard.canActivate(context);
     await guard.canActivate(context);
     await guard.canActivate(context);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(ThrottlerException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ThrottlerException,
+    );
   });
 
   it('tracks each broker connection independently — one connection tripping the limit does not affect another', async () => {
     const storage = newStorage();
-    const guard = new MtConnectionThrottleGuard(storage, configServiceWith(60, 2));
+    const guard = new MtConnectionThrottleGuard(
+      storage,
+      configServiceWith(60, 2),
+    );
 
     const connA = contextWithConnection(connection({ id: 1 }));
     const connB = contextWithConnection(connection({ id: 2 }));
@@ -92,10 +103,15 @@ describe('MtConnectionThrottleGuard', () => {
   });
 
   it('rejects with UnauthorizedException (not a silent pass-through) if brokerConnection is missing — defensive guard-ordering safety net', async () => {
-    const guard = new MtConnectionThrottleGuard(newStorage(), configServiceWith(60, 30));
+    const guard = new MtConnectionThrottleGuard(
+      newStorage(),
+      configServiceWith(60, 30),
+    );
     const context = contextWithConnection(undefined);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('defaults to a 30 req / 60s budget when no env override is configured', async () => {
@@ -106,6 +122,8 @@ describe('MtConnectionThrottleGuard', () => {
     for (let i = 0; i < 30; i++) {
       await expect(guard.canActivate(context)).resolves.toBe(true);
     }
-    await expect(guard.canActivate(context)).rejects.toThrow(ThrottlerException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ThrottlerException,
+    );
   });
 });

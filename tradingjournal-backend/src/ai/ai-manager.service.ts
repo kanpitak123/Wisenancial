@@ -22,10 +22,7 @@ import {
   type AiModelPricing,
   type AiProviderId,
 } from './ai.models';
-import {
-  classifyAiFailure,
-  type AiFailureKind,
-} from './ai-retry';
+import { classifyAiFailure, type AiFailureKind } from './ai-retry';
 import type {
   AiTokenUsage,
   IAiProvider,
@@ -61,13 +58,8 @@ export interface AiModelOption {
 
 @Injectable()
 export class AiManagerService {
-  private readonly logger = new Logger(
-    AiManagerService.name,
-  );
-  private readonly providers: ReadonlyMap<
-    AiProviderId,
-    IAiProvider
-  >;
+  private readonly logger = new Logger(AiManagerService.name);
+  private readonly providers: ReadonlyMap<AiProviderId, IAiProvider>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -76,10 +68,7 @@ export class AiManagerService {
     openai: OpenAiProvider,
     anthropic: AnthropicProvider,
   ) {
-    this.providers = new Map<
-      AiProviderId,
-      IAiProvider
-    >([
+    this.providers = new Map<AiProviderId, IAiProvider>([
       [groq.id, groq],
       [gemini.id, gemini],
       [openai.id, openai],
@@ -90,64 +79,39 @@ export class AiManagerService {
   listAvailableModels(): AiModelOption[] {
     return listAiModels()
       .filter(
-        (model) =>
-          this.providers
-            .get(model.provider)
-            ?.isConfigured() === true,
+        (model) => this.providers.get(model.provider)?.isConfigured() === true,
       )
-      .map(
-        ({
-          id,
-          label,
-          creditsPer1kInput,
-          creditsPer1kOutput,
-        }) => ({
-          id,
-          label,
-          creditsPer1kInput,
-          creditsPer1kOutput,
-        }),
-      );
+      .map(({ id, label, creditsPer1kInput, creditsPer1kOutput }) => ({
+        id,
+        label,
+        creditsPer1kInput,
+        creditsPer1kOutput,
+      }));
   }
 
-  async getBalance(
-    userId: number,
-  ): Promise<number> {
-    const user =
-      await this.prisma.users.findUnique({
-        where: { id: userId },
-        select: {
-          ai_token_balance: true,
-        },
-      });
+  async getBalance(userId: number): Promise<number> {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        ai_token_balance: true,
+      },
+    });
 
     if (!user) {
-      throw new NotFoundException(
-        'User not found',
-      );
+      throw new NotFoundException('User not found');
     }
 
     return user.ai_token_balance;
   }
 
-  async executeAiRequest<T>(
-    request: AiRequest,
-  ): Promise<AiResponse<T>> {
-    const pricing = this.resolveModel(
-      request.modelId,
-    );
-    const provider =
-      this.resolveProvider(pricing);
+  async executeAiRequest<T>(request: AiRequest): Promise<AiResponse<T>> {
+    const pricing = this.resolveModel(request.modelId);
+    const provider = this.resolveProvider(pricing);
 
-    const balance = await this.getBalance(
-      request.userId,
-    );
+    const balance = await this.getBalance(request.userId);
 
     if (balance < MIN_CREDIT_BALANCE) {
-      throw this.insufficientCredits(
-        balance,
-        MIN_CREDIT_BALANCE,
-      );
+      throw this.insufficientCredits(balance, MIN_CREDIT_BALANCE);
     }
 
     let result: {
@@ -158,24 +122,16 @@ export class AiManagerService {
     const startedAt = Date.now();
 
     try {
-      result =
-        await provider.generateJsonResponse<T>({
-          upstreamModel:
-            pricing.upstreamModel,
-          prompt: request.prompt,
-          systemPrompt:
-            request.systemPrompt,
-          temperature:
-            request.temperature,
-          maxOutputTokens:
-            request.maxOutputTokens,
-        });
+      result = await provider.generateJsonResponse<T>({
+        upstreamModel: pricing.upstreamModel,
+        prompt: request.prompt,
+        systemPrompt: request.systemPrompt,
+        temperature: request.temperature,
+        maxOutputTokens: request.maxOutputTokens,
+      });
     } catch (error) {
       const kind = classifyAiFailure(error);
-      const reason =
-        error instanceof Error
-          ? error.message
-          : String(error);
+      const reason = error instanceof Error ? error.message : String(error);
 
       this.logger.error(
         `[${pricing.id}] ${kind} for user ${request.userId}: ${reason}`,
@@ -191,11 +147,7 @@ export class AiManagerService {
       // ไม่ fallback ข้าม provider ให้อัตโนมัติ — เรตเครดิตต่าง model ห่างกันถึง 300 เท่า
       // (groq 1 vs claude 300 ต่อ 1k output) การสลับเงียบๆ = คิดเงินผู้ใช้เกินที่เขาเลือก
       // แทนที่ด้วยการบอกให้ชัดว่าเลือกตัวไหนแทนได้บ้าง
-      throw this.providerUnavailable(
-        pricing,
-        kind,
-        reason,
-      );
+      throw this.providerUnavailable(pricing, kind, reason);
     }
 
     const exactCost = calculateCredits(
@@ -203,19 +155,15 @@ export class AiManagerService {
       result.usage.inputTokens,
       result.usage.outputTokens,
     );
-    const creditsCharged = Math.max(
-      MIN_CREDITS_PER_CALL,
-      Math.ceil(exactCost),
-    );
+    const creditsCharged = Math.max(MIN_CREDITS_PER_CALL, Math.ceil(exactCost));
 
-    const creditsRemaining =
-      await this.chargeAndLog(
-        request.userId,
-        pricing,
-        result.usage,
-        creditsCharged,
-        Date.now() - startedAt,
-      );
+    const creditsRemaining = await this.chargeAndLog(
+      request.userId,
+      pricing,
+      result.usage,
+      creditsCharged,
+      Date.now() - startedAt,
+    );
 
     return {
       data: result.data,
@@ -226,24 +174,22 @@ export class AiManagerService {
     };
   }
 
-  async executeSystemAiRequest<T>(
-    request: {
-      modelId?: string;
-      prompt: string;
-      systemPrompt?: string;
-      temperature?: number;
-      maxOutputTokens?: number;
-      /**
-       * Try only `modelId` — no fallback walk. For callers that run their own,
-       * differently-prompted fallback afterward (e.g. Gemini news enrichment, whose
-       * fallback re-runs the *existing* enrichment prompt on the *other* providers
-       * rather than retrying the same provider with a different prompt).
-       */
-      preferredOnly?: boolean;
-      /** Skip these providers entirely, e.g. to avoid retrying one that just failed. */
-      excludeProviders?: AiProviderId[];
-    },
-  ): Promise<{
+  async executeSystemAiRequest<T>(request: {
+    modelId?: string;
+    prompt: string;
+    systemPrompt?: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    /**
+     * Try only `modelId` — no fallback walk. For callers that run their own,
+     * differently-prompted fallback afterward (e.g. Gemini news enrichment, whose
+     * fallback re-runs the *existing* enrichment prompt on the *other* providers
+     * rather than retrying the same provider with a different prompt).
+     */
+    preferredOnly?: boolean;
+    /** Skip these providers entirely, e.g. to avoid retrying one that just failed. */
+    excludeProviders?: AiProviderId[];
+  }): Promise<{
     data: T;
     model: AiModelId;
     usage: AiTokenUsage;
@@ -262,13 +208,8 @@ export class AiManagerService {
 
     const attempted: string[] = [];
 
-    for (const [
-      index,
-      pricing,
-    ] of chain.entries()) {
-      const provider = this.providers.get(
-        pricing.provider,
-      );
+    for (const [index, pricing] of chain.entries()) {
+      const provider = this.providers.get(pricing.provider);
 
       // buildSystemChain กรอง isConfigured() ไว้แล้ว แต่กันไว้ให้ type แคบลง
       if (!provider) {
@@ -276,20 +217,13 @@ export class AiManagerService {
       }
 
       try {
-        const result =
-          await provider.generateJsonResponse<T>(
-            {
-              upstreamModel:
-                pricing.upstreamModel,
-              prompt: request.prompt,
-              systemPrompt:
-                request.systemPrompt,
-              temperature:
-                request.temperature,
-              maxOutputTokens:
-                request.maxOutputTokens,
-            },
-          );
+        const result = await provider.generateJsonResponse<T>({
+          upstreamModel: pricing.upstreamModel,
+          prompt: request.prompt,
+          systemPrompt: request.systemPrompt,
+          temperature: request.temperature,
+          maxOutputTokens: request.maxOutputTokens,
+        });
 
         if (index > 0) {
           this.logger.log(
@@ -303,16 +237,10 @@ export class AiManagerService {
           usage: result.usage,
         };
       } catch (error) {
-        const kind =
-          classifyAiFailure(error);
-        const reason =
-          error instanceof Error
-            ? error.message
-            : String(error);
+        const kind = classifyAiFailure(error);
+        const reason = error instanceof Error ? error.message : String(error);
 
-        attempted.push(
-          `${pricing.id}(${kind})`,
-        );
+        attempted.push(`${pricing.id}(${kind})`);
 
         if (kind === 'permanent') {
           // คำขอเองมีปัญหา (prompt ผิด, model ไม่รองรับ, key ใช้ไม่ได้)
@@ -358,10 +286,7 @@ export class AiManagerService {
   ): AiModelPricing[] {
     const ordered: AiModelId[] = [];
 
-    if (
-      preferredModelId &&
-      isAiModelId(preferredModelId)
-    ) {
+    if (preferredModelId && isAiModelId(preferredModelId)) {
       ordered.push(preferredModelId);
     }
 
@@ -374,14 +299,10 @@ export class AiManagerService {
     }
 
     return ordered
-      .map((modelId) =>
-        getModelPricing(modelId),
-      )
+      .map((modelId) => getModelPricing(modelId))
       .filter(
         (pricing) =>
-          this.providers
-            .get(pricing.provider)
-            ?.isConfigured() === true &&
+          this.providers.get(pricing.provider)?.isConfigured() === true &&
           !excludeProviders?.includes(pricing.provider),
       );
   }
@@ -395,34 +316,30 @@ export class AiManagerService {
   ): Promise<number> {
     return this.prisma.$transaction(
       async (tx) => {
-        const charged =
-          await tx.users.updateMany({
-            where: {
-              id: userId,
-              ai_token_balance: {
-                gte: creditsCharged,
-              },
+        const charged = await tx.users.updateMany({
+          where: {
+            id: userId,
+            ai_token_balance: {
+              gte: creditsCharged,
             },
-            data: {
-              ai_token_balance: {
-                decrement: creditsCharged,
-              },
+          },
+          data: {
+            ai_token_balance: {
+              decrement: creditsCharged,
+            },
+          },
+        });
+
+        if (charged.count !== 1) {
+          const current = await tx.users.findUnique({
+            where: { id: userId },
+            select: {
+              ai_token_balance: true,
             },
           });
 
-        if (charged.count !== 1) {
-          const current =
-            await tx.users.findUnique({
-              where: { id: userId },
-              select: {
-                ai_token_balance: true,
-              },
-            });
-
           if (!current) {
-            throw new NotFoundException(
-              'User not found',
-            );
+            throw new NotFoundException('User not found');
           }
 
           throw this.insufficientCredits(
@@ -436,12 +353,9 @@ export class AiManagerService {
             user_id: userId,
             model_used: pricing.id,
             provider: pricing.provider,
-            tokens_input:
-              usage.inputTokens,
-            tokens_output:
-              usage.outputTokens,
-            credits_deducted:
-              creditsCharged,
+            tokens_input: usage.inputTokens,
+            tokens_output: usage.outputTokens,
+            credits_deducted: creditsCharged,
             latency_ms: latencyMs,
             status: 'SUCCESS',
           },
@@ -456,20 +370,17 @@ export class AiManagerService {
           },
         });
 
-        const updated =
-          await tx.users.findUniqueOrThrow({
-            where: { id: userId },
-            select: {
-              ai_token_balance: true,
-            },
-          });
+        const updated = await tx.users.findUniqueOrThrow({
+          where: { id: userId },
+          select: {
+            ai_token_balance: true,
+          },
+        });
 
         return updated.ai_token_balance;
       },
       {
-        isolationLevel:
-          Prisma.TransactionIsolationLevel
-            .Serializable,
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
   }
@@ -527,8 +438,7 @@ export class AiManagerService {
         : '';
 
     return new ServiceUnavailableException({
-      statusCode:
-        HttpStatus.SERVICE_UNAVAILABLE,
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
       error: 'AI_PROVIDER_UNAVAILABLE',
       message: `${detail}${hint}`,
       model: pricing.id,
@@ -538,14 +448,10 @@ export class AiManagerService {
     });
   }
 
-  private insufficientCredits(
-    balance: number,
-    required: number,
-  ) {
+  private insufficientCredits(balance: number, required: number) {
     return new HttpException(
       {
-        statusCode:
-          HttpStatus.PAYMENT_REQUIRED,
+        statusCode: HttpStatus.PAYMENT_REQUIRED,
         error: 'INSUFFICIENT_CREDITS',
         message: `You need at least ${required} AI tokens to run this.`,
         balance,
@@ -555,9 +461,7 @@ export class AiManagerService {
     );
   }
 
-  private resolveModel(
-    modelId: string,
-  ): AiModelPricing {
+  private resolveModel(modelId: string): AiModelPricing {
     if (!isAiModelId(modelId)) {
       throw new BadRequestException(
         `Unknown AI model "${modelId}". Supported: ${Object.keys(
@@ -569,13 +473,8 @@ export class AiManagerService {
     return getModelPricing(modelId);
   }
 
-  private resolveProvider(
-    pricing: AiModelPricing,
-  ): IAiProvider {
-    const provider =
-      this.providers.get(
-        pricing.provider,
-      );
+  private resolveProvider(pricing: AiModelPricing): IAiProvider {
+    const provider = this.providers.get(pricing.provider);
 
     if (!provider?.isConfigured()) {
       throw new ServiceUnavailableException(

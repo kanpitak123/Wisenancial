@@ -11,10 +11,30 @@ import { WebullAdapterService } from './webull/webull-adapter.service';
  * ว่างๆ ซึ่งดูเหมือนบัญชีไม่มีข้อมูลจริง — อันตรายกว่าการ throw ชัดๆ)
  */
 describe.each([
-  { name: 'Mt5AdapterService', Adapter: Mt5AdapterService, brokerType: BrokerType.MT5, mode: 'PUSH' },
-  { name: 'Mt4AdapterService', Adapter: Mt4AdapterService, brokerType: BrokerType.MT4, mode: 'PUSH' },
-  { name: 'WebullAdapterService', Adapter: WebullAdapterService, brokerType: BrokerType.WEBULL, mode: 'PULL' },
-  { name: 'DimeAdapterService', Adapter: DimeAdapterService, brokerType: BrokerType.DIME, mode: 'PULL' },
+  {
+    name: 'Mt5AdapterService',
+    Adapter: Mt5AdapterService,
+    brokerType: BrokerType.MT5,
+    mode: 'PUSH',
+  },
+  {
+    name: 'Mt4AdapterService',
+    Adapter: Mt4AdapterService,
+    brokerType: BrokerType.MT4,
+    mode: 'PUSH',
+  },
+  {
+    name: 'WebullAdapterService',
+    Adapter: WebullAdapterService,
+    brokerType: BrokerType.WEBULL,
+    mode: 'PULL',
+  },
+  {
+    name: 'DimeAdapterService',
+    Adapter: DimeAdapterService,
+    brokerType: BrokerType.DIME,
+    mode: 'PULL',
+  },
 ])('$name', ({ Adapter, brokerType, mode }) => {
   const adapter = new Adapter();
 

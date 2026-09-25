@@ -11,10 +11,7 @@
  * dev-server instance; revisit (e.g. move to Redis) before scaling the backend out.
  */
 export class TtlCache<V> {
-  private readonly store = new Map<
-    string,
-    { value: V; expiresAt: number }
-  >();
+  private readonly store = new Map<string, { value: V; expiresAt: number }>();
 
   constructor(private readonly ttlMs: number) {}
 
@@ -36,10 +33,7 @@ export class TtlCache<V> {
   }
 
   /** Fetches from cache, or computes + caches on a miss. */
-  async getOrSet(
-    key: string,
-    compute: () => Promise<V>,
-  ): Promise<V> {
+  async getOrSet(key: string, compute: () => Promise<V>): Promise<V> {
     const cached = this.get(key);
     if (cached !== undefined) return cached;
     const value = await compute();

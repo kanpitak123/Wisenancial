@@ -60,13 +60,22 @@ function createPrismaMock() {
  * result into a rejection, which is the contract the real atomic UPDATE provides.
  */
 function createConnectionsMock() {
-  const pinnedRows: Record<number, { external_account_id: string | null; broker_server: string | null }> = {};
-  const heartbeatState: Record<number, { status: BrokerConnectionStatus; portfolio_id: number | null }> = {};
+  const pinnedRows: Record<
+    number,
+    { external_account_id: string | null; broker_server: string | null }
+  > = {};
+  const heartbeatState: Record<
+    number,
+    { status: BrokerConnectionStatus; portfolio_id: number | null }
+  > = {};
 
   return {
     _pinnedRows: pinnedRows,
     recordHeartbeat: jest.fn(async (id: number) => {
-      const state = heartbeatState[id] ?? { status: BrokerConnectionStatus.ACTIVE, portfolio_id: 3 };
+      const state = heartbeatState[id] ?? {
+        status: BrokerConnectionStatus.ACTIVE,
+        portfolio_id: 3,
+      };
       return {
         id,
         user_id: 1,
@@ -85,18 +94,29 @@ function createConnectionsMock() {
     }),
     recordSync: jest.fn(async () => ({})),
     recordError: jest.fn(async () => undefined),
-    pinOrVerifyMt5Identity: jest.fn(async (id: number, accountLogin: string, accountServer: string) => {
-      const row = pinnedRows[id] ?? { external_account_id: null, broker_server: null };
-      const loginOk = row.external_account_id === null || row.external_account_id === accountLogin;
-      const serverOk = row.broker_server === null || row.broker_server === accountServer;
-      if (!loginOk || !serverOk) return false;
-      pinnedRows[id] = {
-        external_account_id: row.external_account_id ?? accountLogin,
-        broker_server: row.broker_server ?? accountServer,
-      };
-      return true;
-    }),
-    _setHeartbeatState(id: number, state: { status: BrokerConnectionStatus; portfolio_id: number | null }) {
+    pinOrVerifyMt5Identity: jest.fn(
+      async (id: number, accountLogin: string, accountServer: string) => {
+        const row = pinnedRows[id] ?? {
+          external_account_id: null,
+          broker_server: null,
+        };
+        const loginOk =
+          row.external_account_id === null ||
+          row.external_account_id === accountLogin;
+        const serverOk =
+          row.broker_server === null || row.broker_server === accountServer;
+        if (!loginOk || !serverOk) return false;
+        pinnedRows[id] = {
+          external_account_id: row.external_account_id ?? accountLogin,
+          broker_server: row.broker_server ?? accountServer,
+        };
+        return true;
+      },
+    ),
+    _setHeartbeatState(
+      id: number,
+      state: { status: BrokerConnectionStatus; portfolio_id: number | null },
+    ) {
       heartbeatState[id] = state;
     },
   };
@@ -180,7 +200,10 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
   describe('§1 unified heartbeat response', () => {
     it('a valid HEARTBEAT returns connection state (id/status/portfolio_id/last_snapshot_sequence/last_sync_at)', async () => {
       snapshotSequenceStore[7] = 41;
-      const result: any = await service.ingest(connection(), envelope({ eventType: Mt5EventType.HEARTBEAT }));
+      const result: any = await service.ingest(
+        connection(),
+        envelope({ eventType: Mt5EventType.HEARTBEAT }),
+      );
 
       expect(result.eventType).toBe('HEARTBEAT');
       expect(result.applied).toBe(true);
@@ -194,7 +217,10 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('an unbound connection (portfolio_id null) is still allowed to heartbeat and gets its state back', async () => {
-      connectionsMock._setHeartbeatState(7, { status: BrokerConnectionStatus.ACTIVE, portfolio_id: null });
+      connectionsMock._setHeartbeatState(7, {
+        status: BrokerConnectionStatus.ACTIVE,
+        portfolio_id: null,
+      });
 
       const result: any = await service.ingest(
         connection({ portfolio_id: null }),
@@ -206,11 +232,18 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('never exposes api_key_hash or OAuth token fields in the heartbeat response', async () => {
-      const result: any = await service.ingest(connection(), envelope({ eventType: Mt5EventType.HEARTBEAT }));
+      const result: any = await service.ingest(
+        connection(),
+        envelope({ eventType: Mt5EventType.HEARTBEAT }),
+      );
 
       expect(result.connection).not.toHaveProperty('api_key_hash');
-      expect(result.connection).not.toHaveProperty('oauth_access_token_encrypted');
-      expect(result.connection).not.toHaveProperty('oauth_refresh_token_encrypted');
+      expect(result.connection).not.toHaveProperty(
+        'oauth_access_token_encrypted',
+      );
+      expect(result.connection).not.toHaveProperty(
+        'oauth_refresh_token_encrypted',
+      );
     });
 
     // Guard-level 401 for revoked/invalid API key is out of Mt5SyncService's reach —
@@ -233,7 +266,10 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('2. a subsequent request with the matching identity is accepted (fast path — no pin write needed)', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       const result: any = await service.ingest(
         pinned,
@@ -246,35 +282,60 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('3. accountLogin mismatch against an already-pinned connection is rejected', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
-        service.ingest(pinned, envelope({ accountLogin: 99999999, accountServer: 'Broker-Live-01' })),
+        service.ingest(
+          pinned,
+          envelope({ accountLogin: 99999999, accountServer: 'Broker-Live-01' }),
+        ),
       ).rejects.toThrow(BadRequestException);
 
       // Setup-wizard error surfacing — the frontend polls last_error_code to show a
       // specific reason instead of an indefinite spinner (see mt5-ingest-error-codes.ts).
-      expect(connectionsMock.recordError).toHaveBeenCalledWith(7, 'ACCOUNT_MISMATCH', expect.any(String));
+      expect(connectionsMock.recordError).toHaveBeenCalledWith(
+        7,
+        'ACCOUNT_MISMATCH',
+        expect.any(String),
+      );
     });
 
     it('4. accountServer (broker_server) mismatch against an already-pinned connection is rejected', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
-        service.ingest(pinned, envelope({ accountLogin: 12345678, accountServer: 'Broker-Live-99' })),
+        service.ingest(
+          pinned,
+          envelope({ accountLogin: 12345678, accountServer: 'Broker-Live-99' }),
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('5. both accountLogin and accountServer mismatching is rejected', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
-        service.ingest(pinned, envelope({ accountLogin: 99999999, accountServer: 'Broker-Live-99' })),
+        service.ingest(
+          pinned,
+          envelope({ accountLogin: 99999999, accountServer: 'Broker-Live-99' }),
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('6. partially-populated connection (server pinned, login still null): matching server fills in the missing login', async () => {
-      const partial = connection({ external_account_id: null, broker_server: 'Broker-Live-01' });
+      const partial = connection({
+        external_account_id: null,
+        broker_server: 'Broker-Live-01',
+      });
 
       const result: any = await service.ingest(
         partial,
@@ -282,25 +343,47 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
       );
 
       expect(result.applied).toBe(true);
-      expect(connectionsMock.pinOrVerifyMt5Identity).toHaveBeenCalledWith(7, '12345678', 'Broker-Live-01');
+      expect(connectionsMock.pinOrVerifyMt5Identity).toHaveBeenCalledWith(
+        7,
+        '12345678',
+        'Broker-Live-01',
+      );
     });
 
     it('6b. partially-populated connection: a mismatch on the ALREADY-populated field is rejected without touching the still-null one', async () => {
-      const partial = connection({ external_account_id: null, broker_server: 'Broker-Live-01' });
+      const partial = connection({
+        external_account_id: null,
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
-        service.ingest(partial, envelope({ accountLogin: 12345678, accountServer: 'Broker-Live-WRONG' })),
+        service.ingest(
+          partial,
+          envelope({
+            accountLogin: 12345678,
+            accountServer: 'Broker-Live-WRONG',
+          }),
+        ),
       ).rejects.toThrow(BadRequestException);
       // rejected purely from the in-memory fast check — never even reaches the DB call
       expect(connectionsMock.pinOrVerifyMt5Identity).not.toHaveBeenCalled();
     });
 
     it('7. concurrent first-use race: two different accountLogins racing on the same brand-new connection — only one wins', async () => {
-      const fresh = connection({ external_account_id: null, broker_server: null });
+      const fresh = connection({
+        external_account_id: null,
+        broker_server: null,
+      });
 
       const [a, b] = await Promise.allSettled([
-        service.ingest(fresh, envelope({ accountLogin: 11111111, accountServer: 'Broker-Live-01' })),
-        service.ingest(fresh, envelope({ accountLogin: 22222222, accountServer: 'Broker-Live-01' })),
+        service.ingest(
+          fresh,
+          envelope({ accountLogin: 11111111, accountServer: 'Broker-Live-01' }),
+        ),
+        service.ingest(
+          fresh,
+          envelope({ accountLogin: 22222222, accountServer: 'Broker-Live-01' }),
+        ),
       ]);
 
       const outcomes = [a.status, b.status].sort();
@@ -311,18 +394,28 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('8. HEARTBEAT participates in pinning (rejects a mismatched account on heartbeat too)', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
         service.ingest(
           pinned,
-          envelope({ eventType: Mt5EventType.HEARTBEAT, accountLogin: 99999999, accountServer: 'Broker-Live-01' }),
+          envelope({
+            eventType: Mt5EventType.HEARTBEAT,
+            accountLogin: 99999999,
+            accountServer: 'Broker-Live-01',
+          }),
         ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('9. RECONCILE participates in pinning (rejects a mismatched account before touching deals/positions)', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
         service.ingest(
@@ -352,7 +445,10 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('10. a rejected mismatch never mutates trades/records (upsert/close-by-absence/deals all untouched)', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
 
       await expect(
         service.ingest(
@@ -379,7 +475,10 @@ describe('Mt5SyncService — unified heartbeat response + TOFU account identity 
     });
 
     it('11. a rejected mismatch never advances last_snapshot_sequence, even when its snapshotSequence would otherwise be treated as a harmless stale duplicate (<=)', async () => {
-      const pinned = connection({ external_account_id: '12345678', broker_server: 'Broker-Live-01' });
+      const pinned = connection({
+        external_account_id: '12345678',
+        broker_server: 'Broker-Live-01',
+      });
       snapshotSequenceStore[7] = 102; // already at 102 — an incoming <=102 would normally be a silent no-op
 
       await expect(

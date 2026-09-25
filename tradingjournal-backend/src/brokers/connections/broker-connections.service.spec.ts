@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { BrokerConnectionStatus, BrokerType } from '@prisma/client';
 import { BrokerApiKeyService } from './broker-api-key.service';
 import { BrokerConnectionsService } from './broker-connections.service';
@@ -43,7 +47,10 @@ describe('BrokerConnectionsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new BrokerConnectionsService(prismaMock as any, new BrokerApiKeyService());
+    service = new BrokerConnectionsService(
+      prismaMock as any,
+      new BrokerApiKeyService(),
+    );
   });
 
   describe('create', () => {
@@ -76,22 +83,30 @@ describe('BrokerConnectionsService', () => {
 
       expect(result.apiKey).toBeNull();
       expect(prismaMock.broker_connections.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ api_key_hash: null }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ api_key_hash: null }),
+        }),
       );
     });
 
     it('ปฏิเสธถ้า portfolio_id ที่ระบุไม่ใช่ของ user คนนี้ (กัน bind ข้ามบัญชี)', async () => {
       prismaMock.portfolios.findFirst.mockResolvedValue(null);
 
-      await expect(service.create(42, BrokerType.MT5, 999)).rejects.toThrow(NotFoundException);
+      await expect(service.create(42, BrokerType.MT5, 999)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(prismaMock.broker_connections.create).not.toHaveBeenCalled();
     });
 
     it('ปฏิเสธถ้า portfolio นี้มี connection ประเภทเดียวกันที่ยังไม่ REVOKED ผูกอยู่แล้ว (กันสร้างซ้ำโดยไม่ตั้งใจ)', async () => {
       prismaMock.portfolios.findFirst.mockResolvedValue({ id: 5 });
-      prismaMock.broker_connections.findFirst.mockResolvedValue(connectionRow({ id: 3, portfolio_id: 5 }));
+      prismaMock.broker_connections.findFirst.mockResolvedValue(
+        connectionRow({ id: 3, portfolio_id: 5 }),
+      );
 
-      await expect(service.create(42, BrokerType.MT5, 5)).rejects.toThrow(ConflictException);
+      await expect(service.create(42, BrokerType.MT5, 5)).rejects.toThrow(
+        ConflictException,
+      );
       expect(prismaMock.broker_connections.create).not.toHaveBeenCalled();
       expect(prismaMock.broker_connections.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -151,7 +166,11 @@ describe('BrokerConnectionsService', () => {
       await expect(service.getOwned(1, 999)).rejects.toThrow(NotFoundException);
       expect(prismaMock.broker_connections.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ id: 1, user_id: 999, deleted_at: null }),
+          where: expect.objectContaining({
+            id: 1,
+            user_id: 999,
+            deleted_at: null,
+          }),
         }),
       );
     });
@@ -160,15 +179,21 @@ describe('BrokerConnectionsService', () => {
       prismaMock.broker_connections.findFirst.mockResolvedValue(null);
 
       await expect(service.revoke(1, 999)).rejects.toThrow(NotFoundException);
-      await expect(service.rotateKey(1, 999)).rejects.toThrow(NotFoundException);
-      await expect(service.softDelete(1, 999)).rejects.toThrow(NotFoundException);
+      await expect(service.rotateKey(1, 999)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.softDelete(1, 999)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(prismaMock.broker_connections.update).not.toHaveBeenCalled();
     });
   });
 
   describe('revoke', () => {
     it('ตั้ง status เป็น REVOKED', async () => {
-      prismaMock.broker_connections.findFirst.mockResolvedValue(connectionRow());
+      prismaMock.broker_connections.findFirst.mockResolvedValue(
+        connectionRow(),
+      );
       prismaMock.broker_connections.update.mockResolvedValue(
         connectionRow({ status: BrokerConnectionStatus.REVOKED }),
       );
@@ -218,14 +243,18 @@ describe('BrokerConnectionsService', () => {
         connectionRow({ broker_type: BrokerType.WEBULL, api_key_hash: null }),
       );
 
-      await expect(service.rotateKey(1, 42)).rejects.toThrow(ForbiddenException);
+      await expect(service.rotateKey(1, 42)).rejects.toThrow(
+        ForbiddenException,
+      );
       expect(prismaMock.broker_connections.update).not.toHaveBeenCalled();
     });
   });
 
   describe('softDelete', () => {
     it('ตั้งทั้ง deleted_at และ status = REVOKED พร้อมกัน กัน key เก่าใช้งานได้อีก', async () => {
-      prismaMock.broker_connections.findFirst.mockResolvedValue(connectionRow());
+      prismaMock.broker_connections.findFirst.mockResolvedValue(
+        connectionRow(),
+      );
       prismaMock.broker_connections.update.mockResolvedValue(connectionRow());
 
       await service.softDelete(1, 42);
@@ -245,7 +274,10 @@ describe('BrokerConnectionsService', () => {
   describe('recordHeartbeat', () => {
     it('อัปเดต last_heartbeat_at และตั้ง status = ACTIVE', async () => {
       prismaMock.broker_connections.update.mockResolvedValue(
-        connectionRow({ last_heartbeat_at: new Date(), status: BrokerConnectionStatus.ACTIVE }),
+        connectionRow({
+          last_heartbeat_at: new Date(),
+          status: BrokerConnectionStatus.ACTIVE,
+        }),
       );
 
       const result = await service.recordHeartbeat(1);
@@ -301,7 +333,11 @@ describe('BrokerConnectionsService', () => {
     it('เขียน last_error_code/message/at ลงแถวที่ระบุ', async () => {
       prismaMock.broker_connections.update.mockResolvedValue(connectionRow());
 
-      await service.recordError(1, 'ACCOUNT_MISMATCH', 'accountLogin ไม่ตรงกับที่ pin ไว้');
+      await service.recordError(
+        1,
+        'ACCOUNT_MISMATCH',
+        'accountLogin ไม่ตรงกับที่ pin ไว้',
+      );
 
       expect(prismaMock.broker_connections.update).toHaveBeenCalledWith({
         where: { id: 1 },
@@ -344,25 +380,46 @@ describe('BrokerConnectionsService', () => {
     it('issues a single conditional UPDATE guarded by an OR(null, matches-incoming) clause on both columns', async () => {
       prismaMock.broker_connections.updateMany.mockResolvedValue({ count: 1 });
 
-      const result = await service.pinOrVerifyMt5Identity(7, '12345678', 'Broker-Live-01');
+      const result = await service.pinOrVerifyMt5Identity(
+        7,
+        '12345678',
+        'Broker-Live-01',
+      );
 
       expect(result).toBe(true);
       expect(prismaMock.broker_connections.updateMany).toHaveBeenCalledWith({
         where: {
           id: 7,
           AND: [
-            { OR: [{ external_account_id: null }, { external_account_id: '12345678' }] },
-            { OR: [{ broker_server: null }, { broker_server: 'Broker-Live-01' }] },
+            {
+              OR: [
+                { external_account_id: null },
+                { external_account_id: '12345678' },
+              ],
+            },
+            {
+              OR: [
+                { broker_server: null },
+                { broker_server: 'Broker-Live-01' },
+              ],
+            },
           ],
         },
-        data: { external_account_id: '12345678', broker_server: 'Broker-Live-01' },
+        data: {
+          external_account_id: '12345678',
+          broker_server: 'Broker-Live-01',
+        },
       });
     });
 
     it('returns false when the conditional UPDATE matches zero rows (mismatch or lost a concurrent race)', async () => {
       prismaMock.broker_connections.updateMany.mockResolvedValue({ count: 0 });
 
-      const result = await service.pinOrVerifyMt5Identity(7, '99999999', 'Broker-Live-01');
+      const result = await service.pinOrVerifyMt5Identity(
+        7,
+        '99999999',
+        'Broker-Live-01',
+      );
 
       expect(result).toBe(false);
     });
@@ -376,7 +433,10 @@ describe('BrokerConnectionsService', () => {
 
       expect(prismaMock.broker_connections.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ api_key_hash: expect.any(String), deleted_at: null }),
+          where: expect.objectContaining({
+            api_key_hash: expect.any(String),
+            deleted_at: null,
+          }),
         }),
       );
     });

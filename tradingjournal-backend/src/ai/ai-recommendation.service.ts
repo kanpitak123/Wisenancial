@@ -4,10 +4,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import {
-  AiManagerService,
-  type AiModelOption,
-} from './ai-manager.service';
+import { AiManagerService, type AiModelOption } from './ai-manager.service';
 import {
   concisenessRule,
   investmentGuardrail,
@@ -15,10 +12,7 @@ import {
   resolveOutputLanguage,
   screeningOnlyGuardrail,
 } from './ai-prompt.shared';
-import {
-  StocksService,
-  type GrowthCandidate,
-} from '../stocks/stocks.service';
+import { StocksService, type GrowthCandidate } from '../stocks/stocks.service';
 import type { StockRecommendation } from './ai-feature.types';
 
 /**
@@ -28,10 +22,7 @@ import type { StockRecommendation } from './ai-feature.types';
  * ฝั่งเซิร์ฟเวอร์จึงต้องเลือกให้ และต้องมีตัวสำรองด้วย ไม่งั้นตัวแรกล่มทีเดียว
  * ทั้งฟีเจอร์ตายทันทีโดยผู้ใช้ทำอะไรไม่ได้เลย
  */
-const GROWTH_MODEL_PREFERENCE = [
-  'gemini-2.5-flash',
-  'groq-llama3',
-] as const;
+const GROWTH_MODEL_PREFERENCE = ['gemini-2.5-flash', 'groq-llama3'] as const;
 
 /**
  * ต้องมี candidate อย่างน้อยเท่านี้ถึงจะเรียกว่า "คัดเลือก" ได้
@@ -44,25 +35,19 @@ const MIN_GROWTH_CANDIDATES = 5;
 
 @Injectable()
 export class AiRecommendationService {
-  private readonly logger = new Logger(
-    AiRecommendationService.name,
-  );
+  private readonly logger = new Logger(AiRecommendationService.name);
 
   constructor(
     private readonly manager: AiManagerService,
     private readonly stocks: StocksService,
   ) {}
 
-  async getGrowthRecommendations(
-    userId: number,
-    requestedLanguage?: string,
-  ) {
+  async getGrowthRecommendations(userId: number, requestedLanguage?: string) {
     const chain = this.modelChain();
     const [preferred] = chain;
     const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
-    const candidates =
-      await this.stocks.getGrowthCandidates();
+    const candidates = await this.stocks.getGrowthCandidates();
 
     if (candidates.length < MIN_GROWTH_CANDIDATES) {
       throw new ServiceUnavailableException({
@@ -74,51 +59,47 @@ export class AiRecommendationService {
     }
 
     let result: Awaited<
-      ReturnType<
-        AiManagerService['executeAiRequest']
-      >
+      ReturnType<AiManagerService['executeAiRequest']>
     > | null = null;
     let servedBy = preferred;
 
     for (const [index, model] of chain.entries()) {
       try {
-        result =
-          await this.manager.executeAiRequest<
-            | StockRecommendation[]
-            | Record<string, unknown>
-          >({
-            userId,
-            modelId: model.id,
-            systemPrompt: [
-              'You are a quantitative growth-stock screener for Thai retail investors.',
-              outputLanguageRule(outputLanguage),
-              investmentGuardrail(),
-              screeningOnlyGuardrail(),
-              concisenessRule(),
-              // schema ที่นี่ซ้อนลึกที่สุดในระบบ (5 หุ้น × reasoning 4 ช่อง + สรุป)
-              // ถ้าโมเดลอ่านโควตาเป็นของทั้ง reasoning มันจะเทไปที่ growth ช่องเดียว
-              // แล้วอีกสามช่องเหลือประโยคเดียวห้วน ๆ — การ์ดดูเหมือนข้อมูลขาด
-              'Each of the four reasoning sub-fields gets its own budget: give growth, profit, customerBase and liquidity comparable weight instead of spending it all on the first one.',
-              'Only reason about the stocks listed in "candidates". Never return, name, or compare against a symbol that is not in that list, even if you know of a better one.',
-              'Use only the numbers in candidates[].metrics. A null metric means the data is unavailable — say so plainly instead of recalling or estimating it from your own knowledge.',
-              'revenueGrowthYoY and netMargin are fractions, not percentages (0.32 means +32%). Convert them for the reader.',
-              'reasoning.growth and reasoning.profit must each cite a specific number from that candidate\'s metrics. reasoning.liquidity must refer to avgDailyVolume3M. If the metrics do not support a field (for example customerBase), state that the supplied data does not cover it rather than inventing detail.',
-              'Return a valid JSON array only, matching exactly:',
-              '[{"symbol":"string — must be one of candidates[].symbol","reasoning":{"growth":"string","profit":"string","customerBase":"string","liquidity":"string"},"aiSummary":"string"}]',
-            ].join('\n'),
-            prompt: JSON.stringify({
-              task: 'Rank the 4-5 strongest growth candidates from the list below and explain each one using only the metrics given.',
-              candidates,
-            }),
-            /**
-             * สูงสุดในระบบเพราะ output ก้อนใหญ่สุด: 5 หุ้น × (reasoning 4 ช่อง +
-             * aiSummary) = 25 ฟิลด์ข้อความในคำตอบเดียว
-             *
-             * แถมโมเดลตัวแรกคือ gemini ซึ่งหัก thinking token จากเพดานเดียวกันนี้
-             * (ดู gemini.provider.ts) เพดานที่พอดีเป๊ะจึงกลายเป็นไม่พอเงียบ ๆ
-             */
-            maxOutputTokens: 2400,
-          });
+        result = await this.manager.executeAiRequest<
+          StockRecommendation[] | Record<string, unknown>
+        >({
+          userId,
+          modelId: model.id,
+          systemPrompt: [
+            'You are a quantitative growth-stock screener for Thai retail investors.',
+            outputLanguageRule(outputLanguage),
+            investmentGuardrail(),
+            screeningOnlyGuardrail(),
+            concisenessRule(),
+            // schema ที่นี่ซ้อนลึกที่สุดในระบบ (5 หุ้น × reasoning 4 ช่อง + สรุป)
+            // ถ้าโมเดลอ่านโควตาเป็นของทั้ง reasoning มันจะเทไปที่ growth ช่องเดียว
+            // แล้วอีกสามช่องเหลือประโยคเดียวห้วน ๆ — การ์ดดูเหมือนข้อมูลขาด
+            'Each of the four reasoning sub-fields gets its own budget: give growth, profit, customerBase and liquidity comparable weight instead of spending it all on the first one.',
+            'Only reason about the stocks listed in "candidates". Never return, name, or compare against a symbol that is not in that list, even if you know of a better one.',
+            'Use only the numbers in candidates[].metrics. A null metric means the data is unavailable — say so plainly instead of recalling or estimating it from your own knowledge.',
+            'revenueGrowthYoY and netMargin are fractions, not percentages (0.32 means +32%). Convert them for the reader.',
+            "reasoning.growth and reasoning.profit must each cite a specific number from that candidate's metrics. reasoning.liquidity must refer to avgDailyVolume3M. If the metrics do not support a field (for example customerBase), state that the supplied data does not cover it rather than inventing detail.",
+            'Return a valid JSON array only, matching exactly:',
+            '[{"symbol":"string — must be one of candidates[].symbol","reasoning":{"growth":"string","profit":"string","customerBase":"string","liquidity":"string"},"aiSummary":"string"}]',
+          ].join('\n'),
+          prompt: JSON.stringify({
+            task: 'Rank the 4-5 strongest growth candidates from the list below and explain each one using only the metrics given.',
+            candidates,
+          }),
+          /**
+           * สูงสุดในระบบเพราะ output ก้อนใหญ่สุด: 5 หุ้น × (reasoning 4 ช่อง +
+           * aiSummary) = 25 ฟิลด์ข้อความในคำตอบเดียว
+           *
+           * แถมโมเดลตัวแรกคือ gemini ซึ่งหัก thinking token จากเพดานเดียวกันนี้
+           * (ดู gemini.provider.ts) เพดานที่พอดีเป๊ะจึงกลายเป็นไม่พอเงียบ ๆ
+           */
+          maxOutputTokens: 2400,
+        });
         servedBy = model;
         break;
       } catch (error) {
@@ -140,10 +121,7 @@ export class AiRecommendationService {
       );
     }
 
-    const rows = this.reconcile(
-      this.extractArray(result.data),
-      candidates,
-    );
+    const rows = this.reconcile(this.extractArray(result.data), candidates);
     if (!rows.length) {
       throw new InternalServerErrorException(
         'AI returned no stock recommendations',
@@ -159,19 +137,16 @@ export class AiRecommendationService {
        * บอกว่าถูกสลับโมเดลให้หรือเปล่า — null คือได้ตัวที่ตั้งใจไว้ตั้งแต่แรก
        * หน้าบ้านยังไม่ได้ใช้ฟิลด์นี้ แต่ผู้ใช้ควรมีทางรู้ว่าคำตอบมาจากโมเดลไหน
        */
-      fallbackFrom:
-        servedBy.id === preferred.id
-          ? null
-          : preferred.id,
+      fallbackFrom: servedBy.id === preferred.id ? null : preferred.id,
     };
   }
 
   private extractArray(data: unknown): unknown[] {
     if (Array.isArray(data)) return data;
     if (data && typeof data === 'object') {
-      const nested = Object.values(
-        data as Record<string, unknown>,
-      ).find(Array.isArray);
+      const nested = Object.values(data as Record<string, unknown>).find(
+        Array.isArray,
+      );
       if (Array.isArray(nested)) return nested;
     }
     return [];
@@ -222,10 +197,7 @@ export class AiRecommendationService {
       if (seen.has(symbol)) continue;
       seen.add(symbol);
 
-      const reasoning = (raw.reasoning ?? {}) as Record<
-        string,
-        unknown
-      >;
+      const reasoning = raw.reasoning ?? {};
 
       kept.push({
         symbol: candidate.symbol,
@@ -258,12 +230,8 @@ export class AiRecommendationService {
    * เครดิตไม่พอ / ข้อมูลที่ส่งไปผิด ไม่ใช่เรื่องของโมเดล ลองตัวอื่นก็ตายเหมือนกัน
    * แถมยังหลอกผู้ใช้ให้รอนานกว่าเดิมโดยเปล่าประโยชน์
    */
-  private canRetryOnAnotherModel(
-    error: unknown,
-  ): boolean {
-    if (
-      !(error instanceof ServiceUnavailableException)
-    ) {
+  private canRetryOnAnotherModel(error: unknown): boolean {
+    if (!(error instanceof ServiceUnavailableException)) {
       return false;
     }
 
@@ -272,8 +240,7 @@ export class AiRecommendationService {
     return (
       typeof body === 'object' &&
       body !== null &&
-      (body as { error?: string }).error ===
-        'AI_PROVIDER_UNAVAILABLE'
+      (body as { error?: string }).error === 'AI_PROVIDER_UNAVAILABLE'
     );
   }
 
@@ -286,21 +253,12 @@ export class AiRecommendationService {
    * ถอย "ลง" — gemini (5/15) ไป groq (1/1) ถูกลง ผู้ใช้ไม่มีทางเสียเพิ่ม
    */
   private modelChain(): AiModelOption[] {
-    const available =
-      this.manager.listAvailableModels();
-    const ranked = GROWTH_MODEL_PREFERENCE.map(
-      (id) =>
-        available.find(
-          (model) => model.id === id,
-        ),
-    ).filter(
-      (model): model is AiModelOption =>
-        model !== undefined,
-    );
+    const available = this.manager.listAvailableModels();
+    const ranked = GROWTH_MODEL_PREFERENCE.map((id) =>
+      available.find((model) => model.id === id),
+    ).filter((model): model is AiModelOption => model !== undefined);
 
-    const chain = ranked.length
-      ? ranked
-      : available.slice(0, 1);
+    const chain = ranked.length ? ranked : available.slice(0, 1);
     const [preferred] = chain;
 
     if (!preferred) {
@@ -313,19 +271,12 @@ export class AiRecommendationService {
       preferred,
       ...chain
         .slice(1)
-        .filter(
-          (model) =>
-            this.rateOf(model) <=
-            this.rateOf(preferred),
-        ),
+        .filter((model) => this.rateOf(model) <= this.rateOf(preferred)),
     ];
   }
 
   /** เทียบราคาแบบหยาบๆ พอให้รู้ว่าตัวไหนแพงกว่ากัน ไม่ได้ใช้คิดเงินจริง */
   private rateOf(model: AiModelOption): number {
-    return (
-      model.creditsPer1kInput +
-      model.creditsPer1kOutput
-    );
+    return model.creditsPer1kInput + model.creditsPer1kOutput;
   }
 }

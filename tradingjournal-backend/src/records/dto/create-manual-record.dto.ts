@@ -31,6 +31,10 @@ export class CreateManualRecordDto {
   @IsDateString()
   occurred_at?: string;
 
-  @ValidateIf((dto: CreateManualRecordDto) => dto.type === RecordType.TRANSFER_IN || dto.type === RecordType.TRANSFER_OUT)
+  @ValidateIf(
+    (dto: CreateManualRecordDto) =>
+      dto.type === RecordType.TRANSFER_IN ||
+      dto.type === RecordType.TRANSFER_OUT,
+  )
   transfer_group_id?: never;
 }

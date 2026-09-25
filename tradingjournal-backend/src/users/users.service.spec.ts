@@ -88,9 +88,9 @@ describe('UsersService', () => {
     it('ไม่พบ username -> 404', async () => {
       prismaMock.users.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.getPublicProfile('ghost', 99),
-      ).rejects.toThrow('ไม่พบผู้ใช้นี้');
+      await expect(service.getPublicProfile('ghost', 99)).rejects.toThrow(
+        'ไม่พบผู้ใช้นี้',
+      );
     });
 
     it('โปรไฟล์ส่วนตัว + คนอื่นเปิดดู -> 403', async () => {
@@ -98,9 +98,9 @@ describe('UsersService', () => {
         profile({ is_public_profile: false }),
       );
 
-      await expect(
-        service.getPublicProfile('trader01', 99),
-      ).rejects.toThrow('โปรไฟล์นี้ตั้งเป็นส่วนตัว');
+      await expect(service.getPublicProfile('trader01', 99)).rejects.toThrow(
+        'โปรไฟล์นี้ตั้งเป็นส่วนตัว',
+      );
     });
 
     it('โปรไฟล์ส่วนตัว + เจ้าของเปิดดูเอง -> ดูได้ และรู้ว่าเป็นเจ้าของ', async () => {
@@ -155,9 +155,9 @@ describe('UsersService', () => {
 
       const args = prismaMock.users.findUnique.mock.calls[0][0];
 
-      expect(
-        args.select.portfolios.select.stock_purchases.where,
-      ).toEqual({ remaining_shares: { gt: 0 } });
+      expect(args.select.portfolios.select.stock_purchases.where).toEqual({
+        remaining_shares: { gt: 0 },
+      });
     });
 
     it('ไม่ส่ง email/password ออกไปกับโปรไฟล์สาธารณะ', async () => {

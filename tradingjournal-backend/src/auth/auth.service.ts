@@ -127,10 +127,7 @@ export class AuthService {
 
     // ล็อกอินใหม่ = เริ่ม token family ใหม่ ไม่ต่อสายเดิม
     // (คนละอุปกรณ์/คนละ session จะได้ revoke แยกกันได้)
-    const refreshToken = await this.refreshTokenService.issue(
-      user.id,
-      context,
-    );
+    const refreshToken = await this.refreshTokenService.issue(user.id, context);
 
     return {
       message: 'ล็อกอินสำเร็จ',
@@ -147,7 +144,10 @@ export class AuthService {
    * อ่าน user จาก DB สดทุกครั้ง ไม่ได้ใช้ค่าใน payload ของ refresh token
    * เพราะ role/แพ็กเกจอาจเปลี่ยนไปแล้วระหว่างอายุ 30 วันของ token
    */
-  async refresh(rawToken: string | undefined, context: RefreshTokenContext = {}) {
+  async refresh(
+    rawToken: string | undefined,
+    context: RefreshTokenContext = {},
+  ) {
     if (!rawToken) {
       throw new UnauthorizedException(AUTH_ERROR_MESSAGES.missingRefreshToken);
     }

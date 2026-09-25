@@ -50,7 +50,9 @@ function socketWith(options: { authorization?: string }): FakeSocket {
     rooms: new Set(['socket-1']),
     data: {},
     handshake: {
-      headers: options.authorization ? { authorization: options.authorization } : {},
+      headers: options.authorization
+        ? { authorization: options.authorization }
+        : {},
       auth: {},
     },
     disconnect: jest.fn(),
@@ -74,7 +76,9 @@ describe('BrokerSyncGateway', () => {
     }).compile();
 
     gateway = module.get<BrokerSyncGateway>(BrokerSyncGateway);
-    gateway.server = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) } as never;
+    gateway.server = {
+      to: jest.fn().mockReturnValue({ emit: jest.fn() }),
+    } as never;
   });
 
   describe('handleConnection', () => {
@@ -127,7 +131,7 @@ describe('BrokerSyncGateway', () => {
   });
 
   describe('broadcastMt5SyncUpdate', () => {
-    it('emits mt5_sync_update to exactly the target user\'s private room, never a global broadcast', () => {
+    it("emits mt5_sync_update to exactly the target user's private room, never a global broadcast", () => {
       gateway.broadcastMt5SyncUpdate(42, {
         connectionId: 7,
         eventType: Mt5EventType.POSITIONS_SNAPSHOT,
@@ -140,10 +144,15 @@ describe('BrokerSyncGateway', () => {
       // มาตรฐานของ typescript-eslint กับ mocked object methods — ไม่ได้เรียกแบบ unbound จริง)
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(gateway.server.to).toHaveBeenCalledWith('user:42');
-      const emitted = (gateway.server.to as jest.Mock).mock.results[0].value.emit;
+      const emitted = (gateway.server.to as jest.Mock).mock.results[0].value
+        .emit;
       expect(emitted).toHaveBeenCalledWith(
         'mt5_sync_update',
-        expect.objectContaining({ connectionId: 7, eventType: Mt5EventType.POSITIONS_SNAPSHOT, upsertedCount: 2 }),
+        expect.objectContaining({
+          connectionId: 7,
+          eventType: Mt5EventType.POSITIONS_SNAPSHOT,
+          upsertedCount: 2,
+        }),
       );
     });
 
@@ -155,7 +164,8 @@ describe('BrokerSyncGateway', () => {
         appliedDealsCount: 1,
       });
 
-      const emitted = (gateway.server.to as jest.Mock).mock.results[0].value.emit;
+      const emitted = (gateway.server.to as jest.Mock).mock.results[0].value
+        .emit;
       const payload = emitted.mock.calls[0][1];
       expect(payload).not.toHaveProperty('positions');
       expect(payload).not.toHaveProperty('deals');

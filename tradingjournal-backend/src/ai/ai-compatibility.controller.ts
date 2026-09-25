@@ -34,8 +34,7 @@ export class AiCompatibilityController {
     const result = await this.manager.executeAiRequest({
       userId: req.user.userId,
       modelId: body.modelId,
-      systemPrompt:
-        'You are a portfolio advisor. Return valid JSON only.',
+      systemPrompt: 'You are a portfolio advisor. Return valid JSON only.',
       prompt: JSON.stringify({
         task: 'Analyze holdings',
         requiredShape: {
@@ -70,10 +69,9 @@ export class AiCompatibilityController {
 
   @Get('recommendations')
   async recommendationsLegacy(@Request() req: any) {
-    const result =
-      await this.recommendations.getGrowthRecommendations(
-        req.user.userId,
-      );
+    const result = await this.recommendations.getGrowthRecommendations(
+      req.user.userId,
+    );
 
     return {
       success: true,

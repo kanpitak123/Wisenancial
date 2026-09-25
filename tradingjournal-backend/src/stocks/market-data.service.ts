@@ -197,11 +197,7 @@ export interface StochasticResult {
 }
 
 export type OverboughtOversoldStatus =
-  | 'Strong Buy'
-  | 'Buy Signal'
-  | 'Strong Sell'
-  | 'Sell Signal'
-  | 'Neutral';
+  'Strong Buy' | 'Buy Signal' | 'Strong Sell' | 'Sell Signal' | 'Neutral';
 
 export interface OverboughtOversoldSignal {
   status: OverboughtOversoldStatus;

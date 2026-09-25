@@ -15,8 +15,6 @@ describe('AiRuleEngineService', () => {
     'pnl_month',
     'portfolio_allocation',
   ])('returns an insight for %s', (chartType) => {
-    expect(service.analyze(chartType, [])).toEqual(
-      expect.any(String),
-    );
+    expect(service.analyze(chartType, [])).toEqual(expect.any(String));
   });
 });

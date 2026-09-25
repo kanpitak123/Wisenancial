@@ -14,10 +14,7 @@
 export type AiProviderId = 'groq' | 'gemini' | 'openai' | 'anthropic';
 
 export type AiModelId =
-  | 'groq-llama3'
-  | 'gemini-2.5-flash'
-  | 'gpt-4o'
-  | 'claude-sonnet-5';
+  'groq-llama3' | 'gemini-2.5-flash' | 'gpt-4o' | 'claude-sonnet-5';
 
 export interface AiModelPricing {
   /** Public id: what the frontend sends and what we write to ai_usage_logs.model_used. */
@@ -120,6 +117,7 @@ export function calculateCredits(
   tokensOutput: number,
 ): number {
   const input = (Math.max(0, tokensInput) / 1000) * pricing.creditsPer1kInput;
-  const output = (Math.max(0, tokensOutput) / 1000) * pricing.creditsPer1kOutput;
+  const output =
+    (Math.max(0, tokensOutput) / 1000) * pricing.creditsPer1kOutput;
   return input + output;
 }

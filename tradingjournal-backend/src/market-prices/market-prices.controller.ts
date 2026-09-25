@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UpsertMarketPriceDto } from './dto/upsert-market-price.dto';
 import { MarketPricesService } from './market-prices.service';
@@ -13,9 +6,7 @@ import { MarketPricesService } from './market-prices.service';
 @UseGuards(JwtAuthGuard)
 @Controller('market-prices')
 export class MarketPricesController {
-  constructor(
-    private readonly service: MarketPricesService,
-  ) {}
+  constructor(private readonly service: MarketPricesService) {}
 
   @Get()
   find(
@@ -32,9 +23,7 @@ export class MarketPricesController {
   }
 
   @Post()
-  upsert(
-    @Body() dto: UpsertMarketPriceDto,
-  ) {
+  upsert(@Body() dto: UpsertMarketPriceDto) {
     return this.service.upsert(dto);
   }
 }

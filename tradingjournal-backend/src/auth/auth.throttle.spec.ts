@@ -37,9 +37,7 @@ function fakeResponse() {
 
 async function buildApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
-    imports: [
-      ThrottlerModule.forRoot([{ ttl: 60_000, limit: GLOBAL_LIMIT }]),
-    ],
+    imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: GLOBAL_LIMIT }])],
     controllers: [AuthController],
     providers: [
       { provide: AuthService, useValue: { login } },

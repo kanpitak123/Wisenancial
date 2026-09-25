@@ -52,7 +52,12 @@ function makeService(rows: ReturnType<typeof makeTraderRow>[]) {
 }
 
 function traderQuery(): NewsQueryDto {
-  return { scope: NewsScope.TRADER, page: 1, limit: 12, language: 'en' } as NewsQueryDto;
+  return {
+    scope: NewsScope.TRADER,
+    page: 1,
+    limit: 12,
+    language: 'en',
+  };
 }
 
 describe('NewsFeedService — summary ของข่าวปฏิทินเศรษฐกิจ (§4)', () => {
@@ -73,7 +78,9 @@ describe('NewsFeedService — summary ของข่าวปฏิทินเ
   });
 
   it('content มีค่าจริง (เผื่ออนาคต) -> ยังใช้ content เป็น summary เหมือนเดิม', async () => {
-    const service = makeService([makeTraderRow({ content: 'A real scraped article body' })]);
+    const service = makeService([
+      makeTraderRow({ content: 'A real scraped article body' }),
+    ]);
 
     const result = await service.getUnifiedFeed(1, traderQuery());
 
@@ -81,7 +88,9 @@ describe('NewsFeedService — summary ของข่าวปฏิทินเ
   });
 
   it('ไม่มีทั้ง content และ ai_summary (ยังไม่ถูก enrich) -> summary เป็นสตริงว่าง ไม่ใช่ prompt', async () => {
-    const service = makeService([makeTraderRow({ content: null, ai_summary: null })]);
+    const service = makeService([
+      makeTraderRow({ content: null, ai_summary: null }),
+    ]);
 
     const result = await service.getUnifiedFeed(1, traderQuery());
 

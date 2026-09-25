@@ -25,36 +25,22 @@ import { PostsService } from './posts.service';
 @UseGuards(JwtAuthGuard)
 @Controller('posts')
 export class PostsController {
-  constructor(
-    private readonly posts: PostsService,
-  ) {}
+  constructor(private readonly posts: PostsService) {}
 
   @Post()
-  @UseInterceptors(
-    FileInterceptor('image'),
-  )
+  @UseInterceptors(FileInterceptor('image'))
   create(
     @CurrentUser() user: AuthUser,
     @Body() body: CreatePostDto,
     @UploadedFile()
     file?: Express.Multer.File,
   ) {
-    return this.posts.create(
-      user.userId,
-      body,
-      file,
-    );
+    return this.posts.create(user.userId, body, file);
   }
 
   @Get()
-  findAll(
-    @CurrentUser() user: AuthUser,
-    @Query() query: PostsQueryDto,
-  ) {
-    return this.posts.findAll(
-      user.userId,
-      query,
-    );
+  findAll(@CurrentUser() user: AuthUser, @Query() query: PostsQueryDto) {
+    return this.posts.findAll(user.userId, query);
   }
 
   @Get(':id')
@@ -63,10 +49,7 @@ export class PostsController {
     @Param('id', ParseIntPipe)
     id: number,
   ) {
-    return this.posts.findOne(
-      id,
-      user.userId,
-    );
+    return this.posts.findOne(id, user.userId);
   }
 
   @Patch(':id')
@@ -76,11 +59,7 @@ export class PostsController {
     id: number,
     @Body() body: UpdatePostDto,
   ) {
-    return this.posts.update(
-      id,
-      user.userId,
-      body,
-    );
+    return this.posts.update(id, user.userId, body);
   }
 
   @Delete(':id')
@@ -89,10 +68,7 @@ export class PostsController {
     @Param('id', ParseIntPipe)
     id: number,
   ) {
-    return this.posts.remove(
-      id,
-      user.userId,
-    );
+    return this.posts.remove(id, user.userId);
   }
 
   @Post(':id/like')
@@ -101,10 +77,7 @@ export class PostsController {
     @Param('id', ParseIntPipe)
     id: number,
   ) {
-    return this.posts.toggleLike(
-      user.userId,
-      id,
-    );
+    return this.posts.toggleLike(user.userId, id);
   }
 
   @Post(':id/comments')
@@ -114,10 +87,6 @@ export class PostsController {
     id: number,
     @Body() body: CreateCommentDto,
   ) {
-    return this.posts.addComment(
-      user.userId,
-      id,
-      body,
-    );
+    return this.posts.addComment(user.userId, id, body);
   }
 }

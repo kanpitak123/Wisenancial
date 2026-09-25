@@ -32,9 +32,7 @@ afterAll(() => {
 });
 
 function makeGateway(verifyImpl?: () => unknown) {
-  const verify = jest.fn(
-    verifyImpl ?? (() => VALID_PAYLOAD),
-  );
+  const verify = jest.fn(verifyImpl ?? (() => VALID_PAYLOAD));
 
   const gateway = new NewsGateway(
     { verify } as unknown as JwtService,

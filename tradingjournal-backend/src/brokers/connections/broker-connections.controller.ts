@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { AuthUser } from '../../auth/types/auth-user.type';
@@ -21,8 +30,15 @@ export class BrokerConnectionsController {
   constructor(private readonly connections: BrokerConnectionsService) {}
 
   @Post()
-  create(@Body() dto: CreateBrokerConnectionDto, @CurrentUser() user: AuthUser) {
-    return this.connections.create(user.userId, dto.broker_type, dto.portfolio_id);
+  create(
+    @Body() dto: CreateBrokerConnectionDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.connections.create(
+      user.userId,
+      dto.broker_type,
+      dto.portfolio_id,
+    );
   }
 
   @Get()
@@ -41,12 +57,18 @@ export class BrokerConnectionsController {
   }
 
   @Post(':id/rotate-key')
-  rotateKey(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  rotateKey(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.connections.rotateKey(id, user.userId);
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     await this.connections.softDelete(id, user.userId);
 
     return { message: 'ลบ broker connection แล้ว' };

@@ -19,9 +19,7 @@ import { WatchlistService } from './watchlist.service';
 @UseGuards(JwtAuthGuard)
 @Controller('watchlist')
 export class WatchlistController {
-  constructor(
-    private readonly watchlistService: WatchlistService,
-  ) {}
+  constructor(private readonly watchlistService: WatchlistService) {}
 
   /**
    * Canonical user-level route.
@@ -46,25 +44,16 @@ export class WatchlistController {
   @Get('portfolio/:portfolioId')
   getWatchlist(
     @CurrentUser() user: AuthUser,
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
   ) {
-    return this.watchlistService.getWatchlist(
-      user.userId,
-      portfolioId,
-    );
+    return this.watchlistService.getWatchlist(user.userId, portfolioId);
   }
 
   @Get('portfolio/:portfolioId/check')
   checkSymbol(
     @CurrentUser() user: AuthUser,
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @Query('symbol') symbol: string,
   ) {
@@ -78,27 +67,17 @@ export class WatchlistController {
   @Post('portfolio/:portfolioId')
   addToWatchlist(
     @CurrentUser() user: AuthUser,
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @Body() body: AddWatchlistDto,
   ) {
-    return this.watchlistService.addToWatchlist(
-      user.userId,
-      portfolioId,
-      body,
-    );
+    return this.watchlistService.addToWatchlist(user.userId, portfolioId, body);
   }
 
   @Delete('portfolio/:portfolioId')
   removeFromWatchlist(
     @CurrentUser() user: AuthUser,
-    @Param(
-      'portfolioId',
-      ParseIntPipe,
-    )
+    @Param('portfolioId', ParseIntPipe)
     portfolioId: number,
     @Query('symbol') symbol: string,
   ) {

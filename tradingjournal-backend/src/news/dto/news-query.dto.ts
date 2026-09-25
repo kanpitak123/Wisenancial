@@ -42,7 +42,11 @@ export class NewsQueryDto {
   sentiment?: string;
 
   @IsOptional()
-  @Transform(({ value }) => String(value ?? '').trim().toUpperCase())
+  @Transform(({ value }) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase(),
+  )
   @IsString()
   symbol?: string;
 

@@ -85,7 +85,7 @@ const FEW_SHOT_EXAMPLES: Array<{
 }> = [
   {
     headline:
-      "Fed holds interest rates steady at 5.25%-5.50%, signals potential rate cut later this year if inflation cools",
+      'Fed holds interest rates steady at 5.25%-5.50%, signals potential rate cut later this year if inflation cools',
     summary:
       'The Federal Reserve left its benchmark rate unchanged while chairman noted progress on core inflation but emphasized caution regarding wage pressures and labor market resilience.',
     label: {

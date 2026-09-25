@@ -13,7 +13,8 @@ const VALID_RAW = {
   aiSummary: 'Central bank held rates steady, citing inflation progress.',
   aiTrend: 'SIDEWAY',
   aiImpactProbability: 60,
-  stockImpactAnalysis: 'Financing costs stay elevated near-term for leveraged names.',
+  stockImpactAnalysis:
+    'Financing costs stay elevated near-term for leveraged names.',
   sector: 'Macro / Rates',
   importance: 'HIGH',
   sentiment: 'NEUTRAL',
@@ -78,7 +79,12 @@ describe('GeminiNewsClassifierService', () => {
     const service = makeService(executeSystemAiRequest);
 
     await expect(
-      service.classify({ headline: 'x', summary: 'x', content: 'x', language: 'en' }),
+      service.classify({
+        headline: 'x',
+        summary: 'x',
+        content: 'x',
+        language: 'en',
+      }),
     ).rejects.toBeInstanceOf(GeminiClassificationValidationError);
   });
 
@@ -92,7 +98,12 @@ describe('GeminiNewsClassifierService', () => {
     const service = makeService(executeSystemAiRequest);
 
     await expect(
-      service.classify({ headline: 'x', summary: 'x', content: 'x', language: 'en' }),
+      service.classify({
+        headline: 'x',
+        summary: 'x',
+        content: 'x',
+        language: 'en',
+      }),
     ).rejects.toBeInstanceOf(GeminiClassificationValidationError);
   });
 
@@ -108,7 +119,12 @@ describe('GeminiNewsClassifierService', () => {
     const service = makeService(executeSystemAiRequest);
 
     await expect(
-      service.classify({ headline: 'x', summary: 'x', content: 'x', language: 'en' }),
+      service.classify({
+        headline: 'x',
+        summary: 'x',
+        content: 'x',
+        language: 'en',
+      }),
     ).rejects.toBeInstanceOf(GeminiClassificationValidationError);
   });
 
@@ -119,7 +135,12 @@ describe('GeminiNewsClassifierService', () => {
     const service = makeService(executeSystemAiRequest);
 
     await expect(
-      service.classify({ headline: 'x', summary: 'x', content: 'x', language: 'en' }),
+      service.classify({
+        headline: 'x',
+        summary: 'x',
+        content: 'x',
+        language: 'en',
+      }),
     ).rejects.toThrow('Gemini request failed: network timeout');
   });
 });

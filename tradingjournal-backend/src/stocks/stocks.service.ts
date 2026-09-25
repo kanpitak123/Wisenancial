@@ -71,10 +71,7 @@ export interface StockListingParams {
 // ---- AI radar (stock recommendations feed) ----
 
 export type RadarCategory =
-  | 'Upside'
-  | 'Downside'
-  | 'Near-recommended'
-  | 'Not-recommended';
+  'Upside' | 'Downside' | 'Near-recommended' | 'Not-recommended';
 
 export type RadarDateBucket = 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH';
 
@@ -167,9 +164,9 @@ export class StocksService {
   // StockSymbolPicker's autocomplete fetches on every mount across ≥4 different pages —
   // measured at ~1.6-2s per call in the QA sweep's latency diagnosis purely from this app's
   // DB round-trip cost. A short cache removes that cost on every call after the first.
-  private static readonly catalogCache = new TtlCache<
-    StockSearchResult[]
-  >(5 * 60 * 1000);
+  private static readonly catalogCache = new TtlCache<StockSearchResult[]>(
+    5 * 60 * 1000,
+  );
 
   private async queryDbStocks(term: string): Promise<StockSearchResult[]> {
     if (term.length === 0) {
@@ -513,7 +510,12 @@ export class StocksService {
    * แยกกัน ตัวนี้เป็นทางเข้าเดียวกันสำหรับผู้เรียกที่อยากได้ทั้งลิสต์แบบไม่ตัดโควตา
    */
   private async loadActiveStocks(): Promise<
-    { symbol: string; name: string; sector: string | null; exchange: string | null }[]
+    {
+      symbol: string;
+      name: string;
+      sector: string | null;
+      exchange: string | null;
+    }[]
   > {
     try {
       const rows = await this.prisma.stocks.findMany({

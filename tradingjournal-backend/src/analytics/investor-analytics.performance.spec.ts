@@ -23,7 +23,12 @@ interface Deps {
   quotes?: Record<string, number | null>;
 }
 
-function buildService({ records = [], purchases = [], sales = [], quotes = {} }: Deps) {
+function buildService({
+  records = [],
+  purchases = [],
+  sales = [],
+  quotes = {},
+}: Deps) {
   const prisma = {
     portfolios: { findFirst: jest.fn().mockResolvedValue(PORTFOLIO) },
     stock_purchases: { findMany: jest.fn().mockResolvedValue(purchases) },

@@ -155,7 +155,9 @@ describe('Mt5SyncService', () => {
     });
 
     it('rejects sentAt far outside the clock-skew window', async () => {
-      const staleSentAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const staleSentAt = new Date(
+        Date.now() - 48 * 60 * 60 * 1000,
+      ).toISOString();
       await expect(
         service.ingest(connection(), envelope({ sentAt: staleSentAt })),
       ).rejects.toThrow(BadRequestException);
@@ -186,32 +188,46 @@ describe('Mt5SyncService', () => {
       Mt5EventType.POSITIONS_SNAPSHOT,
       Mt5EventType.DEALS,
       Mt5EventType.RECONCILE,
-    ])('rejects %s when the connection has no portfolio bound', async (eventType) => {
-      const payloadByType: Record<string, unknown> = {
-        [Mt5EventType.ACCOUNT_SNAPSHOT]: accountSnapshotPayload,
-        [Mt5EventType.POSITIONS_SNAPSHOT]: {
-          snapshotId: 'uuid-1',
-          snapshotType: 'FULL', snapshotSequence: 1,
-          positionCount: 1,
-          positions: [positionPayload],
-        },
-        [Mt5EventType.DEALS]: { deals: [dealPayload] },
-        [Mt5EventType.RECONCILE]: {
-          accountSnapshot: accountSnapshotPayload,
-          positionsSnapshot: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 0, positions: [] },
-          deals: [],
-        },
-      };
+    ])(
+      'rejects %s when the connection has no portfolio bound',
+      async (eventType) => {
+        const payloadByType: Record<string, unknown> = {
+          [Mt5EventType.ACCOUNT_SNAPSHOT]: accountSnapshotPayload,
+          [Mt5EventType.POSITIONS_SNAPSHOT]: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 1,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
+          [Mt5EventType.DEALS]: { deals: [dealPayload] },
+          [Mt5EventType.RECONCILE]: {
+            accountSnapshot: accountSnapshotPayload,
+            positionsSnapshot: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'FULL',
+              snapshotSequence: 1,
+              positionCount: 0,
+              positions: [],
+            },
+            deals: [],
+          },
+        };
 
-      await expect(
-        service.ingest(
-          connection({ portfolio_id: null }),
-          envelope({ eventType, payload: payloadByType[eventType] }),
-        ),
-      ).rejects.toThrow(ForbiddenException);
+        await expect(
+          service.ingest(
+            connection({ portfolio_id: null }),
+            envelope({ eventType, payload: payloadByType[eventType] }),
+          ),
+        ).rejects.toThrow(ForbiddenException);
 
-      expect(connectionsMock.recordError).toHaveBeenCalledWith(7, 'PORTFOLIO_NOT_BOUND', expect.any(String));
-    });
+        expect(connectionsMock.recordError).toHaveBeenCalledWith(
+          7,
+          'PORTFOLIO_NOT_BOUND',
+          expect.any(String),
+        );
+      },
+    );
   });
 
   describe('setup-wizard error surfacing (last_error_code)', () => {
@@ -220,11 +236,18 @@ describe('Mt5SyncService', () => {
         service.ingest(connection(), envelope({ protocolVersion: 999 })),
       ).rejects.toThrow(BadRequestException);
 
-      expect(connectionsMock.recordError).toHaveBeenCalledWith(7, 'CONFIG_ERROR', expect.any(String));
+      expect(connectionsMock.recordError).toHaveBeenCalledWith(
+        7,
+        'CONFIG_ERROR',
+        expect.any(String),
+      );
     });
 
     it('does not record anything for a successful ingest', async () => {
-      await service.ingest(connection(), envelope({ eventType: Mt5EventType.HEARTBEAT }));
+      await service.ingest(
+        connection(),
+        envelope({ eventType: Mt5EventType.HEARTBEAT }),
+      );
 
       expect(connectionsMock.recordError).not.toHaveBeenCalled();
     });
@@ -234,7 +257,10 @@ describe('Mt5SyncService', () => {
     it('accepts a structurally valid account snapshot and records sync', async () => {
       const result = await service.ingest(
         connection(),
-        envelope({ eventType: Mt5EventType.ACCOUNT_SNAPSHOT, payload: accountSnapshotPayload }),
+        envelope({
+          eventType: Mt5EventType.ACCOUNT_SNAPSHOT,
+          payload: accountSnapshotPayload,
+        }),
       );
       expect(result.applied).toBe(true);
       expect(connectionsMock.recordSync).toHaveBeenCalledWith(7);
@@ -245,7 +271,10 @@ describe('Mt5SyncService', () => {
       await expect(
         service.ingest(
           connection(),
-          envelope({ eventType: Mt5EventType.ACCOUNT_SNAPSHOT, payload: broken }),
+          envelope({
+            eventType: Mt5EventType.ACCOUNT_SNAPSHOT,
+            payload: broken,
+          }),
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -270,7 +299,12 @@ describe('Mt5SyncService', () => {
           connection(),
           envelope({
             eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-            payload: { snapshotId: 'uuid-1', snapshotType: 'DELTA', positionCount: 1, positions: [positionPayload] },
+            payload: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'DELTA',
+              positionCount: 1,
+              positions: [positionPayload],
+            },
           }),
         ),
       ).rejects.toThrow(BadRequestException);
@@ -282,7 +316,13 @@ describe('Mt5SyncService', () => {
           connection(),
           envelope({
             eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-            payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 5, positions: [positionPayload] },
+            payload: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'FULL',
+              snapshotSequence: 1,
+              positionCount: 5,
+              positions: [positionPayload],
+            },
           }),
         ),
       ).rejects.toThrow(BadRequestException);
@@ -295,7 +335,12 @@ describe('Mt5SyncService', () => {
           connection(),
           envelope({
             eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-            payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 0 /* missing positions[] */ },
+            payload: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'FULL',
+              snapshotSequence: 1,
+              positionCount: 0 /* missing positions[] */,
+            },
           }),
         ),
       ).rejects.toThrow(BadRequestException);
@@ -307,7 +352,13 @@ describe('Mt5SyncService', () => {
         connection(),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 1,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
         }),
       );
       expect(result.upsertedCount).toBe(1);
@@ -322,17 +373,30 @@ describe('Mt5SyncService', () => {
         connection(),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 0, positions: [] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 1,
+            positionCount: 0,
+            positions: [],
+          },
         }),
       );
       expect(result.upsertedCount).toBe(0);
       expect(result.accepted).toBe(true);
-      expect(tradesMock.closeMt5PositionsByAbsence).toHaveBeenCalledWith(expect.anything(), 7, new Set());
+      expect(tradesMock.closeMt5PositionsByAbsence).toHaveBeenCalledWith(
+        expect.anything(),
+        7,
+        new Set(),
+      );
     });
   });
 
   describe('POSITIONS_SNAPSHOT — snapshotSequence staleness/ordering (Phase 3 hardening review §2/§3)', () => {
-    function snapshotEnvelope(sequence: number, overrides: Record<string, unknown> = {}) {
+    function snapshotEnvelope(
+      sequence: number,
+      overrides: Record<string, unknown> = {},
+    ) {
       return envelope({
         eventType: Mt5EventType.POSITIONS_SNAPSHOT,
         payload: {
@@ -390,7 +454,11 @@ describe('Mt5SyncService', () => {
         snapshotEnvelope(5, { positionCount: 0, positions: [] }),
       );
       expect(result.accepted).toBe(true);
-      expect(tradesMock.closeMt5PositionsByAbsence).toHaveBeenCalledWith(expect.anything(), 7, new Set());
+      expect(tradesMock.closeMt5PositionsByAbsence).toHaveBeenCalledWith(
+        expect.anything(),
+        7,
+        new Set(),
+      );
     });
 
     it('5. invalid snapshot (DTO validation failure) never reaches the sequence gate or closing-by-absence', async () => {
@@ -405,7 +473,10 @@ describe('Mt5SyncService', () => {
       await expect(
         service.ingest(
           connection(),
-          envelope({ eventType: Mt5EventType.POSITIONS_SNAPSHOT, payload: brokenPayload }),
+          envelope({
+            eventType: Mt5EventType.POSITIONS_SNAPSHOT,
+            payload: brokenPayload,
+          }),
         ),
       ).rejects.toThrow(BadRequestException);
       expect(tradesMock.closeMt5PositionsByAbsence).not.toHaveBeenCalled();
@@ -414,7 +485,10 @@ describe('Mt5SyncService', () => {
 
     it('6. positionCount mismatch is rejected before the sequence gate ever runs (stored sequence unaffected)', async () => {
       await expect(
-        service.ingest(connection(), snapshotEnvelope(10, { positionCount: 99 })),
+        service.ingest(
+          connection(),
+          snapshotEnvelope(10, { positionCount: 99 }),
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(tradesMock.closeMt5PositionsByAbsence).not.toHaveBeenCalled();
       expect(snapshotSequenceStore[7]).toBeUndefined();
@@ -452,7 +526,10 @@ describe('Mt5SyncService', () => {
     it('normalizes and forwards each deal to TradesService.applyMt5Deal', async () => {
       const result = await service.ingest(
         connection(),
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
       expect(tradesMock.applyMt5Deal).toHaveBeenCalledTimes(1);
       expect(result.totalCount).toBe(1);
@@ -460,10 +537,16 @@ describe('Mt5SyncService', () => {
     });
 
     it('counts a duplicate deal (applied=false) separately from applied', async () => {
-      tradesMock.applyMt5Deal.mockResolvedValueOnce({ trade: { id: 1 }, applied: false });
+      tradesMock.applyMt5Deal.mockResolvedValueOnce({
+        trade: { id: 1 },
+        applied: false,
+      });
       const result = await service.ingest(
         connection(),
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
       expect(result.appliedCount).toBe(0);
       expect(result.duplicateCount).toBe(1);
@@ -473,7 +556,10 @@ describe('Mt5SyncService', () => {
       await expect(
         service.ingest(
           connection(),
-          envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [{ ...dealPayload, entryType: 'CLOSE' }] } }),
+          envelope({
+            eventType: Mt5EventType.DEALS,
+            payload: { deals: [{ ...dealPayload, entryType: 'CLOSE' }] },
+          }),
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -501,7 +587,13 @@ describe('Mt5SyncService', () => {
         connection({ portfolio_id: 3, user_id: 1 }),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 1,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
         }),
       );
       expect(invalidateSpy).toHaveBeenCalledTimes(1);
@@ -514,7 +606,13 @@ describe('Mt5SyncService', () => {
         connection(),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 1,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
         }),
       );
       expect(invalidateSpy).not.toHaveBeenCalled();
@@ -523,17 +621,26 @@ describe('Mt5SyncService', () => {
     it('DEALS: invalidates once, keyed by portfolio/user, when at least one deal is newly applied', async () => {
       await service.ingest(
         connection({ portfolio_id: 3, user_id: 1 }),
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
       expect(invalidateSpy).toHaveBeenCalledTimes(1);
       expect(invalidateSpy).toHaveBeenCalledWith(3, 1);
     });
 
     it('DEALS: does not invalidate when the whole batch is duplicates (appliedCount:0, no writes happened)', async () => {
-      tradesMock.applyMt5Deal.mockResolvedValueOnce({ trade: { id: 1 }, applied: false });
+      tradesMock.applyMt5Deal.mockResolvedValueOnce({
+        trade: { id: 1 },
+        applied: false,
+      });
       await service.ingest(
         connection(),
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
       expect(invalidateSpy).not.toHaveBeenCalled();
     });
@@ -561,7 +668,13 @@ describe('Mt5SyncService', () => {
           eventType: Mt5EventType.RECONCILE,
           payload: {
             accountSnapshot: accountSnapshotPayload,
-            positionsSnapshot: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+            positionsSnapshot: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'FULL',
+              snapshotSequence: 1,
+              positionCount: 1,
+              positions: [positionPayload],
+            },
             deals: [dealPayload],
           },
         }),
@@ -578,7 +691,12 @@ describe('Mt5SyncService', () => {
             eventType: Mt5EventType.RECONCILE,
             payload: {
               accountSnapshot: accountSnapshotPayload,
-              positionsSnapshot: { snapshotId: 'uuid-1', snapshotType: 'DELTA', positionCount: 0, positions: [] },
+              positionsSnapshot: {
+                snapshotId: 'uuid-1',
+                snapshotType: 'DELTA',
+                positionCount: 0,
+                positions: [],
+              },
               deals: [],
             },
           }),
@@ -593,7 +711,13 @@ describe('Mt5SyncService', () => {
         connection({ user_id: 42 }),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 1,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
         }),
       );
 
@@ -615,7 +739,13 @@ describe('Mt5SyncService', () => {
         connection(),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 5, positionCount: 1, positions: [positionPayload] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 5,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
         }),
       );
       syncGatewayMock.broadcastMt5SyncUpdate.mockClear();
@@ -624,7 +754,13 @@ describe('Mt5SyncService', () => {
         connection(),
         envelope({
           eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-          payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 5, positionCount: 1, positions: [positionPayload] },
+          payload: {
+            snapshotId: 'uuid-1',
+            snapshotType: 'FULL',
+            snapshotSequence: 5,
+            positionCount: 1,
+            positions: [positionPayload],
+          },
         }),
       );
 
@@ -635,28 +771,43 @@ describe('Mt5SyncService', () => {
     it('DEALS: broadcasts when at least one deal is newly applied', async () => {
       await service.ingest(
         connection({ user_id: 42 }),
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
 
       expect(syncGatewayMock.broadcastMt5SyncUpdate).toHaveBeenCalledWith(
         42,
-        expect.objectContaining({ eventType: Mt5EventType.DEALS, appliedDealsCount: 1 }),
+        expect.objectContaining({
+          eventType: Mt5EventType.DEALS,
+          appliedDealsCount: 1,
+        }),
       );
     });
 
     it('DEALS: does NOT broadcast when the whole batch is duplicates (appliedCount:0)', async () => {
-      tradesMock.applyMt5Deal.mockResolvedValueOnce({ trade: { id: 1 }, applied: false });
+      tradesMock.applyMt5Deal.mockResolvedValueOnce({
+        trade: { id: 1 },
+        applied: false,
+      });
 
       await service.ingest(
         connection(),
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
 
       expect(syncGatewayMock.broadcastMt5SyncUpdate).not.toHaveBeenCalled();
     });
 
     it('HEARTBEAT never broadcasts (nothing mutates)', async () => {
-      await service.ingest(connection(), envelope({ eventType: Mt5EventType.HEARTBEAT }));
+      await service.ingest(
+        connection(),
+        envelope({ eventType: Mt5EventType.HEARTBEAT }),
+      );
       expect(syncGatewayMock.broadcastMt5SyncUpdate).not.toHaveBeenCalled();
     });
 
@@ -667,7 +818,13 @@ describe('Mt5SyncService', () => {
           eventType: Mt5EventType.RECONCILE,
           payload: {
             accountSnapshot: accountSnapshotPayload,
-            positionsSnapshot: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: 1, positions: [positionPayload] },
+            positionsSnapshot: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'FULL',
+              snapshotSequence: 1,
+              positionCount: 1,
+              positions: [positionPayload],
+            },
             deals: [dealPayload],
           },
         }),
@@ -677,7 +834,11 @@ describe('Mt5SyncService', () => {
       expect(syncGatewayMock.broadcastMt5SyncUpdate).toHaveBeenCalledTimes(1);
       expect(syncGatewayMock.broadcastMt5SyncUpdate).toHaveBeenCalledWith(
         42,
-        expect.objectContaining({ eventType: Mt5EventType.RECONCILE, upsertedCount: 1, appliedDealsCount: 1 }),
+        expect.objectContaining({
+          eventType: Mt5EventType.RECONCILE,
+          upsertedCount: 1,
+          appliedDealsCount: 1,
+        }),
       );
     });
   });
@@ -693,18 +854,30 @@ describe('Mt5SyncService', () => {
           connection(),
           envelope({
             eventType: Mt5EventType.POSITIONS_SNAPSHOT,
-            payload: { snapshotId: 'uuid-1', snapshotType: 'FULL', snapshotSequence: 1, positionCount: tooMany.length, positions: tooMany },
+            payload: {
+              snapshotId: 'uuid-1',
+              snapshotType: 'FULL',
+              snapshotSequence: 1,
+              positionCount: tooMany.length,
+              positions: tooMany,
+            },
           }),
         ),
       ).rejects.toThrow(BadRequestException);
     }, 15000);
 
     it('rejects a deals[] array larger than the configured cap (2000)', async () => {
-      const tooMany = Array.from({ length: 2001 }, (_, i) => ({ ...dealPayload, dealTicket: `D${i}` }));
+      const tooMany = Array.from({ length: 2001 }, (_, i) => ({
+        ...dealPayload,
+        dealTicket: `D${i}`,
+      }));
       await expect(
         service.ingest(
           connection(),
-          envelope({ eventType: Mt5EventType.DEALS, payload: { deals: tooMany } }),
+          envelope({
+            eventType: Mt5EventType.DEALS,
+            payload: { deals: tooMany },
+          }),
         ),
       ).rejects.toThrow(BadRequestException);
     }, 15000);
@@ -727,7 +900,10 @@ describe('Mt5SyncService', () => {
       const spoofedConnection = connection({ portfolio_id: 3 });
       await service.ingest(
         spoofedConnection,
-        envelope({ eventType: Mt5EventType.DEALS, payload: { deals: [dealPayload] } }),
+        envelope({
+          eventType: Mt5EventType.DEALS,
+          payload: { deals: [dealPayload] },
+        }),
       );
       expect(tradesMock.applyMt5Deal).toHaveBeenCalledWith(
         expect.anything(),

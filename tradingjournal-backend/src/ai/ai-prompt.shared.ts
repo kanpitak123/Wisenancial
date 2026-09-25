@@ -22,12 +22,8 @@ export type AiOutputLanguage = 'th' | 'en';
 export const DEFAULT_OUTPUT_LANGUAGE: AiOutputLanguage = 'th';
 
 /** รับค่าที่ client ส่งมาแล้วบีบให้เหลือค่าที่รองรับจริง — อะไรที่ไม่รู้จักตกเป็นค่าเริ่มต้น */
-export function resolveOutputLanguage(
-  value?: string | null,
-): AiOutputLanguage {
-  return value === 'en' || value === 'th'
-    ? value
-    : DEFAULT_OUTPUT_LANGUAGE;
+export function resolveOutputLanguage(value?: string | null): AiOutputLanguage {
+  return value === 'en' || value === 'th' ? value : DEFAULT_OUTPUT_LANGUAGE;
 }
 
 /**
@@ -37,9 +33,7 @@ export function resolveOutputLanguage(
  * ทั้งก้อน การเขียนว่า "Output language: th" ทำให้โมเดลบางเจ้าตีความว่าเป็น
  * ค่า config มากกว่าคำสั่ง
  */
-export function outputLanguageRule(
-  language: AiOutputLanguage,
-): string {
+export function outputLanguageRule(language: AiOutputLanguage): string {
   const name = language === 'th' ? 'Thai' : 'English';
 
   return `Output language: ${name} — always match this exactly, regardless of the language of the supplied data.`;

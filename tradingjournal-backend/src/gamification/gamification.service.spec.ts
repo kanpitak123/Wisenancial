@@ -2,10 +2,7 @@ import { GamificationService } from './gamification.service';
 
 describe('GamificationService', () => {
   it('should be defined', () => {
-    const service =
-      new GamificationService(
-        {} as any,
-      );
+    const service = new GamificationService({} as any);
 
     expect(service).toBeDefined();
   });
@@ -33,7 +30,10 @@ describe('GamificationService.getUserRank — เรียงลำดับใ�
   }
 
   it('คะแนนเท่ากับคนอื่น (บัญชีใหม่ 0 แต้ม) -> นับ ahead ด้วย tie-break เดียวกับ getLeaderboard (longest_streak แล้วค่อย id) ไม่ใช่แค่ points_balance', async () => {
-    const { service, count } = makeService({ points_balance: 0, longest_streak: 0 }, 10);
+    const { service, count } = makeService(
+      { points_balance: 0, longest_streak: 0 },
+      10,
+    );
 
     const rank = await (service as any).getUserRank(42);
 
@@ -50,7 +50,10 @@ describe('GamificationService.getUserRank — เรียงลำดับใ�
   });
 
   it('นำโด่งไม่มีใครเสมอ -> ahead = 0 -> อันดับ 1', async () => {
-    const { service } = makeService({ points_balance: 500, longest_streak: 12 }, 0);
+    const { service } = makeService(
+      { points_balance: 500, longest_streak: 12 },
+      0,
+    );
 
     const rank = await (service as any).getUserRank(1);
 

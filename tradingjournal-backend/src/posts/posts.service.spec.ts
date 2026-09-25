@@ -65,7 +65,12 @@ describe('PostsService', () => {
       prismaMock.posts.count.mockResolvedValue(1);
       prismaMock.posts.findMany.mockResolvedValue([post]);
       prismaMock.users.findMany.mockResolvedValue([
-        { id: 14, username: 'qa_paid_wisenancial', full_name: 'QA Paid', avatar_url: null },
+        {
+          id: 14,
+          username: 'qa_paid_wisenancial',
+          full_name: 'QA Paid',
+          avatar_url: null,
+        },
       ]);
       prismaMock.portfolios.findMany.mockResolvedValue([
         { id: 17, name: 'QA Stock Main', portfolio_type: 'INVESTOR' },
@@ -79,7 +84,12 @@ describe('PostsService', () => {
           content: 'QA test comment',
           created_at: new Date('2026-09-23T09:50:57.119Z'),
           updated_at: new Date('2026-09-23T09:50:57.119Z'),
-          users: { id: 14, username: 'qa_paid_wisenancial', full_name: 'QA Paid', avatar_url: null },
+          users: {
+            id: 14,
+            username: 'qa_paid_wisenancial',
+            full_name: 'QA Paid',
+            avatar_url: null,
+          },
         },
       ]);
       prismaMock.post_likes.findMany.mockResolvedValue([{ post_id: 5 }]);

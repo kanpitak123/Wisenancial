@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ThrottlerException, ThrottlerStorage } from '@nestjs/throttler';
 import type { BrokerAuthenticatedRequest } from '../connections/broker-api-key.guard';
@@ -35,19 +41,27 @@ export class MtConnectionThrottleGuard implements CanActivate {
     @Inject(ThrottlerStorage) private readonly storage: ThrottlerStorage,
     private readonly configService: ConfigService,
   ) {
-    const ttlSeconds = Number(this.configService.get<string>('MT_INGEST_THROTTLE_TTL_SECONDS') ?? 60);
+    const ttlSeconds = Number(
+      this.configService.get<string>('MT_INGEST_THROTTLE_TTL_SECONDS') ?? 60,
+    );
     this.ttlMs = ttlSeconds * 1000;
-    this.limit = Number(this.configService.get<string>('MT_INGEST_THROTTLE_LIMIT') ?? 30);
+    this.limit = Number(
+      this.configService.get<string>('MT_INGEST_THROTTLE_LIMIT') ?? 30,
+    );
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<BrokerAuthenticatedRequest>();
+    const request = context
+      .switchToHttp()
+      .getRequest<BrokerAuthenticatedRequest>();
     const connection = request.brokerConnection;
 
     // ไม่ควรเกิดขึ้นจริง — BrokerApiKeyGuard ต้องรันมาก่อนแล้วเสมอตาม @UseGuards order —
     // แต่ถ้าลำดับ guard ผิดพลาดในอนาคต ต้องปฏิเสธ ไม่ใช่ปล่อยผ่านแบบไม่มี rate limit เลย
     if (!connection) {
-      throw new UnauthorizedException('ไม่พบ broker connection ที่ยืนยันตัวตนแล้ว');
+      throw new UnauthorizedException(
+        'ไม่พบ broker connection ที่ยืนยันตัวตนแล้ว',
+      );
     }
 
     const key = `mt-ingest:${connection.id}`;

@@ -49,7 +49,9 @@ export function tierLabel(tier: SubscriptionTier | null): string {
  * แต่ยังมีสมาชิกที่ถูกเพิ่มด้วยมือผ่าน subscriptions/plans อยู่ (PaidTierGuard ก็ยอมให้ผ่าน)
  * เลยต้องอ่านเผื่อไว้ ไม่งั้นคนที่จ่ายเงินแล้วจะโดนตัดสิทธิ์เหลือโควต้า free
  */
-export function tierFromPlanName(name: string | null | undefined): SubscriptionTier | null {
+export function tierFromPlanName(
+  name: string | null | undefined,
+): SubscriptionTier | null {
   if (!name) {
     return null;
   }

@@ -58,8 +58,16 @@ describe('StockTransactionsService.previewSell', () => {
     });
     // ผู้ใช้อาจกด "sell" จาก lot #2 (ซื้อทีหลัง) แต่ FIFO ต้องตัด lot #1 (เก่าสุด) ก่อนเสมอ
     const lots = [
-      lot({ id: 1, purchase_date: new Date('2026-01-01'), remaining_shares: new Prisma.Decimal(5) }),
-      lot({ id: 2, purchase_date: new Date('2026-02-01'), remaining_shares: new Prisma.Decimal(10) }),
+      lot({
+        id: 1,
+        purchase_date: new Date('2026-01-01'),
+        remaining_shares: new Prisma.Decimal(5),
+      }),
+      lot({
+        id: 2,
+        purchase_date: new Date('2026-02-01'),
+        remaining_shares: new Prisma.Decimal(10),
+      }),
     ];
     prismaMock.stock_purchases.findMany.mockResolvedValue(lots);
 
@@ -73,8 +81,16 @@ describe('StockTransactionsService.previewSell', () => {
     expect(result.insufficient).toBe(false);
     // ต้องกิน lot #1 จนหมด (5 หุ้น) ก่อน แล้วค่อยไปกิน lot #2 อีก 3 หุ้น — ครอบคลุม 2 lots ไม่ใช่ lot เดียว
     expect(result.allocations).toEqual([
-      expect.objectContaining({ purchase_id: 1, shares: 5, fully_closes_lot: true }),
-      expect.objectContaining({ purchase_id: 2, shares: 3, fully_closes_lot: false }),
+      expect.objectContaining({
+        purchase_id: 1,
+        shares: 5,
+        fully_closes_lot: true,
+      }),
+      expect.objectContaining({
+        purchase_id: 2,
+        shares: 3,
+        fully_closes_lot: false,
+      }),
     ]);
   });
 
@@ -85,8 +101,16 @@ describe('StockTransactionsService.previewSell', () => {
       investor_cost_method: 'FIFO',
     });
     const lots = [
-      lot({ id: 2, purchase_date: new Date('2026-02-01'), remaining_shares: new Prisma.Decimal(10) }),
-      lot({ id: 1, purchase_date: new Date('2026-01-01'), remaining_shares: new Prisma.Decimal(5) }),
+      lot({
+        id: 2,
+        purchase_date: new Date('2026-02-01'),
+        remaining_shares: new Prisma.Decimal(10),
+      }),
+      lot({
+        id: 1,
+        purchase_date: new Date('2026-01-01'),
+        remaining_shares: new Prisma.Decimal(5),
+      }),
     ];
     prismaMock.stock_purchases.findMany.mockResolvedValue(lots);
 
@@ -98,7 +122,11 @@ describe('StockTransactionsService.previewSell', () => {
 
     expect(result.cost_method).toBe('LIFO');
     expect(result.allocations).toEqual([
-      expect.objectContaining({ purchase_id: 2, shares: 8, fully_closes_lot: false }),
+      expect.objectContaining({
+        purchase_id: 2,
+        shares: 8,
+        fully_closes_lot: false,
+      }),
     ]);
     expect(prismaMock.stock_purchases.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

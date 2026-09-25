@@ -26,19 +26,25 @@ export class GroqProvider implements IAiProvider {
       API_KEY_FORMATS.groq,
       this.logger,
     );
-    this.client = apiKey ? new Groq({ apiKey, timeout: AI_REQUEST_TIMEOUT_MS }) : null;
+    this.client = apiKey
+      ? new Groq({ apiKey, timeout: AI_REQUEST_TIMEOUT_MS })
+      : null;
   }
 
   isConfigured(): boolean {
     return this.client !== null;
   }
 
-  async generateJsonResponse<T>(options: AiGenerateOptions): Promise<AiJsonResult<T>> {
+  async generateJsonResponse<T>(
+    options: AiGenerateOptions,
+  ): Promise<AiJsonResult<T>> {
     if (!this.client) {
       throw new Error('Groq client is not configured');
     }
 
-    const systemPrompt = options.systemPrompt ?? 'You are a helpful assistant. Reply with valid JSON only.';
+    const systemPrompt =
+      options.systemPrompt ??
+      'You are a helpful assistant. Reply with valid JSON only.';
 
     const completion = await this.client.chat.completions.create({
       model: options.upstreamModel,
@@ -60,8 +66,10 @@ export class GroqProvider implements IAiProvider {
       data: parseJsonResponse<T>(text),
       usage: {
         inputTokens:
-          completion.usage?.prompt_tokens ?? estimateTokens(systemPrompt + options.prompt),
-        outputTokens: completion.usage?.completion_tokens ?? estimateTokens(text),
+          completion.usage?.prompt_tokens ??
+          estimateTokens(systemPrompt + options.prompt),
+        outputTokens:
+          completion.usage?.completion_tokens ?? estimateTokens(text),
       },
     };
   }

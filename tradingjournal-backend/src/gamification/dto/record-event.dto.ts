@@ -1,14 +1,5 @@
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  Max,
-  Min,
-} from 'class-validator';
-import {
-  MissionEventType,
-  PortfolioType,
-} from '@prisma/client';
+import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { MissionEventType, PortfolioType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class RecordGamificationEventDto {

@@ -140,8 +140,7 @@ describe('AiService', () => {
       modelId: 'groq-llama3',
     });
 
-    const { systemPrompt, maxOutputTokens } =
-      executeAiRequest.mock.calls[0][0];
+    const { systemPrompt, maxOutputTokens } = executeAiRequest.mock.calls[0][0];
 
     expect(systemPrompt).toContain('about 40 words at most');
     expect(systemPrompt).toContain('applies to every field on its own');

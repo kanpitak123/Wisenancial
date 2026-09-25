@@ -60,7 +60,9 @@ describe('GoalsService', () => {
 
     it('มีเป้าอยู่แล้ว -> คืนเป็นตัวเลข ไม่ใช่ Decimal ของ Prisma', async () => {
       prismaMock.portfolios.findFirst.mockResolvedValue({ id: 1 });
-      prismaMock.goals.findFirst.mockResolvedValue({ target_profit: '1500.50' });
+      prismaMock.goals.findFirst.mockResolvedValue({
+        target_profit: '1500.50',
+      });
 
       const result = await service.getGoal(7, 1, 2026, 8);
 
