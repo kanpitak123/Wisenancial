@@ -40,8 +40,13 @@ export interface WorkspaceNavLink {
    * ต้องเป็นสมาชิกแบบเสียเงินถึงจะเข้าได้ — dock จะหรี่ปุ่มลง ติดไอคอนแม่กุญแจ
    * แล้วเด้งไปหน้าอัปเกรดแทนการ navigate
    *
-   * ⚠️ ตอนนี้ยังไม่มีลิงก์ไหนตั้งค่านี้ — กลไกมีไว้พร้อมใช้เฉยๆ ตัวการตัดสินว่า
-   * หน้าไหนควรล็อกเป็นเรื่องนโยบายแพ็กเกจ ไม่ใช่เรื่องของ layout
+   * ตั้งเฉพาะหน้าที่ backend ล็อกทั้ง controller ไว้ด้วย PaidTierGuard จริงๆ เท่านั้น
+   * (Coach Room: coach.controller.ts, Market Pulse: market-insights.controller.ts —
+   * ทั้งคู่เป็น @UseGuards(JwtAuthGuard, PaidTierGuard) ระดับ class ไม่มีทางเข้าได้เลย
+   * ถ้าไม่ใช่ paid tier) — Analytics ตั้งใจไม่ติดธงนี้ แม้มีบาง endpoint ที่ล็อกอยู่
+   * (analytics.controller.ts มีคอมเมนต์บอกไว้ชัดว่าเลิกล็อกทั้ง controller เพราะผู้ใช้
+   * free tier ควรดูสรุปพอร์ตของตัวเองได้ฟรี — ติดธงล็อกทั้งเมนูตรงนี้จะขัดกับที่ backend
+   * ตั้งใจแก้ไว้แล้ว)
    */
   paid?: boolean;
 }
@@ -66,7 +71,7 @@ export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLin
     { title: 'Portfolios', icon: 'account_balance_wallet', link: '/Portfolio', primary: true },
     { title: 'News', icon: 'newspaper', link: '/News' },
     { title: 'Classroom', icon: 'school', link: '/Classroom' },
-    { title: 'Coach Room', icon: 'record_voice_over', link: '/Coach' },
+    { title: 'Coach Room', icon: 'record_voice_over', link: '/Coach', paid: true },
     { title: 'Community Board', icon: 'forum', link: '/Community' },
     { title: 'Leaderboard', icon: 'emoji_events', link: '/Leaderboard' },
     { title: 'Chat', icon: 'chat', link: '/Chat' },
@@ -81,7 +86,7 @@ export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLin
     { title: 'Stock Terminal', icon: 'candlestick_chart', link: '/Stocks', primary: true },
     // Heatmap + Discover ถูกยุบรวมเป็นหน้าเดียว (แถบอารมณ์ตลาด + แท็บ Heatmap/AI Picks)
     // เมนูจึงเหลือรายการเดียว ส่วน /Heatmap กับ /Discover เดิม redirect มาที่นี่
-    { title: 'Market Pulse', icon: 'insights', link: '/Market', primary: true },
+    { title: 'Market Pulse', icon: 'insights', link: '/Market', primary: true, paid: true },
     { title: 'Watchlist', icon: 'star', link: '/Watchlist', primary: true },
     { title: 'Analytics', icon: 'analytics', link: '/Analytics', primary: true },
     // ⛔ ไม่มี Goals ที่นี่โดยตั้งใจ — GoalsPage ปัจจุบันคิดจาก trades ของฝั่ง Forex
@@ -90,7 +95,7 @@ export const WORKSPACE_NAV_LINKS: Record<WorkspaceType, readonly WorkspaceNavLin
     { title: 'Portfolios', icon: 'account_balance_wallet', link: '/Portfolio' },
     { title: 'News', icon: 'newspaper', link: '/News' },
     { title: 'Classroom', icon: 'school', link: '/Classroom' },
-    { title: 'Coach Room', icon: 'record_voice_over', link: '/Coach' },
+    { title: 'Coach Room', icon: 'record_voice_over', link: '/Coach', paid: true },
     { title: 'Community Board', icon: 'forum', link: '/Community' },
     { title: 'Leaderboard', icon: 'emoji_events', link: '/Leaderboard' },
     { title: 'Chat', icon: 'chat', link: '/Chat' },
