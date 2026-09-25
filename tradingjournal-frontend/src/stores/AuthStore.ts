@@ -9,6 +9,8 @@ interface AuthState {
   loading: boolean;
   initialized: boolean;
   error: string | null;
+  /** login ครั้งล่าสุดไปยกเลิกการลบบัญชีที่ตั้งไว้ — หน้า Login อ่านแล้วแสดงประกาศ */
+  accountDeletionCancelled: boolean;
 }
 
 function readStoredUser(): AuthUser | null {
@@ -33,6 +35,7 @@ export const useAuthStore = defineStore('auth', {
     loading: false,
     initialized: false,
     error: null,
+    accountDeletionCancelled: false,
   }),
 
   getters: {
@@ -61,6 +64,8 @@ export const useAuthStore = defineStore('auth', {
         };
 
         const data = await authApi.login(payload);
+
+        this.accountDeletionCancelled = data.account_deletion_cancelled === true;
 
         this.setSession(data.access_token, data.user);
 

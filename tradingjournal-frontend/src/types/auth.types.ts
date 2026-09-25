@@ -34,6 +34,11 @@ export interface AuthResponse {
   message: string;
   access_token: string;
   user: AuthUser;
+  /**
+   * มีเฉพาะตอนที่การล็อกอินครั้งนี้ไปยกเลิกการลบบัญชีที่ตั้งไว้ (ช่วงผ่อนผัน 30 วัน)
+   * ต้องแสดงให้ผู้ใช้เห็นชัด ๆ ไม่ใช่เงียบ
+   */
+  account_deletion_cancelled?: boolean;
 }
 
 export interface RegisterResponse {

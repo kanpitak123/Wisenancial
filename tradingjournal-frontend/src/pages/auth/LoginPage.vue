@@ -84,6 +84,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from 'stores/AuthStore';
+import { useLanguageStore } from 'stores/LanguageStore';
 import { useQuasar } from 'quasar';
 import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 
@@ -94,6 +95,7 @@ const error = ref('');
 
 const router = useRouter();
 const auth = useAuthStore();
+const languageStore = useLanguageStore();
 
 const handleLogin = async () => {
   error.value = '';
@@ -106,11 +108,28 @@ const handleLogin = async () => {
   try {
     await auth.login(email.value, password.value);
 
-    $q.notify({
-      type: 'positive',
-      message: 'Logged in successfully!',
-      position: 'top',
-    });
+    if (auth.accountDeletionCancelled) {
+      // ผู้ใช้ตั้งลบบัญชีไว้แล้วกลับมาล็อกอิน = ยกเลิกการลบ ต้องบอกให้ชัดและค้างไว้นานพอให้อ่านทัน
+      auth.accountDeletionCancelled = false;
+
+      $q.notify({
+        type: 'warning',
+        position: 'top',
+        timeout: 15000,
+        multiLine: true,
+        message: languageStore.isThai
+          ? 'ยกเลิกการลบบัญชีแล้ว — คุณตั้งค่าให้ลบบัญชีนี้ไว้ แต่การล็อกอินครั้งนี้ยกเลิกการลบให้ บัญชีและข้อมูลของคุณยังอยู่ครบ'
+          : 'Account deletion cancelled — this account was scheduled for deletion, but signing in has cancelled it. Your account and data are intact.',
+        actions: [{ label: 'OK', color: 'white' }],
+        attrs: { 'data-test': 'deletion-cancelled-notice' },
+      });
+    } else {
+      $q.notify({
+        type: 'positive',
+        message: 'Logged in successfully!',
+        position: 'top',
+      });
+    }
 
     await router.push('/Dashboard');
   } catch (e: unknown) {

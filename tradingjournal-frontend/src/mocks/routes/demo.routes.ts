@@ -649,6 +649,15 @@ export const demoRoutes = defineMockRoutes([
     }),
   },
   {
+    method: 'POST',
+    path: '/users/me/deletion',
+    handler: () => ({
+      message: 'ตั้งเวลาลบบัญชีแล้ว (mock — ไม่มีการลบจริง)',
+      deletion_scheduled_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      grace_days: 30,
+    }),
+  },
+  {
     method: 'GET',
     path: '/users/me/export',
     handler: () => ({

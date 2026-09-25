@@ -6,6 +6,7 @@ export const USER_MESSAGES = {
   removeAvatarFailed: 'ไม่สามารถลบรูปโปรไฟล์ได้',
   changePasswordFailed: 'ไม่สามารถเปลี่ยนรหัสผ่านได้',
   exportFailed: 'ไม่สามารถส่งออกข้อมูลได้',
+  deletionFailed: 'ไม่สามารถลบบัญชีได้',
 } as const;
 
 /** กฎเดียวกับ RegisterDto.password ฝั่งหลังบ้าน — ตรวจล่วงหน้าเพื่อไม่ต้องรอ 400 */

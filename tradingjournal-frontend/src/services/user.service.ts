@@ -8,6 +8,7 @@ import type {
   ChangePasswordResponse,
   PublicProfile,
   RemoveAvatarResponse,
+  RequestAccountDeletionResponse,
   UpdateUserPayload,
   UpdateUserResponse,
   UserDataExport,
@@ -62,6 +63,18 @@ export const userService = {
    */
   async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
     const { data } = await api.post<ChangePasswordResponse>(AUTH_ENDPOINTS.changePassword, payload);
+
+    return data;
+  },
+
+  /**
+   * ขอลบบัญชี (soft delete + ผ่อนผัน 30 วัน) — ต้องส่งรหัสผ่านยืนยัน
+   * 400 = รหัสผ่านผิด / 409 = ยังมีแพ็กเกจที่ชำระเงินอยู่ ปล่อยให้ store แปลงข้อความ
+   */
+  async requestAccountDeletion(password: string): Promise<RequestAccountDeletionResponse> {
+    const { data } = await api.post<RequestAccountDeletionResponse>(`${USERS_API_PATH}/me/deletion`, {
+      password,
+    });
 
     return data;
   },

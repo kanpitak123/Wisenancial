@@ -15,6 +15,7 @@ export const useUserStore = defineStore('user', {
     updating: false,
     changingPassword: false,
     exporting: false,
+    requestingDeletion: false,
     error: null as string | null,
   }),
 
@@ -114,6 +115,20 @@ export const useUserStore = defineStore('user', {
       }
     },
 
+    async requestAccountDeletion(password: string) {
+      this.requestingDeletion = true;
+      this.error = null;
+
+      try {
+        return await userService.requestAccountDeletion(password);
+      } catch (error) {
+        this.error = getUserErrorMessage(error, USER_MESSAGES.deletionFailed);
+        throw error;
+      } finally {
+        this.requestingDeletion = false;
+      }
+    },
+
     async exportMyData() {
       this.exporting = true;
       this.error = null;
@@ -177,6 +192,7 @@ export const useUserStore = defineStore('user', {
       this.updating = false;
       this.changingPassword = false;
       this.exporting = false;
+      this.requestingDeletion = false;
       this.error = null;
     },
   },

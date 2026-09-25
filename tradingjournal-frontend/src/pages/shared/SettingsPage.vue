@@ -11,6 +11,7 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
+import { useAuthStore } from 'stores/AuthStore';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useUser } from 'src/composables/useUser';
 import { getUserErrorMessage } from 'src/services/user.service';
@@ -20,6 +21,7 @@ import { WsCard } from 'src/components/ui';
 
 const $q = useQuasar();
 const languageStore = useLanguageStore();
+const authStore = useAuthStore();
 const user = useUser();
 
 const t = (th: string, en: string) => (languageStore.isThai ? th : en);
@@ -245,6 +247,72 @@ const exportMyData = async () => {
           : getUserErrorMessage(error, t('ส่งออกข้อมูลไม่สำเร็จ', 'Could not export your data')),
     });
   }
+};
+
+// ---------------------------------------------------------------- ลบบัญชี
+const GRACE_DAYS = 30;
+
+const deleteDialogOpen = ref(false);
+const deletePassword = ref('');
+const deleteAcknowledged = ref(false);
+const deleteError = ref('');
+
+const deletionScheduledAt = computed(() => user.profile.value?.deletion_scheduled_at ?? null);
+
+const deletionScheduledLabel = computed(() => {
+  if (!deletionScheduledAt.value) return '';
+
+  return new Date(deletionScheduledAt.value).toLocaleDateString(
+    languageStore.isThai ? 'th-TH' : 'en-GB',
+    { day: 'numeric', month: 'long', year: 'numeric' },
+  );
+});
+
+const canConfirmDelete = computed(
+  () => deletePassword.value.length > 0 && deleteAcknowledged.value,
+);
+
+const openDeleteDialog = () => {
+  deletePassword.value = '';
+  deleteAcknowledged.value = false;
+  deleteError.value = '';
+  deleteDialogOpen.value = true;
+};
+
+const confirmDeleteAccount = async () => {
+  if (!canConfirmDelete.value) return;
+
+  deleteError.value = '';
+
+  try {
+    await user.requestAccountDeletion(deletePassword.value);
+  } catch (error) {
+    // 400 = รหัสผ่านผิด, 409 = ยังมีแพ็กเกจที่ชำระเงินอยู่ — ข้อความมาจากหลังบ้านอยู่แล้ว
+    // แสดงในกล่องเลย ไม่ปิดกล่อง ผู้ใช้จะได้แก้แล้วลองใหม่ได้ทันที
+    deleteError.value = getUserErrorMessage(
+      error,
+      t('ไม่สามารถลบบัญชีได้', 'Could not delete the account'),
+    );
+    return;
+  }
+
+  deleteDialogOpen.value = false;
+  deletePassword.value = '';
+
+  $q.notify({
+    type: 'warning',
+    position: 'top',
+    timeout: 6000,
+    message: t(
+      `ตั้งเวลาลบบัญชีแล้ว จะถูกลบถาวรใน ${GRACE_DAYS} วัน — ล็อกอินก่อนถึงกำหนดเพื่อยกเลิก`,
+      `Account scheduled for deletion in ${GRACE_DAYS} days — sign in before then to cancel`,
+    ),
+  });
+
+  // หลังบ้านไล่ออกจากระบบทุกเครื่องให้แล้ว — ล้าง session ในเครื่องนี้แล้วเด้งไปหน้า Login
+  // ใช้การโหลดหน้าใหม่ทั้งหน้า (ไม่ใช่ router.push) เพื่อให้ state ของทุก store หายไปด้วย
+  await authStore.logout();
+  window.location.href = '/Login';
 };
 </script>
 
@@ -492,6 +560,128 @@ const exportMyData = async () => {
         />
       </div>
     </WsCard>
+
+    <!-- ── ลบบัญชี ── -->
+    <WsCard class="settings-card settings-danger" data-test="settings-delete">
+      <template #header>
+        <div class="settings-card-title text-negative">{{ t('ลบบัญชี', 'Delete account') }}</div>
+      </template>
+
+      <div v-if="deletionScheduledAt" class="settings-result is-warn" data-test="deletion-pending">
+        {{
+          t(
+            `บัญชีนี้ตั้งเวลาลบถาวรไว้วันที่ ${deletionScheduledLabel} — ล็อกอินใหม่ก่อนวันดังกล่าวเพื่อยกเลิก`,
+            `This account is scheduled for permanent deletion on ${deletionScheduledLabel} — sign in again before then to cancel.`,
+          )
+        }}
+      </div>
+
+      <p class="settings-copy">
+        {{
+          t(
+            `เมื่อขอลบบัญชี ระบบจะออกจากระบบทุกอุปกรณ์ และลบข้อมูลของคุณถาวรหลังผ่านไป ${GRACE_DAYS} วัน หากล็อกอินกลับเข้ามาก่อนครบกำหนด การลบจะถูกยกเลิกอัตโนมัติ แนะนำให้ส่งออกข้อมูลของคุณก่อน`,
+            `Requesting deletion signs you out of every device and permanently erases your data after ${GRACE_DAYS} days. Signing back in before then cancels the deletion automatically. We recommend exporting your data first.`,
+          )
+        }}
+      </p>
+
+      <div class="settings-actions">
+        <q-btn
+          outline
+          no-caps
+          color="negative"
+          icon="delete_forever"
+          :label="t('ลบบัญชีของฉัน', 'Delete my account')"
+          data-test="delete-open"
+          @click="openDeleteDialog"
+        />
+      </div>
+    </WsCard>
+
+    <q-dialog v-model="deleteDialogOpen" persistent>
+      <q-card class="settings-dialog" data-test="delete-dialog">
+        <q-card-section>
+          <div class="settings-card-title text-negative">
+            {{ t('ยืนยันการลบบัญชี', 'Confirm account deletion') }}
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <ul class="settings-list">
+            <li>
+              {{
+                t(
+                  `บัญชีและข้อมูลทั้งหมดจะถูกลบถาวรใน ${GRACE_DAYS} วัน ย้อนกลับไม่ได้หลังจากนั้น`,
+                  `Your account and all data will be permanently deleted in ${GRACE_DAYS} days — irreversible after that.`,
+                )
+              }}
+            </li>
+            <li>
+              {{
+                t(
+                  'คุณจะถูกออกจากระบบทุกอุปกรณ์ทันที',
+                  'You will be signed out of every device immediately.',
+                )
+              }}
+            </li>
+            <li>
+              {{
+                t(
+                  'ล็อกอินกลับเข้ามาก่อนครบกำหนดเพื่อยกเลิกการลบ',
+                  'Sign back in before then to cancel the deletion.',
+                )
+              }}
+            </li>
+          </ul>
+
+          <q-input
+            v-model="deletePassword"
+            outlined
+            dense
+            type="password"
+            autocomplete="current-password"
+            :label="t('กรอกรหัสผ่านเพื่อยืนยัน', 'Enter your password to confirm')"
+            data-test="delete-password"
+            @update:model-value="deleteError = ''"
+          />
+
+          <q-checkbox
+            v-model="deleteAcknowledged"
+            dense
+            class="q-mt-sm"
+            :label="
+              t('ฉันเข้าใจและต้องการลบบัญชีนี้', 'I understand and want to delete this account')
+            "
+            data-test="delete-acknowledge"
+          />
+
+          <div v-if="deleteError" class="settings-result is-warn q-mt-sm" data-test="delete-error">
+            {{ deleteError }}
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            no-caps
+            :label="t('ยกเลิก', 'Cancel')"
+            :disable="user.requestingDeletion.value"
+            data-test="delete-cancel"
+            @click="deleteDialogOpen = false"
+          />
+          <q-btn
+            unelevated
+            no-caps
+            color="negative"
+            :label="t('ลบบัญชีของฉัน', 'Delete my account')"
+            :loading="user.requestingDeletion.value"
+            :disable="!canConfirmDelete"
+            data-test="delete-confirm"
+            @click="confirmDeleteAccount"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -588,5 +778,21 @@ const exportMyData = async () => {
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
+}
+
+.settings-danger {
+  border: 1px solid rgba(193, 0, 21, 0.35);
+}
+
+.settings-dialog {
+  width: 460px;
+  max-width: 92vw;
+}
+
+.settings-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 </style>

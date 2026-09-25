@@ -20,6 +20,8 @@ export interface UserProfile {
   bio: string | null;
   /** GET /users/me ส่งมาให้ตั้งแต่เพิ่มหน้า Settings — ฝั่ง mock เก่าอาจไม่มีจึงเป็น optional */
   is_public_profile?: boolean;
+  /** ISO เวลาที่บัญชีจะถูกลบถาวร — null/ไม่มี = ไม่ได้อยู่ในช่วงรอลบ */
+  deletion_scheduled_at?: string | null;
   subscription_tier: SubscriptionTier;
   created_at: string | null;
   updated_at: string | null;
@@ -97,6 +99,13 @@ export interface ChangePasswordResponse {
   other_sessions_revoked: number;
   /** false = หลังบ้านระบุเครื่องนี้ไม่ได้ จึงไล่ออกทุกเครื่องรวมเครื่องนี้ */
   current_session_kept: boolean;
+}
+
+export interface RequestAccountDeletionResponse {
+  message: string;
+  /** ISO เวลาที่บัญชีจะถูกลบถาวร */
+  deletion_scheduled_at: string;
+  grace_days: number;
 }
 
 /** ไฟล์ export ข้อมูลของฉัน — GET /users/me/export */
