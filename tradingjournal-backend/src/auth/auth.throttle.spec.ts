@@ -88,6 +88,8 @@ async function callLogin(
 
   const context = {
     getClass: () => AuthController,
+    // อ้างอิง method เพื่อให้ guard อ่าน decorator metadata เท่านั้น ไม่เคยเรียกเอง
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     getHandler: () => controller.login,
     getType: () => 'http',
     switchToHttp: () => ({

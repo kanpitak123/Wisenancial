@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AiTrend, NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
+import { NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
 import { AiService } from '../ai/ai.service';
 import type { NewsEnrichmentOutcome } from '../ai/ai-news.types';
 import { GeminiNewsClassifierService } from '../ai/gemini-news-classifier.service';
@@ -39,7 +39,7 @@ export class NewsEnrichmentService {
           (analysis.sentiment as NewsSentiment) ?? NewsSentiment.NEUTRAL,
         ai_summary: analysis.aiSummary || row.title,
         market_impact_analysis: analysis.stockImpactAnalysis || null,
-        ai_trend: (analysis.aiTrend as AiTrend) ?? null,
+        ai_trend: analysis.aiTrend ?? null,
         ai_impact_probability: analysis.aiImpactProbability ?? null,
         ai_confidence: analysis.confidence,
         ai_translated_summary:

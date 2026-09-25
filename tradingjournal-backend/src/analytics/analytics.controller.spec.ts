@@ -49,6 +49,9 @@ function effectiveGuards(handler: HandlerName): unknown[] {
   const reflector = new Reflector();
 
   return reflector.getAllAndMerge<unknown[]>(GUARDS_METADATA, [
+    // อ่าน metadata ที่ decorator ติดไว้บน method เท่านั้น ไม่เคยเรียก method นี้เลย —
+    // ไม่มีความเสี่ยงเรื่อง `this` ที่ @typescript-eslint/unbound-method เตือนจริง
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     AnalyticsController.prototype[handler],
     AnalyticsController,
   ]);

@@ -52,7 +52,7 @@ export interface StockListingResponse {
 export interface StockListingParams {
   search?: string;
   exchange?: StockListingExchange | 'ALL';
-  sector?: string | 'ALL';
+  sector?: string;
   sortBy?: keyof Pick<
     StockListingRow,
     | 'symbol'
@@ -351,7 +351,7 @@ export class StocksService {
       name: string;
       sector: string | null;
       exchange: string | null;
-    }[] = [];
+    }[];
     try {
       base = await this.prisma.stocks.findMany({
         where: { is_active: true },

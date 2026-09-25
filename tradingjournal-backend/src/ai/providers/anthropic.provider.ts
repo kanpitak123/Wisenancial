@@ -75,7 +75,7 @@ export class AnthropicProvider implements IAiProvider {
     } catch (error: unknown) {
       const reason = this.describeError(error);
       this.logger.error(reason);
-      throw new Error(reason);
+      throw new Error(reason, { cause: error });
     }
   }
 

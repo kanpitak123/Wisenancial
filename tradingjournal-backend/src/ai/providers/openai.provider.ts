@@ -71,7 +71,9 @@ export class OpenAiProvider implements IAiProvider {
       );
       payload = response.data;
     } catch (error) {
-      throw new Error(`OpenAI request failed: ${describeAxiosError(error)}`);
+      throw new Error(`OpenAI request failed: ${describeAxiosError(error)}`, {
+        cause: error,
+      });
     }
 
     const text = payload.choices?.[0]?.message?.content;

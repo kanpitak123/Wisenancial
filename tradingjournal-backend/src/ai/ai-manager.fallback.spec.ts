@@ -19,7 +19,7 @@ const httpError = (status: number, message = `HTTP ${status}`) =>
 /** provider ปลอมที่บันทึกลำดับการถูกเรียกไว้ใน calls */
 function fakeProvider(
   id: ProviderId,
-  behaviour: { fails?: unknown; configured?: boolean } = {},
+  behaviour: { fails?: Error; configured?: boolean } = {},
   calls: string[] = [],
 ): IAiProvider {
   return {
@@ -41,7 +41,7 @@ function fakeProvider(
 }
 
 function makeManager(
-  behaviours: Partial<Record<ProviderId, { fails?: unknown; configured?: boolean }>>,
+  behaviours: Partial<Record<ProviderId, { fails?: Error; configured?: boolean }>>,
 ) {
   const calls: string[] = [];
   const provider = (id: ProviderId) =>
@@ -251,7 +251,7 @@ describe('executeAiRequest — ฝั่งผู้ใช้ ต้องไม
       ai_usage_logs: { create: jest.fn().mockResolvedValue({}) },
     }) as never;
 
-  function makeUserManager(fails: unknown) {
+  function makeUserManager(fails: Error) {
     const calls: string[] = [];
     const provider = (id: ProviderId) =>
       fakeProvider(id, id === 'groq' ? { fails } : {}, calls);

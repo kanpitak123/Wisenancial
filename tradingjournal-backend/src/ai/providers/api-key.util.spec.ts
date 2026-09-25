@@ -106,7 +106,11 @@ describe('resolveApiKey', () => {
 
     resolveApiKey(VALID.groq, API_KEY_FORMATS.anthropic, logger);
 
+    // vi.fn() mock property access ตรงๆ โดน @typescript-eslint/unbound-method (false positive
+    // มาตรฐานของ typescript-eslint กับ mocked object methods — ไม่ได้เรียกแบบ unbound จริง)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(logger.warn).not.toHaveBeenCalled();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(logger.error).toHaveBeenCalledTimes(1);
 
     const message = (logger.error as jest.Mock).mock.calls[0][0] as string;
@@ -120,7 +124,9 @@ describe('resolveApiKey', () => {
 
     resolveApiKey(undefined, API_KEY_FORMATS.openai, logger);
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(logger.error).not.toHaveBeenCalled();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 });

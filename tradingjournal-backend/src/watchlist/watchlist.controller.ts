@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   Param,
-  ParseEnumPipe,
   ParseIntPipe,
   Post,
   Query,

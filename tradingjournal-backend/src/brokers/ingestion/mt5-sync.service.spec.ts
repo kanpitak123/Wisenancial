@@ -241,7 +241,7 @@ describe('Mt5SyncService', () => {
     });
 
     it('rejects a payload missing a required field', async () => {
-      const { balance, ...broken } = accountSnapshotPayload;
+      const { balance: _balance, ...broken } = accountSnapshotPayload;
       await expect(
         service.ingest(
           connection(),

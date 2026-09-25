@@ -95,7 +95,7 @@ const insufficientCredits = () =>
 /** manager ปลอมที่บันทึกลำดับโมเดลที่ถูกเรียกไว้ใน calls */
 function makeService(
   models: Array<typeof GEMINI>,
-  behaviour: Record<string, unknown> = {},
+  behaviour: Record<string, Error> = {},
   candidates: GrowthCandidate[] = CANDIDATES,
 ) {
   const calls: string[] = [];

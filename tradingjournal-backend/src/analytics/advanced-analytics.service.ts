@@ -310,6 +310,9 @@ export class AdvancedAnalyticsService {
     };
   }
 
+  // async เพื่อคง Promise<DCASimulatorResponse> ตาม interface ไว้ (ผู้เรียก await
+  // อยู่แล้ว) — เนื้อในเป็นคำนวณ DCA ล้วนๆ ไม่มี await จริง
+  // eslint-disable-next-line @typescript-eslint/require-await
   async simulateDca(
     request: DCASimulatorRequest,
   ): Promise<DCASimulatorResponse> {

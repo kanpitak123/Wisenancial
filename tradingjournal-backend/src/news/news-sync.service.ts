@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { AiTrend, NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
+import { NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsScope } from './dto/news-query.dto';
@@ -229,7 +229,11 @@ export class NewsSyncService {
         },
       });
 
-      existing ? updated++ : created++;
+      if (existing) {
+        updated++;
+      } else {
+        created++;
+      }
 
       if (!existing || actualChanged || !saved.ai_analyzed_at) {
         try {
@@ -384,7 +388,7 @@ export class NewsSyncService {
           (analysis.sentiment as NewsSentiment) ?? NewsSentiment.NEUTRAL,
         ai_summary: analysis.aiSummary || title,
         stock_impact_analysis: analysis.stockImpactAnalysis || null,
-        ai_trend: (analysis.aiTrend as AiTrend) ?? null,
+        ai_trend: analysis.aiTrend ?? null,
         ai_impact_probability: analysis.aiImpactProbability ?? null,
         ai_confidence: analysis.confidence,
         ai_translated_summary:

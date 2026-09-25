@@ -136,6 +136,9 @@ describe('BrokerSyncGateway', () => {
         closedByAbsenceCount: 0,
       });
 
+      // vi.fn() mock property access ตรงๆ โดน @typescript-eslint/unbound-method (false positive
+      // มาตรฐานของ typescript-eslint กับ mocked object methods — ไม่ได้เรียกแบบ unbound จริง)
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(gateway.server.to).toHaveBeenCalledWith('user:42');
       const emitted = (gateway.server.to as jest.Mock).mock.results[0].value.emit;
       expect(emitted).toHaveBeenCalledWith(

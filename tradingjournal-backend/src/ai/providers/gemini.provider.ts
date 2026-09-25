@@ -83,7 +83,9 @@ export class GeminiProvider implements IAiProvider {
       );
       payload = response.data;
     } catch (error) {
-      throw new Error(`Gemini request failed: ${describeAxiosError(error)}`);
+      throw new Error(`Gemini request failed: ${describeAxiosError(error)}`, {
+        cause: error,
+      });
     }
 
     const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;

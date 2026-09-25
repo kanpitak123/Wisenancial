@@ -122,7 +122,9 @@ export class StocksController {
         },
       );
     } catch (error) {
-      throw new Error(`Failed to get analysis for ${symbol}: ${error.message}`);
+      throw new Error(`Failed to get analysis for ${symbol}: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -139,6 +141,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get analysis for ${symbol} with ${timeframe}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -148,7 +151,9 @@ export class StocksController {
     try {
       return await this.marketDataService.getStockProfile(symbol.toUpperCase());
     } catch (error) {
-      throw new Error(`Failed to get profile for ${symbol}: ${error.message}`);
+      throw new Error(`Failed to get profile for ${symbol}: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -161,6 +166,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get financials for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -198,6 +204,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get historical data for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -215,6 +222,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get technical indicators for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -238,6 +246,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to calculate intrinsic value for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -259,6 +268,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get analysis with valuation for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -276,6 +286,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get analysis with valuation for ${symbol} with ${timeframe}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -291,6 +302,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get analyst recommendations for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -308,6 +320,7 @@ export class StocksController {
     } catch (error) {
       throw new Error(
         `Failed to get seasonality analysis for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }

@@ -872,7 +872,6 @@ export class MarketDataService {
       const normalizedTimeframe = (timeframe || '1M').toUpperCase();
       const resolvedInterval: YahooFinanceInterval =
         interval ?? this.getIntervalForTimeframe(normalizedTimeframe);
-      let result: any;
 
       const rangeDays = this.getDaysFromRange(range);
       // ปกติ period2 คือ "ตอนนี้" — แต่ตอนโหลดประวัติเก่ากว่าเพิ่ม (pan กราฟย้อนหลังเกิน
@@ -884,7 +883,7 @@ export class MarketDataService {
         rangeDays ?? this.getRobustTimeframeDays(normalizedTimeframe);
       period1.setDate(period1.getDate() - windowDays);
 
-      result = await yahooFinance.chart(symbol, {
+      const result = await yahooFinance.chart(symbol, {
         period1,
         period2,
         interval: resolvedInterval,
@@ -917,6 +916,7 @@ export class MarketDataService {
     } catch (error: any) {
       throw new Error(
         `Failed to fetch historical data for ${symbol}: ${error.message}`,
+        { cause: error },
       );
     }
   }
@@ -1150,6 +1150,9 @@ export class MarketDataService {
     }
   }
 
+  // async เพื่อคง Promise<IntrinsicValueAnalysis> ตาม interface ไว้ — คำนวณล้วนๆ
+  // จาก financials ที่ส่งเข้ามาแล้ว ไม่มี await จริง
+  // eslint-disable-next-line @typescript-eslint/require-await
   async calculateIntrinsicValue(
     symbol: string,
     profile: StockProfile,
