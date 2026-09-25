@@ -7,6 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { VerifiedEmailGuard } from '../auth/verified-email.guard';
 import { AiRecommendationService } from './ai-recommendation.service';
 import { AiRiskService } from './ai-risk.service';
 import { AiEducationService } from './ai-education.service';
@@ -22,6 +23,7 @@ export class AiCompatibilityController {
     private readonly education: AiEducationService,
   ) {}
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('analyze')
   async analyzeLegacyPortfolio(
     @Request() req: any,
@@ -67,6 +69,7 @@ export class AiCompatibilityController {
     };
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Get('recommendations')
   async recommendationsLegacy(@Request() req: any) {
     const result = await this.recommendations.getGrowthRecommendations(
@@ -83,6 +86,7 @@ export class AiCompatibilityController {
     };
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('analyze-risk')
   async riskLegacy(
     @Request() req: any,
@@ -105,6 +109,7 @@ export class AiCompatibilityController {
     };
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('generate-quiz')
   async quizLegacy(
     @Request() req: any,

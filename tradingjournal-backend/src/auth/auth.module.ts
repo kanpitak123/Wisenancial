@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, type JwtModuleOptions } from '@nestjs/jwt';
+import { MailModule } from '../mail/mail.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { EmailFlowsService } from './email-flows.service';
 import { AUTH_CONSTANTS } from './constants/auth.constants';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RefreshTokenService } from './refresh-token.service';
@@ -13,6 +15,7 @@ import { parseExpiresInSeconds } from './utils/expires-in.util';
   imports: [
     ConfigModule,
     PrismaModule,
+    MailModule,
 
     // ค่าที่ register ไว้ตรงนี้ใช้กับ access token เท่านั้น
     // refresh token เซ็น/ตรวจด้วย secret + อายุคนละชุด โดยส่ง options เข้าไป
@@ -47,7 +50,12 @@ import { parseExpiresInSeconds } from './utils/expires-in.util';
     }),
   ],
 
-  providers: [AuthService, JwtAuthGuard, RefreshTokenService],
+  providers: [
+    AuthService,
+    EmailFlowsService,
+    JwtAuthGuard,
+    RefreshTokenService,
+  ],
 
   controllers: [AuthController],
 

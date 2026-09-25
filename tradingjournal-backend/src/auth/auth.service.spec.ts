@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { EmailFlowsService } from './email-flows.service';
 import { RefreshTokenService } from './refresh-token.service';
 
 jest.mock('bcrypt', () => ({
@@ -30,6 +31,10 @@ const refreshTokenMock = {
   revoke: jest.fn(),
   findActiveFamilyForUser: jest.fn(),
   revokeAllForUser: jest.fn(),
+};
+
+const emailFlowsMock = {
+  sendVerificationForNewUser: jest.fn(),
 };
 
 const USER_ROW = {
@@ -61,6 +66,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: JwtService, useValue: jwtMock },
         { provide: RefreshTokenService, useValue: refreshTokenMock },
+        { provide: EmailFlowsService, useValue: emailFlowsMock },
       ],
     }).compile();
 
@@ -106,6 +112,66 @@ describe('AuthService', () => {
       }),
     );
     expect(result.access_token).toBe('access-token');
+  });
+
+  describe('email verification state', () => {
+    beforeEach(() => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      jwtMock.signAsync.mockResolvedValue('access-token');
+      refreshTokenMock.issue.mockResolvedValue({
+        token: 'refresh-token',
+        expiresAt: new Date(),
+      });
+    });
+
+    it('login reports email_verified=false until the address is verified', async () => {
+      prismaMock.users.findUnique.mockResolvedValue(USER_ROW);
+
+      const result = await service.login({
+        email: 'user@example.com',
+        password: 'Password123',
+      });
+
+      expect(result.user.email_verified).toBe(false);
+    });
+
+    it('login reports email_verified=true once email_verified_at is set', async () => {
+      prismaMock.users.findUnique.mockResolvedValue({
+        ...USER_ROW,
+        email_verified_at: new Date(),
+      });
+
+      const result = await service.login({
+        email: 'user@example.com',
+        password: 'Password123',
+      });
+
+      expect(result.user.email_verified).toBe(true);
+    });
+
+    it('register sends a verification email to the new address without waiting for it', async () => {
+      prismaMock.users.findFirst.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed');
+      prismaMock.users.create.mockResolvedValue({ ...USER_ROW });
+      // ไม่มีวันจบ — ถ้า register รอผลการส่งอีเมล เทสนี้จะค้างจนหมดเวลา
+      emailFlowsMock.sendVerificationForNewUser.mockReturnValue(
+        new Promise(() => undefined),
+      );
+
+      const result = await service.register({
+        email: 'User@Example.com',
+        username: 'user',
+        full_name: 'Example User',
+        password: 'Password123',
+      });
+
+      expect(emailFlowsMock.sendVerificationForNewUser).toHaveBeenCalledWith({
+        id: 1,
+        email: 'user@example.com',
+        full_name: 'Example User',
+      });
+      expect(result.user.email_verified).toBe(false);
+    });
   });
 
   describe('login during the account-deletion grace period', () => {

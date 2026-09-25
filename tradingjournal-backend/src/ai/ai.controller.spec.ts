@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { VerifiedEmailGuard } from '../auth/verified-email.guard';
 import { AiController } from './ai.controller';
 import { AiManagerService } from './ai-manager.service';
 import { AiService } from './ai.service';
@@ -38,6 +39,8 @@ describe('AiController', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
+      .overrideGuard(VerifiedEmailGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get<AiController>(AiController);
@@ -45,6 +48,34 @@ describe('AiController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  /**
+   * ฟีเจอร์ AI ที่กินโควตาต้องยืนยันอีเมลก่อน — แต่ /ai/models กับ /ai/credits ต้องเปิดไว้
+   * เพราะ badge โควตาบนหัวเว็บเรียกทุกหน้า ถ้าปิดผู้ใช้ที่ยังไม่ยืนยันจะเจอ error ทุกหน้า
+   */
+  it('routes that run AI are behind VerifiedEmailGuard; models/credits are not', () => {
+    const guardsOf = (handler: unknown): unknown[] =>
+      (Reflect.getMetadata('__guards__', handler as object) as unknown[]) ?? [];
+
+    const proto = AiController.prototype as unknown as Record<string, unknown>;
+    const open = new Set(['listModels', 'getCredits']);
+
+    const routeNames = Object.getOwnPropertyNames(proto).filter(
+      (name) => name !== 'constructor' && typeof proto[name] === 'function',
+    );
+
+    expect(routeNames.length).toBeGreaterThan(4);
+
+    for (const name of routeNames) {
+      expect({
+        name,
+        guarded: guardsOf(proto[name]).includes(VerifiedEmailGuard),
+      }).toEqual({
+        name,
+        guarded: !open.has(name),
+      });
+    }
   });
 
   it('growthRecommendations ใช้ userId จาก request ไม่ใช่ค่าจาก client', () => {

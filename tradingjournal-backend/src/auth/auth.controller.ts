@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
   Req,
   Res,
@@ -13,7 +14,12 @@ import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AUTH_THROTTLE } from './constants/auth.constants';
+import { EMAIL_FLOW } from './constants/email-flows.constants';
+import { EmailFlowsService } from './email-flows.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -37,11 +43,30 @@ const authThrottle = {
   default: { limit: AUTH_THROTTLE.limit, ttl: AUTH_THROTTLE.ttlMs },
 };
 
+/**
+ * endpoint ที่ "ส่งอีเมลออกไปจริง" เข้มกว่า login: ทุกครั้งที่ผ่านเพดานคืออีเมลหนึ่งฉบับ
+ * (เพดานต่ออีเมลอยู่ใน EmailFlowsService นับจาก DB แยกอีกชั้น)
+ */
+const emailFlowThrottle = {
+  default: {
+    limit: EMAIL_FLOW.ipThrottleLimit,
+    ttl: EMAIL_FLOW.ipThrottleTtlMs,
+  },
+};
+
+/** ข้อความเดียวกันทุกกรณี — ห้ามบอกใบ้ว่าอีเมลนี้มีบัญชีอยู่หรือไม่ */
+const FORGOT_PASSWORD_RESPONSE = {
+  message: 'หากอีเมลนี้มีบัญชีอยู่ เราได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปให้แล้ว',
+};
+
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly refreshTokenService: RefreshTokenService,
+    private readonly emailFlows: EmailFlowsService,
   ) {}
 
   @Throttle(authThrottle)
@@ -134,6 +159,46 @@ export class AuthController {
       body,
       readRefreshCookie(request),
     );
+  }
+
+  /**
+   * ตอบทันทีด้วยข้อความเดิมเสมอ โดยไม่รอผลการค้นหาบัญชี/การส่งอีเมล — เวลาตอบของอีเมลที่มี
+   * กับไม่มีบัญชีจึงไม่ต่างกัน (ไม่เปิดทางให้เดาอีเมลจากความช้า) และไม่ผูกกับ session ใด ๆ
+   */
+  @Throttle(emailFlowThrottle)
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  forgotPassword(@Body() body: ForgotPasswordDto) {
+    void this.emailFlows.requestPasswordReset(body.email).catch(() => {
+      // ตั้งใจไม่ log ตัว error (อาจมีอีเมล) และไม่ให้ rejection ที่ไม่มีใครรับทำ process ล้ม
+      this.logger.warn('Password reset request failed');
+    });
+
+    return FORGOT_PASSWORD_RESPONSE;
+  }
+
+  /** ไม่ต้องล็อกอิน — ผู้ใช้ลืมรหัสผ่านจึงไม่มี session ตัวยืนยันคือ token ในลิงก์ */
+  @Throttle(authThrottle)
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.emailFlows.resetPassword(body.token, body.new_password);
+  }
+
+  @Throttle(emailFlowThrottle)
+  @Post('send-verification')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  sendVerification(@CurrentUser() user: AuthUser) {
+    return this.emailFlows.sendVerificationEmail(user.userId);
+  }
+
+  /** ไม่ต้องล็อกอิน — เปิดลิงก์จากมือถือ/เบราว์เซอร์อื่นได้ */
+  @Throttle(authThrottle)
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  verifyEmail(@Body() body: VerifyEmailDto) {
+    return this.emailFlows.verifyEmail(body.token);
   }
 
   private issueRefreshCookie(response: Response, token: string): void {

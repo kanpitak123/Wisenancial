@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { VerifiedEmailGuard } from '../auth/verified-email.guard';
 import { AiManagerService } from './ai-manager.service';
 import { MIN_CREDIT_BALANCE } from './ai.models';
 import { AiService } from './ai.service';
@@ -49,11 +50,13 @@ export class AiController {
     return { balance, minBalance: MIN_CREDIT_BALANCE };
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('analyze')
   analyzeChart(@Request() req: any, @Body() dto: AnalyzeChartDto) {
     return this.ai.analyzeChart(req.user.userId, dto);
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('portfolio/:portfolioId/review')
   reviewPortfolio(
     @Request() req: any,
@@ -70,6 +73,7 @@ export class AiController {
     );
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('portfolio/risk-analysis')
   riskAnalysis(@Request() req: any, @Body() dto: RiskAnalysisDto) {
     return this.risk.analyze(
@@ -84,6 +88,7 @@ export class AiController {
    * เป็น GET จึงไม่มี body ให้ใส่ outputLanguage — รับเป็น query string แทน
    * ค่าที่ไม่รู้จักถูก resolveOutputLanguage() ปัดเป็นค่าเริ่มต้นให้อยู่แล้ว
    */
+  @UseGuards(VerifiedEmailGuard)
   @Get('recommendations/growth')
   growthRecommendations(
     @Request() req: any,
@@ -95,6 +100,7 @@ export class AiController {
     );
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('education/quiz')
   generateQuiz(@Request() req: any, @Body() dto: QuizDto) {
     return this.education.generateQuiz(
@@ -105,6 +111,7 @@ export class AiController {
     );
   }
 
+  @UseGuards(VerifiedEmailGuard)
   @Post('news/enrich')
   enrichNews(@Request() req: any, @Body() dto: EnrichNewsDto) {
     if (!dto.modelId) {

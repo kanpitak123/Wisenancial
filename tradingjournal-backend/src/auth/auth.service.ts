@@ -8,6 +8,7 @@ import { Role, SubscriptionTier } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailFlowsService } from './email-flows.service';
 import {
   AUTH_CONSTANTS,
   AUTH_ERROR_MESSAGES,
@@ -35,6 +36,7 @@ interface PublicUserSource {
   current_streak?: number;
   longest_streak?: number;
   created_at?: Date | null;
+  email_verified_at?: Date | null;
 }
 
 interface AccessPayloadSource {
@@ -50,6 +52,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly refreshTokenService: RefreshTokenService,
+    private readonly emailFlows: EmailFlowsService,
   ) {}
 
   async register(data: RegisterDto) {
@@ -93,7 +96,16 @@ export class AuthService {
         current_streak: true,
         longest_streak: true,
         created_at: true,
+        email_verified_at: true,
       },
+    });
+
+    // ส่งลิงก์ยืนยันอีเมลแบบไม่รอ — ส่งไม่ได้ก็ไม่ทำให้การสมัครล้ม (กดส่งซ้ำได้จากแบนเนอร์)
+    // ไม่เคยโยน error ออกมา จึงไม่ต้องมี catch
+    void this.emailFlows.sendVerificationForNewUser({
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
     });
 
     return {
@@ -292,6 +304,7 @@ export class AuthService {
         current_streak: true,
         longest_streak: true,
         created_at: true,
+        email_verified_at: true,
       },
     });
 
@@ -329,6 +342,7 @@ export class AuthService {
       current_streak: user.current_streak ?? 0,
       longest_streak: user.longest_streak ?? 0,
       created_at: user.created_at ?? null,
+      email_verified: Boolean(user.email_verified_at),
     };
   }
 }

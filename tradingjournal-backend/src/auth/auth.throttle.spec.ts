@@ -18,6 +18,8 @@ import {
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AUTH_THROTTLE } from './constants/auth.constants';
+import { EMAIL_FLOW } from './constants/email-flows.constants';
+import { EmailFlowsService } from './email-flows.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -41,6 +43,7 @@ async function buildApp(): Promise<INestApplication> {
     controllers: [AuthController],
     providers: [
       { provide: AuthService, useValue: { login } },
+      { provide: EmailFlowsService, useValue: {} },
       {
         provide: RefreshTokenService,
         useValue: { ttlSeconds: 60 },
@@ -70,7 +73,13 @@ async function buildApp(): Promise<INestApplication> {
 async function callLogin(
   app: INestApplication,
   ip: string,
-  handler: 'login' | 'changePassword' = 'login',
+  handler:
+    | 'login'
+    | 'changePassword'
+    | 'forgotPassword'
+    | 'resetPassword'
+    | 'sendVerification'
+    | 'verifyEmail' = 'login',
 ): Promise<'ok' | 'throttled'> {
   const guard = app.get(ThrottlerGuard);
   const controller = app.get(AuthController);
@@ -161,6 +170,28 @@ describe('/auth/login rate limit', () => {
       'throttled',
     );
   });
+
+  /**
+   * flow อีเมล: ขอลิงก์ (forgot/send-verification) ใช้เพดาน EMAIL_FLOW เพราะทุกครั้งที่ผ่านคือ
+   * อีเมลออกจริง ส่วนตัวที่รับ token (reset/verify) เป็นจุดเดา token จึงใช้เพดานเดียวกับ login
+   */
+  it.each([
+    ['forgotPassword', EMAIL_FLOW.ipThrottleLimit],
+    ['sendVerification', EMAIL_FLOW.ipThrottleLimit],
+    ['resetPassword', AUTH_THROTTLE.limit],
+    ['verifyEmail', AUTH_THROTTLE.limit],
+  ] as const)(
+    'POST %s ถูกจำกัดต่อ IP ที่ %d ครั้ง ไม่ใช่เพดานรวมของระบบ',
+    async (handler, limit) => {
+      expect(limit).toBeLessThan(GLOBAL_LIMIT / 4);
+
+      for (let i = 0; i < limit; i++) {
+        expect(await callLogin(app, '203.0.113.30', handler)).toBe('ok');
+      }
+
+      expect(await callLogin(app, '203.0.113.30', handler)).toBe('throttled');
+    },
+  );
 
   /** นับแยกราย IP ไม่งั้นคนหนึ่งยิงรัวแล้วล็อกคนทั้งระบบออกจากการล็อกอิน */
   it('IP อื่นไม่ได้รับผลจากคนที่โดนบล็อก', async () => {
