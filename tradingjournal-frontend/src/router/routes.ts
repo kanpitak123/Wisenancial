@@ -62,6 +62,20 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/shared/BrokerConnectionsPage.vue'),
       },
 
+      // Dev-only: MT5 investor-password / managed-connector technical spike (see
+      // docs/mt5-investor-password-spike.md). Not linked from any nav; backend route
+      // 404s unless MT5_CLOUD_SPIKE_ENABLED=true, and the page self-blocks on
+      // import.meta.env.PROD. Must be a child of MainLayout (not a top-level route) —
+      // its template root is <q-page>, which throws "QPage needs to be a deep child of
+      // QLayout" if rendered outside a <q-layout><q-page-container> ancestor. Nesting it
+      // here also means it now requires auth like every other MainLayout child, matching
+      // the backend's JwtAuthGuard on /dev/mt5-cloud-spike/* instead of only enforcing
+      // that after the page has already loaded.
+      {
+        path: 'dev/mt5-cloud-spike',
+        component: () => import('pages/dev/Mt5CloudSpikePage.vue'),
+      },
+
       // ---------- Forex เท่านั้น ----------
       {
         path: 'Journal',

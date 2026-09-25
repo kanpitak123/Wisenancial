@@ -38,6 +38,7 @@
     "csv-parse": "^7.0.1",
     "groq-sdk": "^0.33.0",
     "jsonwebtoken": "^9.0.3",
+    "metaapi.cloud-sdk": "^29.3.3",
     "multer": "^2.2.0",
     "openai": "^7.3.0",
     "reflect-metadata": "^0.2.2",

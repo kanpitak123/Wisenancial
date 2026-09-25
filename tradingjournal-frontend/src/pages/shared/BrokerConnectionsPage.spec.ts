@@ -52,6 +52,20 @@ vi.mock('src/services/broker-sync-socket.service', () => ({
 // that, same reasoning as mocking every other real dependency in this file.
 vi.mock('src/mocks/mock.config', () => ({ isMockEnabled: () => false }));
 
+// Gated beta (docs/mt5-investor-password-spike.md, "Beta graduation work") — defaults
+// to disabled so every existing test below keeps seeing the page as it was before this
+// option existed; the two new tests at the bottom flip it on/off explicitly.
+const betaStatus = vi.fn();
+const listCloudRecords = vi.fn();
+
+vi.mock('src/services/mt5-cloud-connector.service', () => ({
+  mt5CloudConnectorService: {
+    betaStatus: (...args: unknown[]) => betaStatus(...args),
+    listRecords: (...args: unknown[]) => listCloudRecords(...args),
+  },
+  getMt5CloudConnectorErrorMessage: (_error: unknown, fallback: string) => fallback,
+}));
+
 // PortfolioPage.vue's broker badge navigates here with ?portfolio_id=<id> — mutable so
 // individual tests can set it before mounting (แบบเดียวกับ WatchlistPage.spec.ts)
 let routeQuery: Record<string, string> = {};
@@ -138,6 +152,8 @@ describe('BrokerConnectionsPage', () => {
     list.mockResolvedValue([]);
     getAll.mockResolvedValue([]);
     getQuota.mockResolvedValue({ used: { TRADER: 0, INVESTOR: 0 }, limit: { TRADER: 5, INVESTOR: 5 } });
+    betaStatus.mockResolvedValue({ enabled: false });
+    listCloudRecords.mockResolvedValue([]);
   });
 
   it('mounts and shows the page title', async () => {
@@ -343,5 +359,23 @@ describe('BrokerConnectionsPage', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ portfolio_id: 42 }));
+  });
+
+  it('gated beta: hides the cloud-connector card when betaStatus() reports disabled', async () => {
+    betaStatus.mockResolvedValue({ enabled: false });
+
+    const wrapper = await mountPage();
+
+    expect(byTest(wrapper, 'cloud-connector-card').exists()).toBe(false);
+  });
+
+  it('gated beta: shows the cloud-connector card only when betaStatus() reports enabled', async () => {
+    betaStatus.mockResolvedValue({ enabled: true });
+
+    const wrapper = await mountPage();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(byTest(wrapper, 'cloud-connector-card').exists()).toBe(true);
   });
 });

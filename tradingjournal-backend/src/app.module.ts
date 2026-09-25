@@ -28,6 +28,7 @@ import { MarketInsightsModule } from './market-insights/market-insights.module';
 import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { BrokersModule } from './brokers/brokers.module';
+import { Mt5CloudSpikeModule } from './mt5-cloud-spike/mt5-cloud-spike.module';
 
 @Module({
   imports: [
@@ -73,6 +74,10 @@ import { BrokersModule } from './brokers/brokers.module';
     StocksModule,
     MarketInsightsModule,
     BrokersModule,
+    // Dev-only technical spike (docs/mt5-investor-password-spike.md) — routes 404 unless
+    // MT5_CLOUD_SPIKE_ENABLED=true (see Mt5CloudSpikeEnabledGuard). Never set that flag
+    // in production.
+    Mt5CloudSpikeModule,
   ],
   controllers: [AppController],
   providers: [

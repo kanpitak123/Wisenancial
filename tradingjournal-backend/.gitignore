@@ -65,3 +65,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# mt5-cloud-spike (docs/mt5-investor-password-spike.md) — encrypted investor-password
+# store for the dev-only spike page; never belongs in version control
+/data/mt5-cloud-spike-store.json

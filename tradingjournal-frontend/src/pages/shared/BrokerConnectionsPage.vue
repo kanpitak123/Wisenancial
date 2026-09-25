@@ -20,6 +20,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import { useRoute } from 'vue-router';
 import { WsCard } from 'src/components/ui';
+import Mt5CloudConnectorCard from 'src/components/broker/Mt5CloudConnectorCard.vue';
 import { useBrokerConnectionStore } from 'stores/BrokerConnectionStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
 import {
@@ -28,12 +29,18 @@ import {
   BROKER_STATUS_LABEL_TH,
   BROKER_TYPE_OPTIONS,
 } from 'src/constants/broker-connection.constants';
+import { mt5CloudConnectorService } from 'src/services/mt5-cloud-connector.service';
 import type { BrokerConnection, BrokerType } from 'src/types/broker-connection.types';
 
 const $q = useQuasar();
 const route = useRoute();
 const store = useBrokerConnectionStore();
 const portfolioStore = usePortfolioStore();
+
+// Gated beta — see docs/mt5-investor-password-spike.md, "Beta graduation work". Only
+// renders Mt5CloudConnectorCard for the allowlisted account; a plain 404 (treated the
+// same as "disabled" here) for everyone else keeps it undiscoverable.
+const cloudConnectorBetaEnabled = ref(false);
 
 const selectedBrokerType = ref<BrokerType>('MT5');
 const selectedPortfolioId = ref<number | null>(null);
@@ -187,6 +194,14 @@ onMounted(async () => {
   await Promise.all([
     store.loadConnections().catch(() => null),
     portfolioStore.loadPortfolios('TRADER').catch(() => null),
+    mt5CloudConnectorService
+      .betaStatus()
+      .then((result) => {
+        cloudConnectorBetaEnabled.value = result.enabled;
+      })
+      .catch(() => {
+        cloudConnectorBetaEnabled.value = false;
+      }),
   ]);
 
   const portfolioId = queryPortfolioId();
@@ -288,6 +303,8 @@ onUnmounted(() => {
         />
       </div>
     </WsCard>
+
+    <Mt5CloudConnectorCard v-if="cloudConnectorBetaEnabled" data-test="cloud-connector-card" />
 
     <div v-if="store.isLoading" class="state-loading" data-test="connections-loading">
       <q-spinner color="primary" size="32px" />
