@@ -9,6 +9,7 @@ import type {
   PublicProfile,
   RemoveAvatarResponse,
   RequestAccountDeletionResponse,
+  SendVerificationResponse,
   UpdateUserPayload,
   UpdateUserResponse,
   UserDataExport,
@@ -63,6 +64,16 @@ export const userService = {
    */
   async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
     const { data } = await api.post<ChangePasswordResponse>(AUTH_ENDPOINTS.changePassword, payload);
+
+    return data;
+  },
+
+  /**
+   * ส่งลิงก์ยืนยันอีเมลอีกครั้ง — 429 = ขอถี่เกินไป (ข้อความ + retry_after_seconds มากับ error)
+   * 503 = ระบบส่งอีเมลยังไม่พร้อม
+   */
+  async sendVerificationEmail(): Promise<SendVerificationResponse> {
+    const { data } = await api.post<SendVerificationResponse>(AUTH_ENDPOINTS.sendVerification);
 
     return data;
   },

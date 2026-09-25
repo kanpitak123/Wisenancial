@@ -650,6 +650,11 @@ export const demoRoutes = defineMockRoutes([
   },
   {
     method: 'POST',
+    path: '/auth/send-verification',
+    handler: () => ({ message: 'ส่งอีเมลยืนยันแล้ว (mock)', already_verified: false }),
+  },
+  {
+    method: 'POST',
     path: '/users/me/deletion',
     handler: () => ({
       message: 'ตั้งเวลาลบบัญชีแล้ว (mock — ไม่มีการลบจริง)',

@@ -7,7 +7,7 @@ export function useUser() {
   const authStore = useAuthStore();
   const userStore = useUserStore();
 
-  const { profile, loading, updating, changingPassword, exporting, requestingDeletion, error } =
+  const { profile, loading, updating, changingPassword, exporting, requestingDeletion, sendingVerification, error } =
     storeToRefs(userStore);
 
   const displayName = computed(() => userStore.displayName);
@@ -31,6 +31,7 @@ export function useUser() {
     changingPassword,
     exporting,
     requestingDeletion,
+    sendingVerification,
     error,
 
     displayName,
@@ -49,6 +50,8 @@ export function useUser() {
       userStore.changePassword(...args),
     exportMyData: (...args: Parameters<typeof userStore.exportMyData>) =>
       userStore.exportMyData(...args),
+    sendVerificationEmail: (...args: Parameters<typeof userStore.sendVerificationEmail>) =>
+      userStore.sendVerificationEmail(...args),
     requestAccountDeletion: (...args: Parameters<typeof userStore.requestAccountDeletion>) =>
       userStore.requestAccountDeletion(...args),
     removeAvatar: (...args: Parameters<typeof userStore.removeAvatar>) =>

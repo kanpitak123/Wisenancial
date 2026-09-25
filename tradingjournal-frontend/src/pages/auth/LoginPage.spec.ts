@@ -119,4 +119,17 @@ describe('LoginPage', () => {
 
     expect(String(call!.message)).toContain('Account deletion cancelled');
   });
+
+  it('มีลิงก์ลืมรหัสผ่านไปหน้า /ForgotPassword', async () => {
+    const wrapper = mount(
+      { render: () => h(QLayout, () => [h(QPageContainer, () => [h(LoginPage)])]) },
+      { attachTo: document.body },
+    );
+    await flushPromises();
+
+    const link = wrapper.find('[data-test="forgot-password-link"]');
+
+    expect(link.exists()).toBe(true);
+    expect(link.attributes('href')).toContain('/ForgotPassword');
+  });
 });

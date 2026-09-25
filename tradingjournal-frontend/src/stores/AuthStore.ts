@@ -92,6 +92,44 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async forgotPassword(email: string) {
+      this.error = null;
+
+      try {
+        return await authApi.forgotPassword(email);
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'ส่งคำขอไม่สำเร็จ';
+        throw error;
+      }
+    },
+
+    async resetPassword(token: string, newPassword: string) {
+      this.error = null;
+
+      try {
+        const result = await authApi.resetPassword(token, newPassword);
+
+        // หลังบ้านยกเลิก session ทุกเครื่องแล้ว — ล้างของเครื่องนี้ด้วย ไม่ปล่อยให้ค้างสถานะล็อกอินเก่า
+        this.clearSession();
+
+        return result;
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'ตั้งรหัสผ่านใหม่ไม่สำเร็จ';
+        throw error;
+      }
+    },
+
+    async verifyEmail(token: string) {
+      this.error = null;
+
+      try {
+        return await authApi.verifyEmail(token);
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'ยืนยันอีเมลไม่สำเร็จ';
+        throw error;
+      }
+    },
+
     async initialize(force = false) {
       if (this.initialized && !force) {
         return this.user;

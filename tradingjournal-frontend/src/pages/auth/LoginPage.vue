@@ -49,6 +49,16 @@
             </q-input>
           </div>
 
+          <div class="text-right">
+            <router-link
+              to="/ForgotPassword"
+              class="auth-link text-weight-medium"
+              data-test="forgot-password-link"
+            >
+              {{ languageStore.isThai ? 'ลืมรหัสผ่าน?' : 'Forgot password?' }}
+            </router-link>
+          </div>
+
           <div v-if="error" class="text-negative text-center text-weight-medium q-mt-sm">
             <q-icon name="error_outline" class="q-mr-xs" />
             {{ error }}

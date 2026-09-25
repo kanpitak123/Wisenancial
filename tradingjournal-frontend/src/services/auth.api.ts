@@ -11,9 +11,11 @@ import type {
   CurrentUserResponse,
   LoginPayload,
   LogoutResponse,
+  MessageResponse,
   RefreshResponse,
   RegisterPayload,
   RegisterResponse,
+  ResetPasswordResponse,
 } from 'src/types/auth.types';
 
 interface ErrorPayload {
@@ -97,6 +99,28 @@ export const authApi = {
       method: 'POST',
       // backend ค้าง = ผู้ใช้ค้าง — ตัดทิ้งแล้วให้ AuthStore.logout() ล้าง session ฝั่งเครื่องต่อ
       signal: AbortSignal.timeout(LOGOUT_TIMEOUT_MS),
+    });
+  },
+
+  /** ตอบข้อความเดิมเสมอ ไม่ว่าอีเมลนั้นจะมีบัญชีหรือไม่ — หน้าจอต้องไม่บอกใบ้เช่นกัน */
+  forgotPassword(email: string) {
+    return request<MessageResponse>(AUTH_ENDPOINTS.forgotPassword, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword(token: string, newPassword: string) {
+    return request<ResetPasswordResponse>(AUTH_ENDPOINTS.resetPassword, {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+  },
+
+  verifyEmail(token: string) {
+    return request<MessageResponse>(AUTH_ENDPOINTS.verifyEmail, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     });
   },
 

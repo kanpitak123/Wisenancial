@@ -17,6 +17,7 @@ const MOCK_AUTH_USER = {
   current_streak: MOCK_USER.current_streak,
   longest_streak: MOCK_USER.longest_streak,
   created_at: MOCK_USER.created_at,
+  email_verified: true,
 };
 
 /**
@@ -56,6 +57,18 @@ export function mockAuthResponse(path: string, options: RequestInit): unknown {
 
   if (path === AUTH_ENDPOINTS.logout && method === 'POST') {
     return { message: 'ออกจากระบบเรียบร้อย (mock)' };
+  }
+
+  if (path === AUTH_ENDPOINTS.forgotPassword && method === 'POST') {
+    return { message: 'หากอีเมลนี้มีบัญชีอยู่ เราได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปให้แล้ว (mock)' };
+  }
+
+  if (path === AUTH_ENDPOINTS.resetPassword && method === 'POST') {
+    return { message: 'ตั้งรหัสผ่านใหม่สำเร็จ (mock)', sessions_revoked: 0 };
+  }
+
+  if (path === AUTH_ENDPOINTS.verifyEmail && method === 'POST') {
+    return { message: 'ยืนยันอีเมลสำเร็จ (mock)' };
   }
 
   return null;

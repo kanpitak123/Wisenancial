@@ -16,6 +16,8 @@ export interface AuthUser {
   current_streak: number;
   longest_streak: number;
   created_at: string | null;
+  /** false = ยังไม่ได้ยืนยันอีเมล (ใช้แอปได้ แต่ฟีเจอร์ AI ถูกล็อกจนกว่าจะยืนยัน) */
+  email_verified?: boolean;
 }
 
 export interface LoginPayload {
@@ -60,4 +62,13 @@ export type RefreshResponse = AuthResponse;
 
 export interface LogoutResponse {
   message: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface ResetPasswordResponse extends MessageResponse {
+  /** จำนวน refresh token ที่ถูกยกเลิก — ทุกเครื่องต้องล็อกอินใหม่ */
+  sessions_revoked: number;
 }

@@ -102,6 +102,7 @@
          padding-bottom กันไม่ให้ dock ลอยไปทับปุ่มท้ายฟอร์มยาวๆ อย่างหน้า Record
          ค่าคำนวณจากความสูง dock (~58px) + ระยะลอย (18px) + หายใจอีกหน่อย -->
     <q-page-container class="page-container">
+      <EmailVerificationBanner />
       <router-view />
     </q-page-container>
 
@@ -204,6 +205,7 @@ import { useQuasar } from 'quasar';
 import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 import BottomNavBar from 'components/BottomNavBar.vue';
 import AiQuotaBadge from 'components/AiQuotaBadge.vue';
+import EmailVerificationBanner from 'components/EmailVerificationBanner.vue';
 import WorkspaceSwitcher from 'components/WorkspaceSwitcher.vue';
 import MockModeToggle from 'components/MockModeToggle.vue';
 import { useWorkspace } from 'src/composables/useWorkspace';

@@ -24,6 +24,11 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: 'Login', component: () => import('pages/auth/LoginPage.vue') },
       { path: 'Register', component: () => import('pages/auth/RegisterPage.vue') },
+      // ลืมรหัสผ่าน / ยืนยันอีเมล — เปิดจากลิงก์ในอีเมลได้โดยไม่ต้องล็อกอิน
+      // (token อยู่ใน query หลัง `#` ของ hash router: /#/ResetPassword?token=...)
+      { path: 'ForgotPassword', component: () => import('pages/auth/ForgotPasswordPage.vue') },
+      { path: 'ResetPassword', component: () => import('pages/auth/ResetPasswordPage.vue') },
+      { path: 'VerifyEmail', component: () => import('pages/auth/VerifyEmailPage.vue') },
     ],
   },
   {

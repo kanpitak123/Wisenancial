@@ -16,6 +16,7 @@ export const useUserStore = defineStore('user', {
     changingPassword: false,
     exporting: false,
     requestingDeletion: false,
+    sendingVerification: false,
     error: null as string | null,
   }),
 
@@ -129,6 +130,20 @@ export const useUserStore = defineStore('user', {
       }
     },
 
+    async sendVerificationEmail() {
+      this.sendingVerification = true;
+      this.error = null;
+
+      try {
+        return await userService.sendVerificationEmail();
+      } catch (error) {
+        this.error = getUserErrorMessage(error, USER_MESSAGES.sendVerificationFailed);
+        throw error;
+      } finally {
+        this.sendingVerification = false;
+      }
+    },
+
     async exportMyData() {
       this.exporting = true;
       this.error = null;
@@ -193,6 +208,7 @@ export const useUserStore = defineStore('user', {
       this.changingPassword = false;
       this.exporting = false;
       this.requestingDeletion = false;
+      this.sendingVerification = false;
       this.error = null;
     },
   },

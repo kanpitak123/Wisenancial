@@ -22,6 +22,8 @@ export interface UserProfile {
   is_public_profile?: boolean;
   /** ISO เวลาที่บัญชีจะถูกลบถาวร — null/ไม่มี = ไม่ได้อยู่ในช่วงรอลบ */
   deletion_scheduled_at?: string | null;
+  /** false = ยังไม่ได้ยืนยันอีเมล */
+  email_verified?: boolean;
   subscription_tier: SubscriptionTier;
   created_at: string | null;
   updated_at: string | null;
@@ -86,6 +88,11 @@ export interface RemoveAvatarResponse {
     avatar_url: null;
     updated_at: string | null;
   };
+}
+
+export interface SendVerificationResponse {
+  message: string;
+  already_verified: boolean;
 }
 
 export interface ChangePasswordPayload {
