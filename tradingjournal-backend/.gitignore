@@ -65,3 +65,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Runtime data written by local dev/spike code (e.g. the encrypted MT5 investor-password
+# store) — machine-local state, never belongs in version control
+/data/
