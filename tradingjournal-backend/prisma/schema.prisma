@@ -148,9 +148,10 @@ model users {
   // clears it (= cancels the deletion).
   deletion_scheduled_at DateTime? @db.Timestamp(6)
 
-  // Email verification. NULL = the address has not been proven yet (every existing row gets
-  // NULL; nothing is backfilled). Set when the user opens a verification link or completes a
-  // password reset (both prove control of the mailbox).
+  // Email verification. NULL = the address has not been proven yet. The migration backfills
+  // every pre-existing user to their created_at (they registered before verification existed),
+  // so only new sign-ups start NULL. Set when the user opens a verification link or completes
+  // a password reset (both prove control of the mailbox).
   email_verified_at DateTime? @db.Timestamp(6)
 
   created_at DateTime? @default(now()) @db.Timestamp(6)

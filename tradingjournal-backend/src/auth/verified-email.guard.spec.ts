@@ -16,7 +16,8 @@ describe('VerifiedEmailGuard', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    delete process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI;
+    // ทุกเทสต์ยกเว้นที่ทดสอบค่าดีฟอลต์ ทำงานกับ guard ที่เปิดอยู่
+    process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI = 'true';
     guard = new VerifiedEmailGuard(prismaMock as unknown as PrismaService);
   });
 
@@ -71,6 +72,27 @@ describe('VerifiedEmailGuard', () => {
       guard.canActivate(contextFor({ userId: 1 })),
     ).rejects.toMatchObject({ status: 403 });
   });
+
+  it('is OFF by default (variable unset) and does not touch the database', async () => {
+    delete process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI;
+
+    await expect(guard.canActivate(contextFor({ userId: 1 }))).resolves.toBe(
+      true,
+    );
+    expect(prismaMock.users.findUnique).not.toHaveBeenCalled();
+  });
+
+  it.each(['false', '', '1', 'TRUE'])(
+    'only the exact value "true" turns it on — "%s" leaves it off',
+    async (value) => {
+      process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI = value;
+
+      await expect(guard.canActivate(contextFor({ userId: 1 }))).resolves.toBe(
+        true,
+      );
+      expect(prismaMock.users.findUnique).not.toHaveBeenCalled();
+    },
+  );
 
   it('REQUIRE_VERIFIED_EMAIL_FOR_AI=false turns the check off without touching the database', async () => {
     process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI = 'false';

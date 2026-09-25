@@ -14,15 +14,16 @@ import { AUTH_ERROR_MESSAGES } from './constants/auth.constants';
  * ต้องวางหลัง JwtAuthGuard (อ่าน request.user) อ่านสถานะจาก DB สดทุกครั้ง ไม่เชื่อ JWT
  * เพราะ access token อายุ 15 นาทีและถูกออกไปก่อนผู้ใช้กดยืนยัน
  *
- * ปิดได้ด้วย REQUIRE_VERIFIED_EMAIL_FOR_AI=false — ต้องปิดจนกว่าจะตั้งผู้ให้บริการอีเมลจริง
- * ไม่งั้นบน production ไม่มีใครได้รับลิงก์ยืนยันและ AI จะใช้ไม่ได้ทั้งระบบ
+ * ดีฟอลต์ "ปิด" — เปิดด้วย REQUIRE_VERIFIED_EMAIL_FOR_AI=true เฉพาะหลังตั้งผู้ให้บริการอีเมลจริงแล้ว
+ * ไม่งั้นบน production (console transport ไม่ส่งอะไรเลย) ไม่มีใครได้รับลิงก์ยืนยัน
+ * และผู้ใช้ใหม่จะใช้ AI ไม่ได้ทั้งระบบ
  */
 @Injectable()
 export class VerifiedEmailGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    if (process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI === 'false') return true;
+    if (process.env.REQUIRE_VERIFIED_EMAIL_FOR_AI !== 'true') return true;
 
     const request = context.switchToHttp().getRequest<{
       user?: { userId?: number };

@@ -316,3 +316,25 @@ Deviations from the plan above, on purpose:
 - Community content (posts/comments) stays visible during the grace period; only the public profile page returns 404. After the purge, cascade removes it.
 
 Known limits: access tokens (15 min) issued before a password change / deletion request stay valid until they expire (no deny-list). The export is not paginated (fine up to tens of MB).
+
+## B2 — implementation status (2026-09-27)
+
+Endpoints (all under `/auth`): `POST forgot-password`, `reset-password`, `send-verification` (JWT), `verify-email`.
+
+| Piece | Decision |
+|---|---|
+| Tokens | 256-bit random, only the SHA-256 is stored (`email_tokens`), single-use (atomic `used_at`), reset 30 min / verify 24 h. A new request voids the older unused link of that purpose. |
+| Enumeration | `forgot-password` answers the same message before it even looks the account up, so neither the body nor the timing reveals whether the email exists. Rate-limited (per IP, plus per address: 3/hour and a 60 s cooldown counted from `email_tokens`); over the cap it silently sends nothing. |
+| Reset | One transaction: consume token, set bcrypt hash, void other reset links, mark the address verified, revoke every refresh token. One 400 message for every invalid-link case. |
+| Verification | The link only verifies while the account still has the address it was sent to. `register` sends the mail without waiting for it. |
+| Unverified users | Can use everything except the AI routes that spend credits (`VerifiedEmailGuard`, 403 code `EMAIL_NOT_VERIFIED`; `/ai/models` and `/ai/credits` stay open). A banner with a resend button is shown. |
+| AI gate switch | `REQUIRE_VERIFIED_EMAIL_FOR_AI`, **default off**; only the exact value `true` enables it. Enable only after a real mail transport is configured. |
+| Mailer | `Mailer` abstract class, `MAIL_TRANSPORT` picks a transport from a registry; only `console` exists and it is the default. Dev logs the link (recipient masked); production never logs the body. Unknown value stops boot. |
+| Existing users | The migration backfills `email_verified_at = created_at` (they registered before verification existed). Only new sign-ups start unverified. |
+
+## Backlog (found, deliberately not done yet)
+
+- **`POST /auth/register` reveals whether an email/username is taken** (409 `accountAlreadyExists`). This lets someone probe for registered emails even though `forgot-password` no longer does. The usual fix is to answer identically and send "you already have an account" to the existing address; that needs the real mail transport first. Pre-existing, left as is on purpose.
+- Access tokens (15 min) issued before a password reset stay valid until they expire (no deny-list) - same limit as change-password.
+- Real mail provider: add a transport to `MAIL_TRANSPORTS` in `src/mail/mail.module.ts`, set `MAIL_TRANSPORT`, then consider `REQUIRE_VERIFIED_EMAIL_FOR_AI=true`.
+- Email templates are bilingual TH/EN in one message (no per-user locale is stored yet); plain text only.

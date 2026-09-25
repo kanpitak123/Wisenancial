@@ -1,16 +1,26 @@
 -- Email flows (password reset + email verification).
 --
--- Purely additive: one new enum, one nullable column on users (every existing row gets NULL,
--- i.e. "not verified" - nothing is backfilled), and one new table for hashed one-time tokens.
--- No existing data is read, changed or deleted. Deleting a user cascades to their tokens.
+-- One new enum, one nullable column on users, and one new table for hashed one-time tokens.
+-- Deleting a user cascades to their tokens (ON DELETE CASCADE), so the account-purge job is
+-- unaffected.
 --
--- Generated offline with `prisma migrate diff`; NOT applied to any database.
+-- Backfill: every user that exists when this runs registered before email verification
+-- existed, so they are treated as verified from their registration time. Only new sign-ups
+-- start unverified. This is the ONLY statement that changes existing rows.
+--
+-- Generated offline with `prisma migrate diff` (+ the backfill below); not applied until
+-- reviewed.
 
 -- CreateEnum
 CREATE TYPE "EmailTokenPurpose" AS ENUM ('PASSWORD_RESET', 'EMAIL_VERIFICATION');
 
 -- AlterTable
 ALTER TABLE "users" ADD COLUMN     "email_verified_at" TIMESTAMP(6);
+
+-- Backfill: existing users predate verification. created_at is nullable in this schema, so fall
+-- back to the moment of the migration for any row without one.
+UPDATE "users" SET "email_verified_at" = COALESCE("created_at", CURRENT_TIMESTAMP)
+WHERE "email_verified_at" IS NULL;
 
 -- CreateTable
 CREATE TABLE "email_tokens" (
