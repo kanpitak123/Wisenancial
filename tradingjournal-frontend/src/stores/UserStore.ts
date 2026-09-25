@@ -2,13 +2,19 @@ import { defineStore } from 'pinia';
 import { USER_MESSAGES } from 'src/constants/user.constants';
 import { getUserErrorMessage, userService } from 'src/services/user.service';
 import { useAuthStore } from 'src/stores/AuthStore';
-import type { UpdateUserPayload, UserProfile } from 'src/types/user.types';
+import type {
+  ChangePasswordPayload,
+  UpdateUserPayload,
+  UserProfile,
+} from 'src/types/user.types';
 
 export const useUserStore = defineStore('user', {
   state: () => ({
     profile: null as UserProfile | null,
     loading: false,
     updating: false,
+    changingPassword: false,
+    exporting: false,
     error: null as string | null,
   }),
 
@@ -94,6 +100,34 @@ export const useUserStore = defineStore('user', {
       }
     },
 
+    async changePassword(payload: ChangePasswordPayload) {
+      this.changingPassword = true;
+      this.error = null;
+
+      try {
+        return await userService.changePassword(payload);
+      } catch (error) {
+        this.error = getUserErrorMessage(error, USER_MESSAGES.changePasswordFailed);
+        throw error;
+      } finally {
+        this.changingPassword = false;
+      }
+    },
+
+    async exportMyData() {
+      this.exporting = true;
+      this.error = null;
+
+      try {
+        return await userService.exportMyData();
+      } catch (error) {
+        this.error = getUserErrorMessage(error, USER_MESSAGES.exportFailed);
+        throw error;
+      } finally {
+        this.exporting = false;
+      }
+    },
+
     async removeAvatar() {
       this.updating = true;
       this.error = null;
@@ -141,6 +175,8 @@ export const useUserStore = defineStore('user', {
       this.profile = null;
       this.loading = false;
       this.updating = false;
+      this.changingPassword = false;
+      this.exporting = false;
       this.error = null;
     },
   },

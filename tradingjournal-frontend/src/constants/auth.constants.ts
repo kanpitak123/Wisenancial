@@ -9,6 +9,9 @@ export const AUTH_ENDPOINTS = {
   me: '/auth/me',
   refresh: '/auth/refresh',
   logout: '/auth/logout',
+  // อยู่ใต้ /auth เพราะ refresh cookie ถูกจำกัด path ไว้ที่ /auth — หลังบ้านต้องเห็น cookie
+  // นั้นเพื่อรู้ว่า "เครื่องนี้" คือสายไหนแล้วเก็บไว้ตอนไล่เครื่องอื่นออก
+  changePassword: '/auth/change-password',
 } as const;
 
 // backend ฟังที่พอร์ต 3000 (main.ts) และไม่มี global prefix

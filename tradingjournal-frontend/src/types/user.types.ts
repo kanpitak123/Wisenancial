@@ -18,6 +18,8 @@ export interface UserProfile {
   role: UserRole;
   avatar_url: string | null;
   bio: string | null;
+  /** GET /users/me ส่งมาให้ตั้งแต่เพิ่มหน้า Settings — ฝั่ง mock เก่าอาจไม่มีจึงเป็น optional */
+  is_public_profile?: boolean;
   subscription_tier: SubscriptionTier;
   created_at: string | null;
   updated_at: string | null;
@@ -82,6 +84,27 @@ export interface RemoveAvatarResponse {
     avatar_url: null;
     updated_at: string | null;
   };
+}
+
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
+  /** จำนวน refresh token ของเครื่องอื่นที่ถูกยกเลิก */
+  other_sessions_revoked: number;
+  /** false = หลังบ้านระบุเครื่องนี้ไม่ได้ จึงไล่ออกทุกเครื่องรวมเครื่องนี้ */
+  current_session_kept: boolean;
+}
+
+/** ไฟล์ export ข้อมูลของฉัน — GET /users/me/export */
+export interface UserDataExport {
+  format_version: number;
+  exported_at: string;
+  user: Record<string, unknown>;
+  data: Record<string, unknown>;
 }
 
 export interface ApiErrorResponse {

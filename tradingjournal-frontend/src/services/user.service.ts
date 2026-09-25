@@ -1,12 +1,16 @@
 import type { AxiosError } from 'axios';
 import { api } from 'boot/axios';
+import { AUTH_ENDPOINTS } from 'src/constants/auth.constants';
 import { USERS_API_PATH } from 'src/constants/user.constants';
 import type {
   ApiErrorResponse,
+  ChangePasswordPayload,
+  ChangePasswordResponse,
   PublicProfile,
   RemoveAvatarResponse,
   UpdateUserPayload,
   UpdateUserResponse,
+  UserDataExport,
   UserProfile,
 } from 'src/types/user.types';
 
@@ -48,6 +52,22 @@ export const userService = {
     const { data } = await api.get<PublicProfile>(
       `${USERS_API_PATH}/profile/${encodeURIComponent(username)}`,
     );
+
+    return data;
+  },
+
+  /**
+   * เปลี่ยนรหัสผ่าน — 400 = รหัสปัจจุบันผิด/รหัสใหม่ไม่ผ่านกฎ ปล่อย error ออกไปให้ store
+   * แปลงเป็นข้อความ (ตั้งใจให้หลังบ้านตอบ 400 ไม่ใช่ 401 จะได้ไม่เข้า flow force-logout)
+   */
+  async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
+    const { data } = await api.post<ChangePasswordResponse>(AUTH_ENDPOINTS.changePassword, payload);
+
+    return data;
+  },
+
+  async exportMyData(): Promise<UserDataExport> {
+    const { data } = await api.get<UserDataExport>(`${USERS_API_PATH}/me/export`);
 
     return data;
   },

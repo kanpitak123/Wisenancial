@@ -56,6 +56,8 @@ const routes: RouteRecordRaw[] = [
       //   billing.service.ts  -> ${FRONTEND_URL}/AiCredits?success=true|canceled=true
       //   payments.service.ts -> ${FRONTEND_URL}/Upgrade?success=true|canceled=true
       { path: 'AiCredits', component: () => import('pages/shared/AiCreditsPage.vue') },
+      // ตั้งค่าบัญชี (โปรไฟล์ / รหัสผ่าน / ส่งออกข้อมูล) — เข้าจากเมนูบัญชีมุมขวาบน
+      { path: 'Settings', component: () => import('pages/shared/SettingsPage.vue') },
       { path: 'Upgrade', component: () => import('pages/shared/UpgradePage.vue') },
       {
         path: 'BrokerConnections',

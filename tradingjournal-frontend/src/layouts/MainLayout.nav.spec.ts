@@ -475,8 +475,21 @@ describe('MainLayout — เมนู (bottom nav) ตามโหมด', () =>
       await nextTick();
       await nextTick();
 
-      const signOut = document.querySelector('.account-list-item');
-      expect(signOut?.textContent).toContain('Sign out');
+      const items = Array.from(document.querySelectorAll('.account-list-item'));
+      const signOut = items.find((item) => item.textContent?.includes('Sign out'));
+      expect(signOut, 'ต้องมีปุ่ม Sign out ในเมนูบัญชี').toBeDefined();
+    });
+
+    it('เมนูบัญชีมีทางเข้าหน้า Settings', async () => {
+      const wrapper = await mountLayout();
+
+      await wrapper.find('.account-btn').trigger('click');
+      await nextTick();
+      await nextTick();
+
+      const settings = document.querySelector('[data-test="account-menu-settings"]');
+      expect(settings, 'ต้องมีรายการ Settings ในเมนูบัญชี').not.toBeNull();
+      expect(settings?.textContent).toContain('Settings');
     });
 
     it('CommandPalette ยังถูก mount อยู่ (Cmd+K ไม่ได้หายไปกับ drawer)', async () => {

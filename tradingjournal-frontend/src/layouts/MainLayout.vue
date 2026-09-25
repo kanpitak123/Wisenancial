@@ -71,6 +71,19 @@
 
             <q-list class="q-py-xs account-list" style="min-width: 220px">
               <q-item
+                v-close-popup
+                clickable
+                v-ripple
+                to="/Settings"
+                class="account-list-item"
+                data-test="account-menu-settings"
+              >
+                <q-item-section avatar style="min-width: 32px">
+                  <q-icon name="settings" size="18px" />
+                </q-item-section>
+                <q-item-section>Settings</q-item-section>
+              </q-item>
+              <q-item
                 clickable
                 v-ripple
                 class="account-list-item text-negative"
