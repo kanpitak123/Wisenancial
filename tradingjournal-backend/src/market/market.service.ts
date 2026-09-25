@@ -219,6 +219,7 @@ export class MarketService {
       // แคช/ค่าที่คืนยังคง key ด้วย symbol เดิม (ก่อนแปลง) เพื่อไม่ให้ผู้เรียกเดิม (หุ้น) ที่
       // จับคู่ response.symbol กับ symbol ที่ขอไปกระทบ
       const yahooSymbol = toYahooTraderSymbol(symbol);
+      const isTraderSymbol = yahooSymbol !== symbol;
       const raw = await this.yahooFinance.quote(yahooSymbol);
       const quote = (Array.isArray(raw) ? raw[0] : raw) as any;
       const price = this.positiveNumber(quote?.regularMarketPrice);
@@ -230,7 +231,10 @@ export class MarketService {
       const now = Date.now();
       const mapped: RealtimeQuote = {
         symbol,
-        price: this.round(price),
+        // forex/gold ต้องการทศนิยมระดับ pip (เช่น EUR/USD 1.13856) ไม่ใช่ 2 ตำแหน่งแบบราคาหุ้น
+        // — round() เดิม (.toFixed(2)) ปัด tick จริงจนราคาแทบไม่ขยับเลยระหว่าง poll แต่ละรอบ
+        // แยกออกมาเฉพาะ price ที่กราฟใช้ผูกแท่งล่าสุดจริงๆ ไม่แตะ round() เดิมที่หุ้นยังใช้อยู่
+        price: isTraderSymbol ? this.roundTraderPrice(price) : this.round(price),
         change: this.roundOptional(
           this.optionalNumber(quote?.regularMarketChange),
         ),
@@ -613,5 +617,12 @@ export class MarketService {
 
   private round(value: number): number {
     return Number(value.toFixed(2));
+  }
+
+  /** ทศนิยมตามลำดับขนาดราคา — คู่เงิน (~1) ต้องการ 5 ตำแหน่ง, JPY-quoted/ทองคำฟิวเจอร์สน้อยกว่านั้น */
+  private roundTraderPrice(value: number): number {
+    const magnitude = Math.abs(value);
+    const decimals = magnitude < 10 ? 5 : magnitude < 1000 ? 3 : 2;
+    return Number(value.toFixed(decimals));
   }
 }
