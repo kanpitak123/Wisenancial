@@ -635,4 +635,27 @@ export const demoRoutes = defineMockRoutes([
     path: '/news/trader/analyze-pending',
     handler: () => ({ analyzed: 0, skipped: 0, message: 'ข่าวทั้งหมดถูกวิเคราะห์แล้ว (mock)' }),
   },
+
+  // -------------------------------------------------------------------------
+  // Settings — เปลี่ยนรหัสผ่าน / ส่งออกข้อมูล (ของจริงอยู่ที่ auth.controller / users.controller)
+  // -------------------------------------------------------------------------
+  {
+    method: 'POST',
+    path: '/auth/change-password',
+    handler: () => ({
+      message: 'เปลี่ยนรหัสผ่านสำเร็จ (mock)',
+      other_sessions_revoked: 2,
+      current_session_kept: true,
+    }),
+  },
+  {
+    method: 'GET',
+    path: '/users/me/export',
+    handler: () => ({
+      format_version: 1,
+      exported_at: new Date().toISOString(),
+      user: { id: MOCK_USER.id, username: MOCK_USER.username, email: MOCK_USER.email },
+      data: { note: 'ข้อมูลตัวอย่างจาก Mock Mode — ไม่ใช่ข้อมูลจริง', portfolios: [], trades: [] },
+    }),
+  },
 ]);
