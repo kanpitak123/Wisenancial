@@ -11,8 +11,25 @@ import { PrismaService } from '../prisma/prisma.service';
  * type-check) จับไม่ได้เพราะไม่ได้ instantiate DI graph จริง
  *
  * mock เฉพาะ PrismaService ไม่ให้ต่อ DB จริงตอนรันเทส
+ *
+ * AuthModule ต้องการ JWT_ACCESS_SECRET ตอน compile เลยตั้งค่าทดสอบให้ชัดเจนเอง
+ * (ไม่พึ่ง .env จริง — CI ไม่มีไฟล์ .env) แล้วคืนค่าเดิมหลังจบเทส
  */
 describe('AppModule (with BrokersModule wired in)', () => {
+  const originalJwtSecret = process.env.JWT_ACCESS_SECRET;
+
+  beforeAll(() => {
+    process.env.JWT_ACCESS_SECRET = 'test-only-jwt-access-secret';
+  });
+
+  afterAll(() => {
+    if (originalJwtSecret === undefined) {
+      delete process.env.JWT_ACCESS_SECRET;
+    } else {
+      process.env.JWT_ACCESS_SECRET = originalJwtSecret;
+    }
+  });
+
   it('compile ผ่าน Nest DI container ได้โดยไม่มี provider ขาดหาย', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
