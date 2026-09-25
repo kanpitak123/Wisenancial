@@ -35,12 +35,16 @@ export class AssetsController {
     @Param('portfolioId', ParseIntPipe) portfolioId: number,
     @Query('symbol') symbol: string,
     @Query('interval') interval: '1d' | '1wk' | '1mo' = '1d',
+    @Query('before') before?: string,
   ) {
+    const beforeDate = before ? new Date(before) : undefined;
+
     return this.assetsService.getChartData(
       user.userId,
       portfolioId,
       symbol,
       interval,
+      beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : undefined,
     );
   }
 

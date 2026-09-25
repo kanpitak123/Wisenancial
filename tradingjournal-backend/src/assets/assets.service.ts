@@ -6,10 +6,22 @@ import {
 import { PortfolioType, Prisma } from '@prisma/client';
 import YahooFinance from 'yahoo-finance2';
 import { PrismaService } from '../prisma/prisma.service';
+import { toYahooTraderSymbol } from '../market/trader-symbol.util';
 
 const yahooFinance = new YahooFinance();
 
 type ChartInterval = '1d' | '1wk' | '1mo';
+
+/**
+ * ขนาดหน้าต่างย้อนหลังต่อการขอหนึ่งครั้งตอน lazy-load (pan กราฟย้อนหลังเกินขอบที่โหลดไว้)
+ * เทียบเท่าแนวทางเดียวกับ MarketDataService.getHistoricalData ฝั่ง stocks แต่ forex/crypto/
+ * indices ไม่มี "range" ให้ผู้ใช้เลือกเหมือนหุ้น จึงกำหนดเป็นค่าคงที่ต่อ interval แทน
+ */
+const CHART_WINDOW_DAYS: Record<ChartInterval, number> = {
+  '1d': 365,
+  '1wk': 365 * 5,
+  '1mo': 365 * 15,
+};
 
 export interface NormalizedAsset {
   id: number;
@@ -112,6 +124,7 @@ export class AssetsService {
     portfolioId: number,
     symbol: string,
     interval: ChartInterval = '1d',
+    before?: Date,
   ) {
     const portfolio = await this.requirePortfolio(userId, portfolioId);
     const normalized = this.normalizeSymbol(symbol);
@@ -122,12 +135,23 @@ export class AssetsService {
 
     const yahooSymbol =
       portfolio.portfolio_type === PortfolioType.TRADER
-        ? this.toYahooTraderSymbol(normalized)
+        ? toYahooTraderSymbol(normalized)
         : normalized;
 
     try {
+      // ไม่มี before -> โหลดครั้งแรก คงพฤติกรรมเดิมทุกประการ (period1 คงที่ที่ 2023-01-01)
+      // มี before -> lazy-load ตอนผู้ใช้ pan กราฟย้อนหลังเกินขอบที่โหลดไว้ ต้องเลื่อนหน้าต่าง
+      // ไปสิ้นสุดที่ before แทน ไม่งั้น period1/period2 จะได้ช่วงเวลาเดิมซ้ำทุกครั้งที่เลื่อนต่อ
+      // (แนวทางเดียวกับ MarketDataService.getHistoricalData ฝั่ง stocks)
+      const period1: Date | string = before
+        ? new Date(
+            before.getTime() - CHART_WINDOW_DAYS[interval] * 24 * 60 * 60 * 1000,
+          )
+        : '2023-01-01';
+
       const result = await yahooFinance.chart(yahooSymbol, {
-        period1: '2023-01-01',
+        period1,
+        ...(before ? { period2: before } : {}),
         interval,
       });
 
@@ -549,26 +573,6 @@ export class AssetsService {
       throw new BadRequestException('กรุณาระบุ symbol');
     }
     return normalized;
-  }
-
-  private toYahooTraderSymbol(symbol: string): string {
-    const symbolMap: Record<string, string> = {
-      'BTC/USD': 'BTC-USD',
-      'ETH/USD': 'ETH-USD',
-      'BNB/USD': 'BNB-USD',
-      'SOL/USD': 'SOL-USD',
-      'XRP/USD': 'XRP-USD',
-      'DOGE/USD': 'DOGE-USD',
-      'XAU/USD': 'GC=F',
-      'EUR/USD': 'EURUSD=X',
-      'GBP/USD': 'GBPUSD=X',
-      'USD/JPY': 'JPY=X',
-      'USD/CHF': 'CHF=X',
-      US30: '^DJI',
-      NAS100: '^IXIC',
-      SPX500: '^GSPC',
-    };
-    return symbolMap[symbol] ?? symbol;
   }
 
   private inferTraderMarketRegion(symbol: string): string {

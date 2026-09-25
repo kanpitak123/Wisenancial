@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import YahooFinance from 'yahoo-finance2';
+import { toYahooTraderSymbol } from './trader-symbol.util';
 
 interface CacheEntry {
   price: number;
@@ -213,7 +214,12 @@ export class MarketService {
     symbol: string,
   ): Promise<RealtimeQuote | null> {
     try {
-      const raw = await this.yahooFinance.quote(symbol);
+      // Trader-portfolio symbols (forex/crypto/indices, e.g. "EUR/USD") ต้องแปลงเป็น
+      // ticker จริงของ Yahoo ก่อนยิง — เป็น no-op สำหรับ ticker หุ้นปกติที่ไม่ตรง map นี้เลย
+      // แคช/ค่าที่คืนยังคง key ด้วย symbol เดิม (ก่อนแปลง) เพื่อไม่ให้ผู้เรียกเดิม (หุ้น) ที่
+      // จับคู่ response.symbol กับ symbol ที่ขอไปกระทบ
+      const yahooSymbol = toYahooTraderSymbol(symbol);
+      const raw = await this.yahooFinance.quote(yahooSymbol);
       const quote = (Array.isArray(raw) ? raw[0] : raw) as any;
       const price = this.positiveNumber(quote?.regularMarketPrice);
 
