@@ -137,6 +137,12 @@ model users {
   longest_streak   Int       @default(0)
   last_active_date DateTime?
 
+  // Account deletion (soft delete + grace period). NULL = normal account. When set, the
+  // account is scheduled for permanent deletion at this moment: the daily purge job
+  // hard-deletes it (cascade) once it has passed, and a successful login before then
+  // clears it (= cancels the deletion).
+  deletion_scheduled_at DateTime? @db.Timestamp(6)
+
   created_at DateTime? @default(now()) @db.Timestamp(6)
   updated_at DateTime? @default(now()) @db.Timestamp(6)
 
@@ -163,6 +169,8 @@ model users {
   ai_usage_logs         ai_usage_logs[]
   refresh_tokens        refresh_tokens[]
   broker_connections    broker_connections[]
+
+  @@index([deletion_scheduled_at])
 }
 
 model plans {
