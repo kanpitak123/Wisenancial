@@ -70,6 +70,7 @@ async function buildApp(): Promise<INestApplication> {
 async function callLogin(
   app: INestApplication,
   ip: string,
+  handler: 'login' | 'changePassword' = 'login',
 ): Promise<'ok' | 'throttled'> {
   const guard = app.get(ThrottlerGuard);
   const controller = app.get(AuthController);
@@ -88,7 +89,7 @@ async function callLogin(
     getClass: () => AuthController,
     // อ้างอิง method เพื่อให้ guard อ่าน decorator metadata เท่านั้น ไม่เคยเรียกเอง
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    getHandler: () => controller.login,
+    getHandler: () => controller[handler],
     getType: () => 'http',
     switchToHttp: () => ({
       getRequest: () => request,
@@ -142,6 +143,23 @@ describe('/auth/login rate limit', () => {
     }
 
     expect(blocked).toBe(40 - AUTH_THROTTLE.limit);
+  });
+
+  /**
+   * เปลี่ยนรหัสผ่านเป็นอีกจุดที่เดารหัสผ่านปัจจุบันได้ (แม้ต้องล็อกอินอยู่ก่อน)
+   * จึงต้องอยู่ใต้เพดานเดียวกับ login ไม่ใช่เพดานรวมของระบบ
+   */
+  it('POST /auth/change-password ใช้เพดาน auth เดียวกับ login', async () => {
+    const results: string[] = [];
+
+    for (let i = 0; i < AUTH_THROTTLE.limit; i++) {
+      results.push(await callLogin(app, '203.0.113.20', 'changePassword'));
+    }
+
+    expect(results.every((r) => r === 'ok')).toBe(true);
+    expect(await callLogin(app, '203.0.113.20', 'changePassword')).toBe(
+      'throttled',
+    );
   });
 
   /** นับแยกราย IP ไม่งั้นคนหนึ่งยิงรัวแล้วล็อกคนทั้งระบบออกจากการล็อกอิน */

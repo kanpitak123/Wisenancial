@@ -246,6 +246,89 @@ describe('RefreshTokenService', () => {
     });
   });
 
+  describe('revokeAllForUser', () => {
+    it('revokes every unrevoked token of the user except the kept family', async () => {
+      prismaMock.refresh_tokens.updateMany.mockResolvedValue({ count: 4 });
+
+      await expect(service.revokeAllForUser(7, 'keep-family')).resolves.toBe(4);
+
+      expect(prismaMock.refresh_tokens.updateMany).toHaveBeenCalledWith({
+        where: {
+          user_id: 7,
+          revoked_at: null,
+          family_id: { not: 'keep-family' },
+        },
+        data: { revoked_at: expect.any(Date) },
+      });
+    });
+
+    it('revokes everything for the user when no family is kept', async () => {
+      prismaMock.refresh_tokens.updateMany.mockResolvedValue({ count: 2 });
+
+      await service.revokeAllForUser(7);
+
+      expect(prismaMock.refresh_tokens.updateMany).toHaveBeenCalledWith({
+        where: { user_id: 7, revoked_at: null },
+        data: { revoked_at: expect.any(Date) },
+      });
+    });
+  });
+
+  describe('findActiveFamilyForUser', () => {
+    it('returns the family of a valid, live token owned by the user', async () => {
+      jwtMock.verifyAsync.mockResolvedValue(VALID_PAYLOAD);
+      prismaMock.refresh_tokens.findUnique.mockResolvedValue(tokenRow());
+
+      await expect(service.findActiveFamilyForUser(7, RAW_TOKEN)).resolves.toBe(
+        VALID_PAYLOAD.fam,
+      );
+    });
+
+    it.each([
+      ['no cookie at all', undefined],
+      ['a token that fails signature verification', 'bad'],
+    ])('returns undefined for %s', async (_label, raw) => {
+      jwtMock.verifyAsync.mockRejectedValue(new Error('bad signature'));
+
+      await expect(service.findActiveFamilyForUser(7, raw)).resolves.toBe(
+        undefined,
+      );
+    });
+
+    it('returns undefined when the token belongs to a different user', async () => {
+      jwtMock.verifyAsync.mockResolvedValue({ ...VALID_PAYLOAD, sub: 99 });
+
+      await expect(
+        service.findActiveFamilyForUser(7, RAW_TOKEN),
+      ).resolves.toBeUndefined();
+
+      expect(prismaMock.refresh_tokens.findUnique).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['already revoked', { revoked_at: new Date() }],
+      ['expired', { expires_at: new Date(Date.now() - 1000) }],
+      ['hash mismatch', { token_hash: 'something-else' }],
+      ['row owned by another user', { user_id: 99 }],
+    ])('returns undefined when the stored row is %s', async (_label, patch) => {
+      jwtMock.verifyAsync.mockResolvedValue(VALID_PAYLOAD);
+      prismaMock.refresh_tokens.findUnique.mockResolvedValue(tokenRow(patch));
+
+      await expect(
+        service.findActiveFamilyForUser(7, RAW_TOKEN),
+      ).resolves.toBeUndefined();
+    });
+
+    it('returns undefined when the row no longer exists', async () => {
+      jwtMock.verifyAsync.mockResolvedValue(VALID_PAYLOAD);
+      prismaMock.refresh_tokens.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.findActiveFamilyForUser(7, RAW_TOKEN),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('revoke', () => {
     it('should revoke every token in the family, not just the current one', async () => {
       jwtMock.verifyAsync.mockResolvedValue(VALID_PAYLOAD);

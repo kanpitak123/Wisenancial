@@ -184,6 +184,85 @@ export class RefreshTokenService {
     return result.count;
   }
 
+  /**
+   * ยกเลิก refresh token ทุกสายของผู้ใช้คนนี้ที่ยังไม่ถูกยกเลิก ยกเว้นสายที่ระบุ
+   *
+   * ใช้ตอนเปลี่ยนรหัสผ่าน (เก็บสายของเครื่องที่กำลังใช้อยู่ไว้ ไล่เครื่องอื่นออกหมด)
+   * และตอนขอลบบัญชี (ไม่ส่ง exceptFamilyId = ไล่ออกทุกเครื่อง)
+   *
+   * คืนจำนวน "token" ที่ถูกยกเลิก ไม่ใช่จำนวนสาย
+   */
+  async revokeAllForUser(
+    userId: number,
+    exceptFamilyId?: string,
+  ): Promise<number> {
+    const result = await this.prisma.refresh_tokens.updateMany({
+      where: {
+        user_id: userId,
+        revoked_at: null,
+        ...(exceptFamilyId ? { family_id: { not: exceptFamilyId } } : {}),
+      },
+      data: { revoked_at: new Date() },
+    });
+
+    return result.count;
+  }
+
+  /**
+   * หาว่า refresh token ที่แนบมากับคำขอเป็นของสายไหน — ใช้แยก "เครื่องนี้" ออกจาก
+   * "เครื่องอื่น" ตอนเปลี่ยนรหัสผ่าน
+   *
+   * ไม่ throw ถ้า token ใช้ไม่ได้ (ไม่มี/ปลอม/หมดอายุ/เป็นของคนอื่น/ถูก revoke แล้ว)
+   * แต่คืน undefined ให้ผู้เรียกตัดสินใจเอง — ฝั่งเปลี่ยนรหัสผ่านจะไล่ทุกเครื่องออก
+   * ซึ่งปลอดภัยกว่าเดาว่าเครื่องนี้คือเครื่องไหน
+   *
+   * ตรวจว่า row เป็นของ userId เดียวกับที่ล็อกอินอยู่ด้วย กัน cookie ของอีกบัญชีที่
+   * ค้างอยู่ในเบราว์เซอร์ทำให้เราไปเก็บสายของคนอื่นไว้
+   */
+  async findActiveFamilyForUser(
+    userId: number,
+    rawToken: string | undefined,
+  ): Promise<string | undefined> {
+    if (!rawToken) {
+      return undefined;
+    }
+
+    let payload: JwtRefreshPayload;
+
+    try {
+      payload = await this.verifySignature(rawToken);
+    } catch {
+      return undefined;
+    }
+
+    if (payload.sub !== userId) {
+      return undefined;
+    }
+
+    const record = await this.prisma.refresh_tokens.findUnique({
+      where: { jti: payload.jti },
+      select: {
+        user_id: true,
+        family_id: true,
+        token_hash: true,
+        revoked_at: true,
+        expires_at: true,
+      },
+    });
+
+    if (
+      !record ||
+      record.user_id !== userId ||
+      record.revoked_at !== null ||
+      record.expires_at.getTime() <= Date.now() ||
+      record.token_hash !== this.hash(rawToken)
+    ) {
+      return undefined;
+    }
+
+    return record.family_id;
+  }
+
   private async verifySignature(rawToken: string): Promise<JwtRefreshPayload> {
     let payload: JwtRefreshPayload;
 

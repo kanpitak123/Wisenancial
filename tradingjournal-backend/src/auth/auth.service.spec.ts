@@ -16,6 +16,7 @@ const prismaMock = {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
     create: jest.fn(),
+    update: jest.fn(),
   },
 };
 
@@ -27,6 +28,8 @@ const refreshTokenMock = {
   issue: jest.fn(),
   rotate: jest.fn(),
   revoke: jest.fn(),
+  findActiveFamilyForUser: jest.fn(),
+  revokeAllForUser: jest.fn(),
 };
 
 const USER_ROW = {
@@ -189,6 +192,101 @@ describe('AuthService', () => {
         expect.objectContaining({ role: Role.ADMIN }),
       );
       expect(result.user.subscription_tier).toBe('PACK_399');
+    });
+  });
+
+  describe('changePassword', () => {
+    const DTO = { current_password: 'OldPass123', new_password: 'NewPass456' };
+
+    beforeEach(() => {
+      prismaMock.users.findUnique.mockResolvedValue({
+        id: 1,
+        password: 'hashed-password',
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+      prismaMock.users.update.mockResolvedValue({});
+      refreshTokenMock.findActiveFamilyForUser.mockResolvedValue('family-A');
+      refreshTokenMock.revokeAllForUser.mockResolvedValue(3);
+    });
+
+    it('rejects a wrong current password without touching the DB or sessions', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(service.changePassword(1, DTO, 'cookie')).rejects.toThrow(
+        'รหัสผ่านปัจจุบันไม่ถูกต้อง',
+      );
+
+      expect(prismaMock.users.update).not.toHaveBeenCalled();
+      expect(refreshTokenMock.revokeAllForUser).not.toHaveBeenCalled();
+    });
+
+    it('answers 400 (not 401) for a wrong current password so the client does not force-logout', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.changePassword(1, DTO, 'cookie'),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('rejects a new password identical to the current one', async () => {
+      await expect(
+        service.changePassword(
+          1,
+          { current_password: 'SamePass1', new_password: 'SamePass1' },
+          'cookie',
+        ),
+      ).rejects.toThrow('รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านปัจจุบัน');
+
+      expect(prismaMock.users.update).not.toHaveBeenCalled();
+    });
+
+    it('stores only the bcrypt hash, never the plain new password', async () => {
+      await service.changePassword(1, DTO, 'cookie');
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('NewPass456', 12);
+      expect(prismaMock.users.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { password: 'new-hash', updated_at: expect.any(Date) },
+      });
+    });
+
+    it('revokes every OTHER session and keeps the one this request came from', async () => {
+      const result = await service.changePassword(1, DTO, 'cookie');
+
+      expect(refreshTokenMock.findActiveFamilyForUser).toHaveBeenCalledWith(
+        1,
+        'cookie',
+      );
+      expect(refreshTokenMock.revokeAllForUser).toHaveBeenCalledWith(
+        1,
+        'family-A',
+      );
+      expect(result).toEqual({
+        message: 'เปลี่ยนรหัสผ่านสำเร็จ',
+        other_sessions_revoked: 3,
+        current_session_kept: true,
+      });
+    });
+
+    it('revokes ALL sessions when this device cannot be identified (safe fallback)', async () => {
+      refreshTokenMock.findActiveFamilyForUser.mockResolvedValue(undefined);
+
+      const result = await service.changePassword(1, DTO, undefined);
+
+      expect(refreshTokenMock.revokeAllForUser).toHaveBeenCalledWith(
+        1,
+        undefined,
+      );
+      expect(result.current_session_kept).toBe(false);
+    });
+
+    it('fails with 401 when the account no longer exists', async () => {
+      prismaMock.users.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changePassword(1, DTO, 'cookie'),
+      ).rejects.toMatchObject({ status: 401 });
     });
   });
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -11,6 +12,7 @@ import {
   AUTH_CONSTANTS,
   AUTH_ERROR_MESSAGES,
 } from './constants/auth.constants';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import {
@@ -187,6 +189,76 @@ export class AuthService {
     }
 
     return { message: 'ออกจากระบบเรียบร้อย' };
+  }
+
+  /**
+   * เปลี่ยนรหัสผ่านของผู้ใช้ที่ล็อกอินอยู่
+   *
+   * - ต้องยืนยันรหัสผ่านปัจจุบันเสมอ (แค่ล็อกอินอยู่ไม่พอ — กัน session ที่ถูกขโมยไป
+   *   ล็อกเจ้าของบัญชีออก)
+   * - สำเร็จแล้วยกเลิก refresh token ของ "เครื่องอื่นทั้งหมด" เครื่องที่ใช้อยู่ตอนนี้
+   *   (ดูจาก refresh cookie ที่แนบมา) ยังอยู่ต่อ ถ้าระบุเครื่องนี้ไม่ได้ก็ไล่ออกหมด
+   *   ซึ่งปลอดภัยกว่าเดา — เครื่องนี้จะถูกเด้งไปล็อกอินตอน access token 15 นาทีหมด
+   * - access token ที่ออกไปแล้วยังใช้ได้จนหมดอายุเอง (ไม่มีรายการดำ) — ช่องว่างนี้
+   *   จำกัดที่อายุ access token
+   */
+  async changePassword(
+    userId: number,
+    data: ChangePasswordDto,
+    rawRefreshToken: string | undefined,
+  ) {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.userNotFound);
+    }
+
+    const isCurrentValid = await bcrypt.compare(
+      data.current_password,
+      user.password,
+    );
+
+    if (!isCurrentValid) {
+      throw new BadRequestException(
+        AUTH_ERROR_MESSAGES.currentPasswordIncorrect,
+      );
+    }
+
+    if (data.new_password === data.current_password) {
+      throw new BadRequestException(
+        AUTH_ERROR_MESSAGES.newPasswordSameAsCurrent,
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(
+      data.new_password,
+      AUTH_CONSTANTS.bcryptSaltRounds,
+    );
+
+    await this.prisma.users.update({
+      where: { id: userId },
+      data: { password: hashedPassword, updated_at: new Date() },
+    });
+
+    const currentFamily =
+      await this.refreshTokenService.findActiveFamilyForUser(
+        userId,
+        rawRefreshToken,
+      );
+
+    const revokedTokens = await this.refreshTokenService.revokeAllForUser(
+      userId,
+      currentFamily,
+    );
+
+    return {
+      message: 'เปลี่ยนรหัสผ่านสำเร็จ',
+      other_sessions_revoked: revokedTokens,
+      current_session_kept: currentFamily !== undefined,
+    };
   }
 
   async getCurrentUser(userId: number) {

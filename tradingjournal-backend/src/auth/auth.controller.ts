@@ -13,6 +13,7 @@ import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AUTH_THROTTLE } from './constants/auth.constants';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -109,6 +110,30 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   getCurrentUser(@CurrentUser() user: AuthUser) {
     return this.authService.getCurrentUser(user.userId);
+  }
+
+  /**
+   * อยู่ใต้ /auth (ไม่ใช่ /users/me/password) โดยตั้งใจ: refresh cookie ถูกจำกัด path ไว้ที่
+   * /auth (ดู AUTH_CONSTANTS.refreshCookiePath) เบราว์เซอร์จึงแนบให้เฉพาะ endpoint ใต้
+   * path นี้ — ต้องการ cookie ตัวนั้นเพื่อรู้ว่า "เครื่องนี้" คือสายไหนแล้วเก็บไว้
+   * ตอนไล่เครื่องอื่นออก ไม่ต้องขยาย path ของ cookie ให้เห็น refresh token กว้างขึ้น
+   *
+   * เพดาน throttle เดียวกับ login — เป็นจุดเดารหัสผ่านปัจจุบันได้เหมือนกัน
+   */
+  @Throttle(authThrottle)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() body: ChangePasswordDto,
+    @Req() request: Request,
+  ) {
+    return this.authService.changePassword(
+      user.userId,
+      body,
+      readRefreshCookie(request),
+    );
   }
 
   private issueRefreshCookie(response: Response, token: string): void {
