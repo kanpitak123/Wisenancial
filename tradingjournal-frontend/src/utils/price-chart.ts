@@ -13,9 +13,12 @@ export type ChartTime = number;
 
 export interface PriceBarInput {
   date: string;
-  open: number;
-  high: number;
-  low: number;
+  // Forex/Trader chart rows can have a null OHLC leg (see AssetsService.getChartData) —
+  // isUsableNumber() below already filters these out at runtime; widened here so a
+  // caller (e.g. AssetExplorerPage) can pass them straight through without a cast.
+  open: number | null;
+  high: number | null;
+  low: number | null;
   close: number;
   volume?: number;
 }
@@ -66,7 +69,7 @@ const isUsableNumber = (value: unknown): value is number =>
  * Yahoo ส่งแท่งซ้ำเวลาเดิมมาได้ในบางช่วง interval ถ้าปล่อยผ่านไป setData จะ throw
  * แล้วกราฟหายทั้งอัน
  */
-function sortedUniqueByTime<T extends { time: ChartTime }>(points: T[]): T[] {
+export function sortedUniqueByTime<T extends { time: ChartTime }>(points: T[]): T[] {
   const byTime = new Map<ChartTime, T>();
 
   for (const point of points) {

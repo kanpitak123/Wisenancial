@@ -48,6 +48,8 @@ export const assetService = {
     portfolioId: number,
     symbol: string,
     interval: ChartInterval = '1d',
+    /** lazy-load ตอน pan กราฟย้อนหลังเกินขอบที่โหลดไว้แรก — ดู AssetsService.getChartData */
+    before?: Date,
   ): Promise<ChartDataPoint[]> {
     const response = await api.get<ChartDataPoint[]>(
       `${ASSETS_API_PATH}/portfolio/${portfolioId}/chart`,
@@ -55,6 +57,7 @@ export const assetService = {
         params: {
           symbol: normalizeSymbol(symbol),
           interval,
+          ...(before ? { before: before.toISOString() } : {}),
         },
       },
     );

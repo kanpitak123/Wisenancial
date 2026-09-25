@@ -1,124 +1,178 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
-import type { IChartApi, IPriceLine } from 'lightweight-charts';
-import { createChart, CandlestickSeries, LineStyle } from 'lightweight-charts';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { useAssetStore } from 'stores/AssetStore';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
+import { useLivePrice } from 'src/composables/useLivePrice';
+import { useOlderHistoryLoader } from 'src/composables/useOlderHistoryLoader';
+import { assetService } from 'src/services/asset.service';
+import { isForexMarketOpen } from 'src/utils/forex-market-hours';
+import PriceChart from 'components/charts/PriceChart.vue';
+import {
+  isNewerTradingDay,
+  mergeLivePrice,
+  toCandlestickData,
+  toTradingDay,
+  type CandlestickPoint,
+  type PriceLineSpec,
+} from 'src/utils/price-chart';
 
 const assetStore = useAssetStore();
 
 // ==========================================
-// 📊 Chart Logic
+// 📊 Chart Logic — shares components/charts/PriceChart.vue and
+// composables/useOlderHistoryLoader.ts with the Stock chart (StockAnalysisPage.vue)
+// instead of a second hand-rolled implementation. See
+// forex-chart-parity-investigation.md for why: this inherits the visible-range
+// lazy-load subscription, the position-preserving prepend/live-tick updates, AND the
+// chart-zoom-drift-fix (commit a0e8cb6) for free, since it's the same component.
 // ==========================================
-const chartContainer = ref<HTMLElement | null>(null);
-let chart: IChartApi | null = null;
-let candlestickSeries: any = null;
-
-// เก็บตัวแปรเส้นแนวรับ/แนวต้าน เพื่อเอาไว้ลบทิ้งเวลาเปลี่ยนเหรียญ
-let supportLine: IPriceLine | null = null;
-let resistanceLine: IPriceLine | null = null;
+const priceChartRef = ref<InstanceType<typeof PriceChart> | null>(null);
 
 const currentTab = ref('chart'); // 'chart' | 'financial'
 const selectedInterval = ref<'1d' | '1wk' | '1mo'>('1d');
 
-// สร้างกราฟ
-const initChart = () => {
-  if (!chartContainer.value) return;
+/** ChartDataPoint (AssetStore) -> CandlestickPoint (PriceChart) — ชื่อฟิลด์คนละชุด (time/value vs date/volume) */
+const currentBars = computed<CandlestickPoint[]>(() =>
+  toCandlestickData(
+    assetStore.chartData.map((point) => ({
+      date: point.time,
+      open: point.open,
+      high: point.high,
+      low: point.low,
+      close: point.close,
+      volume: point.value,
+    })),
+  ),
+);
 
-  chart = createChart(chartContainer.value, {
-    width: chartContainer.value.clientWidth || 600,
-    height: 500,
-    layout: {
-      background: { color: 'transparent' },
-      textColor: '#94a3b8',
-    },
-    grid: {
-      vertLines: { color: 'rgba(148, 163, 184, 0.1)' },
-      horzLines: { color: 'rgba(148, 163, 184, 0.1)' },
-    },
-    crosshair: { mode: 0 },
-    timeScale: { borderColor: 'rgba(148, 163, 184, 0.2)' },
-  });
+const historyRequestKey = computed(
+  () => `${assetStore.activeAsset?.symbol ?? ''}:${selectedInterval.value}`,
+);
 
-  candlestickSeries = chart.addSeries(CandlestickSeries, {
-    upColor: '#10b981',
-    downColor: '#ef4444',
-    borderVisible: false,
-    wickUpColor: '#10b981',
-    wickDownColor: '#ef4444',
-  });
+const {
+  bars: chartBars,
+  loading: loadingOlderHistory,
+  loadOlder: onNeedOlderHistory,
+} = useOlderHistoryLoader(currentBars, {
+  requestKey: historyRequestKey,
+  fetchOlder: async (before) => {
+    const asset = assetStore.activeAsset;
+    if (!asset) return [];
 
-  const handleResize = () => {
-    if (chart && chartContainer.value) {
-      chart.applyOptions({ width: chartContainer.value.clientWidth });
-    }
-  };
-  window.addEventListener('resize', handleResize);
-};
+    const portfolioId = assetStore.requirePortfolioId();
+    const data = await assetService.getChart(
+      portfolioId,
+      asset.symbol,
+      selectedInterval.value,
+      before,
+    );
 
-// 🟢 ฟังก์ชันตีเส้นแนวรับ/แนวต้าน
-const drawSupportResistance = () => {
-  if (!candlestickSeries || assetStore.chartData.length === 0) return;
+    return toCandlestickData(
+      data.map((point) => ({
+        date: point.time,
+        open: point.open,
+        high: point.high,
+        low: point.low,
+        close: point.close,
+        volume: point.value,
+      })),
+    );
+  },
+});
 
-  // ลบเส้นเก่าทิ้งก่อน ป้องกันการวาดซ้อนกัน
-  if (supportLine) candlestickSeries.removePriceLine(supportLine);
-  if (resistanceLine) candlestickSeries.removePriceLine(resistanceLine);
+/** เส้นแนวรับ/แนวต้าน — ดูย้อนหลัง 30 แท่งล่าสุด (ของเดิมวาดด้วย candlestickSeries.createPriceLine ตรงๆ) */
+const supportResistanceLines = computed<PriceLineSpec[]>(() => {
+  const data = chartBars.value;
+  if (data.length === 0) return [];
 
-  const data = assetStore.chartData;
-  const lookback = Math.min(30, data.length); // ดูย้อนหลัง 30 แท่ง
+  const lookback = Math.min(30, data.length);
   const recentData = data.slice(-lookback);
+  const highs = recentData.map((d) => d.high);
+  const lows = recentData.map((d) => d.low);
 
-  const highs = recentData.map((d) => d.high).filter((v): v is number => v !== null);
-  const lows = recentData.map((d) => d.low).filter((v): v is number => v !== null);
-  if (highs.length === 0 || lows.length === 0) return;
+  return [
+    { price: Math.max(...highs), color: '#ef4444', title: 'RES' },
+    { price: Math.min(...lows), color: '#10b981', title: 'SUP' },
+  ];
+});
 
-  const maxHigh = Math.max(...highs);
-  const minLow = Math.min(...lows);
+// ==========================================
+// 📡 Realtime — reuses the same 15s-poll + server-side-cache composable Stock uses
+// ==========================================
+const activeSymbol = computed(() => assetStore.activeAsset?.symbol ?? null);
 
-  // วาดเส้นแนวต้าน (Resistance) - สีแดง
-  resistanceLine = candlestickSeries.createPriceLine({
-    price: maxHigh,
-    color: '#ef4444',
-    lineWidth: 2,
-    lineStyle: LineStyle.Dashed,
-    axisLabelVisible: true,
-    title: 'RES',
-  });
+/**
+ * คู่เงิน/ทองคำเท่านั้นที่ผูกกับปฏิทินตลาด Forex (ปิดเสาร์-อาทิตย์) — crypto (BTC/USD ฯลฯ)
+ * เทรด 24/7 อยู่แล้วไม่ต้องเกท ส่วนดัชนี (US30/NAS100/SPX500) มีปฏิทินตลาดหุ้นของตัวเองซึ่ง
+ * ไม่ใช่ขอบเขตของงานนี้ (ดู forex-chart-parity-investigation.md Phase B) — ปล่อย poll
+ * ตามปกติเหมือนเดิม ไม่ได้แย่ลงกว่าก่อนแก้
+ */
+const FOREX_MARKET_HOURS_SYMBOLS = new Set([
+  'EUR/USD',
+  'GBP/USD',
+  'USD/JPY',
+  'USD/CHF',
+  'XAU/USD',
+]);
 
-  // วาดเส้นแนวรับ (Support) - สีเขียว
-  supportLine = candlestickSeries.createPriceLine({
-    price: minLow,
-    color: '#10b981',
-    lineWidth: 2,
-    lineStyle: LineStyle.Dashed,
-    axisLabelVisible: true,
-    title: 'SUP',
-  });
-};
+const forexMarketOpenNow = ref(isForexMarketOpen());
+let marketHoursTimer: ReturnType<typeof setInterval> | null = null;
 
-// อัปเดตข้อมูลกราฟเมื่อเปลี่ยน Asset
-const updateChartData = () => {
-  if (candlestickSeries && assetStore.chartData.length > 0) {
-    candlestickSeries.setData(assetStore.chartData as any);
-    drawSupportResistance(); // สั่งตีเส้นใหม่
-    chart?.timeScale().fitContent();
+const livePriceEnabled = computed(() => {
+  const symbol = activeSymbol.value;
+  if (!symbol) return false;
+  if (FOREX_MARKET_HOURS_SYMBOLS.has(symbol)) return forexMarketOpenNow.value;
+  return true;
+});
+
+const { quote: liveQuote } = useLivePrice(activeSymbol, { enabled: livePriceEnabled });
+
+/** วันที่เคยสั่งโหลดประวัติใหม่เพราะข้ามวันเทรดไปแล้ว — กันไม่ให้วนโหลดทุกรอบ poll (เหมือน StockAnalysisPage) */
+let rolloverRefetchedDay: number | null = null;
+
+watch(activeSymbol, () => {
+  rolloverRefetchedDay = null;
+});
+
+// ราคาสดเข้ามาแล้วอัปเดตเฉพาะแท่งล่าสุดด้วย series.update() ไม่ setData ใหม่ทั้งชุด
+// (setData จะรีเซ็ตตำแหน่งที่ผู้ใช้เลื่อน/ซูมกราฟค้างไว้) — ไม่มีทางสร้างแท่งปลอม เพราะ
+// mergeLivePrice() แก้ไขแท่งสุดท้ายที่มีอยู่แล้วเท่านั้น ไม่เคยสร้างแท่งใหม่เอง
+watch(liveQuote, (quote) => {
+  if (!quote) return;
+
+  const bars = chartBars.value;
+  const lastBar = bars[bars.length - 1];
+  if (!lastBar) return;
+
+  if (isNewerTradingDay(quote.asOf, lastBar.time)) {
+    const quoteDay = toTradingDay(quote.asOf);
+    if (quoteDay !== null && quoteDay !== rolloverRefetchedDay) {
+      rolloverRefetchedDay = quoteDay;
+      const asset = assetStore.activeAsset;
+      if (asset) void assetStore.fetchChartData(asset.symbol, selectedInterval.value);
+    }
+    return;
   }
-};
+
+  const merged = mergeLivePrice(lastBar, quote.price);
+  if (merged) {
+    priceChartRef.value?.applyLiveBar(merged);
+  }
+});
 
 const { safeLoad } = useSafeLoad();
 
 onMounted(async () => {
+  marketHoursTimer = setInterval(() => {
+    forexMarketOpenNow.value = isForexMarketOpen();
+  }, 60_000);
+
   // บัญชีที่ยังไม่มีพอร์ต fetchAssets() จะ throw — ต้องดักไว้ ไม่งั้น mounted หลุดทั้งก้อน
-  // แล้ว initChart() ไม่ได้ทำงาน หน้าเลยว่างเปล่า
   await safeLoad(() => assetStore.fetchAssets(), 'โหลดรายการสินทรัพย์ไม่สำเร็จ');
 
-  initChart();
-
   const activeAsset = assetStore.activeAsset;
-
   if (activeAsset) {
     await safeLoad(() => assetStore.setActiveAsset(activeAsset), 'โหลดข้อมูลสินทรัพย์ไม่สำเร็จ');
-    updateChartData();
   }
 });
 
@@ -127,14 +181,13 @@ watch(
   () => assetStore.activeAsset,
   async (newAsset) => {
     if (newAsset) {
-      await assetStore.setActiveAsset(newAsset);
-      updateChartData();
+      await assetStore.setActiveAsset(newAsset, selectedInterval.value);
     }
   },
 );
 
 onUnmounted(() => {
-  if (chart) chart.remove();
+  if (marketHoursTimer !== null) clearInterval(marketHoursTimer);
 });
 
 // ==========================================
@@ -349,10 +402,20 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
           </div>
 
           <div class="chart-wrapper relative-position">
-            <div ref="chartContainer" class="full-width" style="height: 500px"></div>
+            <PriceChart
+              v-if="assetStore.activeAsset"
+              ref="priceChartRef"
+              :bars="chartBars"
+              display-type="candlestick"
+              :price-lines="supportResistanceLines"
+              :height="500"
+              data-test="asset-explorer-chart"
+              @need-older-history="onNeedOlderHistory"
+            />
             <div
               v-if="!assetStore.activeAsset"
-              class="absolute-full flex flex-center explorer-empty-state"
+              class="flex flex-center explorer-empty-state"
+              style="height: 500px"
               data-test="asset-explorer-empty"
             >
               {{
@@ -363,6 +426,13 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
             </div>
             <div v-if="assetStore.isLoading" class="absolute-full flex flex-center bg-overlay">
               <q-spinner-dots color="primary" size="4em" />
+            </div>
+            <div
+              v-if="loadingOlderHistory"
+              class="chart-history-loading"
+              data-test="chart-history-loading"
+            >
+              <q-spinner size="18px" color="primary" />
             </div>
           </div>
         </q-tab-panel>
@@ -490,5 +560,20 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 
 .rounded-input :deep(.q-field__control) {
   border-radius: 12px !important;
+}
+
+.chart-history-loading {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
 }
 </style>

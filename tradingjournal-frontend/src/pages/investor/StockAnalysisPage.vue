@@ -9,6 +9,7 @@ import MarketOverviewSection from 'components/MarketOverviewSection.vue';
 import StockExplorerRail from 'components/stocks/StockExplorerRail.vue';
 import PriceChart from 'components/charts/PriceChart.vue';
 import { useLivePrice } from 'src/composables/useLivePrice';
+import { useOlderHistoryLoader } from 'src/composables/useOlderHistoryLoader';
 import { useStockCatalog } from 'src/composables/useStockCatalog';
 import StockSymbolPicker from 'components/stocks/StockSymbolPicker.vue';
 import { symbolAvatarColor, symbolAvatarInitials } from 'src/utils/symbol-avatar';
@@ -508,22 +509,16 @@ const sortedHistory = computed<HistoricalDataPoint[]>(() => {
 });
 
 /**
- * ประวัติเก่ากว่าที่โหลดเพิ่มตอนผู้ใช้เลื่อนกราฟย้อนหลังเกินขอบเขตที่ backend ให้มาตอนแรก
- * (lazy-load ตอน pan ถึงขอบ — ดู onNeedOlderHistory ด้านล่าง) เก็บเป็น raw data แบบเดียว
- * กับ historicalData ไม่ใช่ CandlestickPoint เพื่อให้ toCandlestickData() เรียง/ตัดเวลาซ้ำ
- * ให้ทีเดียวตอนรวมกับ sortedHistory แทนที่จะทำเองอีกที่
+ * แท่งราคาปัจจุบัน (ไม่รวมประวัติเก่ากว่าที่ lazy-load เพิ่ม) แปลงเป็นรูปที่
+ * lightweight-charts รับแล้ว — ดู useOlderHistoryLoader ด้านล่างสำหรับส่วนที่รวม
+ * ประวัติเก่ากว่าเข้าด้วยกัน (เรียง/ตัดเวลาซ้ำให้ทีเดียวตอนรวม)
  *
- * ไม่รวมเข้ากับ sortedHistory ตรงๆ (ให้ chartOverlays ด้านล่างยังคำนวณจากมันแยก) เพราะ
- * EMA/pattern overlay เป็น array ที่ index ต้องตรงกับช่วงที่ backend ส่ง indicator มาให้
- * ตอนแรกเท่านั้น — ผู้ใช้เลื่อนย้อนไปไกลกว่านั้นจะเห็นแค่แท่งราคาเปล่าๆ ไม่มีเส้น EMA ทับ
- * ซึ่งยอมรับได้ เพราะ indicator ไม่มีความหมายกับช่วงที่ backend ไม่เคยคำนวณให้อยู่แล้ว
+ * ไม่รวม overlay (EMA/pattern) เข้ามาตรงนี้ (ให้ chartOverlays ด้านล่างยังคำนวณจาก
+ * sortedHistory แยก) เพราะเป็น array ที่ index ต้องตรงกับช่วงที่ backend ส่ง indicator
+ * มาให้ตอนแรกเท่านั้น — ผู้ใช้เลื่อนย้อนไปไกลกว่านั้นจะเห็นแค่แท่งราคาเปล่าๆ ไม่มีเส้น EMA
+ * ทับ ซึ่งยอมรับได้ เพราะ indicator ไม่มีความหมายกับช่วงที่ backend ไม่เคยคำนวณให้อยู่แล้ว
  */
-const olderHistory = ref<HistoricalDataPoint[]>([]);
-
-/** แท่งราคาในรูปที่ lightweight-charts รับ (เรียงเวลาแล้ว ไม่มีเวลาซ้ำ) */
-const chartBars = computed<CandlestickPoint[]>(() =>
-  toCandlestickData([...olderHistory.value, ...sortedHistory.value]),
-);
+const currentBars = computed<CandlestickPoint[]>(() => toCandlestickData(sortedHistory.value));
 
 /**
  * เส้นทับกราฟ: EMA 20/50/100 + รูปแบบที่ตรวจพบ
@@ -1027,66 +1022,30 @@ const priceChartRef = ref<InstanceType<typeof PriceChart> | null>(null);
  * ของตัวไลบรารีเอง) — คีย์เฉพาะหุ้น+timeframe ปัจจุบัน เปลี่ยนหุ้น/timeframe แล้ว
  * "หมดประวัติแล้ว"/"กำลังโหลดอยู่" ของช่วงเก่าต้องไม่ติดมาบล็อกช่วงใหม่
  */
-const loadingOlderHistory = ref(false);
-const exhaustedHistoryKey = ref<string | null>(null);
 const historyRequestKey = computed(() => `${selectedSymbol.value}:${selectedTimeframe.value}`);
 
-watch(historyRequestKey, () => {
-  olderHistory.value = [];
-  exhaustedHistoryKey.value = null;
-  // คำขอเก่าที่อาจค้างอยู่ (ถ้ามี) เช็ค key ก่อนเขียนทับอยู่แล้ว — รีเซ็ตธงตรงนี้ด้วย
-  // ไม่งั้นถ้าสลับหุ้นกลางคันตอนกำลังโหลดอยู่ ธงจะค้าง true ตลอดไป (finally ของคำขอเก่า
-  // เห็น key ไม่ตรงแล้วข้ามการรีเซ็ตธงไปเช่นกัน)
-  loadingOlderHistory.value = false;
-});
-
 /** ผู้เรียกจาก PriceChart's @need-older-history — ดู isPrependUpdate ใน price-chart.ts */
-async function onNeedOlderHistory() {
-  const key = historyRequestKey.value;
-
-  if (loadingOlderHistory.value || exhaustedHistoryKey.value === key) return;
-
-  const earliest = chartBars.value[0];
-  if (!earliest) return;
-
-  loadingOlderHistory.value = true;
-
-  try {
+const {
+  bars: chartBars,
+  loading: loadingOlderHistory,
+  loadOlder: onNeedOlderHistory,
+} = useOlderHistoryLoader(currentBars, {
+  requestKey: historyRequestKey,
+  fetchOlder: async (before) => {
     const response = await api.get<HistoricalDataPoint[]>(
       `/stocks/historical/${selectedSymbol.value}/${selectedTimeframe.value}`,
       {
         params: {
           interval: selectedInterval.value,
           range: selectedRange.value,
-          before: new Date(earliest.time * 1000).toISOString(),
+          before: before.toISOString(),
         },
       },
     );
 
-    // เปลี่ยนหุ้น/timeframe ไปแล้วระหว่างรอ -> ทิ้งผล ไม่ใช่ของช่วงนี้แล้ว
-    if (key !== historyRequestKey.value) return;
-
-    const olderPoints = toCandlestickData(response.data);
-    const hasNewOlderBars = olderPoints.some((point) => point.time < earliest.time);
-
-    if (!hasNewOlderBars) {
-      // ไม่มีแท่งไหนเก่ากว่าที่มีอยู่แล้วจริงๆ (response ว่าง หรือมีแต่แท่งที่ทับกับของเดิม)
-      // = เจอขอบเขตข้อมูลเก่าสุดแล้ว (เช่นวัน IPO) — หยุดขอเพิ่มสำหรับช่วงนี้
-      exhaustedHistoryKey.value = key;
-      return;
-    }
-
-    olderHistory.value = [...response.data, ...olderHistory.value];
-  } catch (err) {
-    // เงียบ ไม่ notify — นี่คือ background pagination ตอนผู้ใช้แค่เลื่อนกราฟ ไม่ใช่การกระทำ
-    // ที่ผู้ใช้เพิ่งสั่งตรงๆ ป๊อปอัป error ตรงนี้จะน่ารำคาญเกินไป (เลื่อนอีกทีก็ลองใหม่ได้เอง)
-    console.error('Failed to fetch older history:', err);
-  } finally {
-    if (key === historyRequestKey.value) {
-      loadingOlderHistory.value = false;
-    }
-  }
-}
+    return toCandlestickData(response.data);
+  },
+});
 
 /** วันที่เคยสั่งโหลดประวัติใหม่เพราะข้ามวันเทรดไปแล้ว — กันไม่ให้วนโหลดทุกรอบ poll */
 let rolloverRefetchedDay: number | null = null;
