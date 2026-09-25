@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ยกเลิก run เก่าอัตโนมัติเมื่อมี push ใหม่เข้า branch/PR เดียวกัน — ไม่ต้องรอ run
+# ที่ล้าสมัยไปแล้วให้จบ
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (tsc + jest + lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tradingjournal-backend
+    env:
+      # ไม่ใช่ secret จริง — เป็นแค่ placeholder ให้ Prisma parse connection string ได้
+      # (schema.prisma อ่านผ่าน env() เสมอ) งานนี้ไม่ต้องต่อ DB จริงเลย: prisma generate
+      # อ่านแค่ schema ไฟล์, และ jest suite ทั้งชุด mock PrismaService ทุกจุดอยู่แล้ว
+      # (ไม่มี setupFiles โหลด .env ใน jest.config.js — รันได้แม้ไม่มี .env จริงเลย)
+      DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci_placeholder'
+      DIRECT_URL: 'postgresql://ci:ci@localhost:5432/ci_placeholder'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tradingjournal-backend/package-lock.json
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx jest
+
+      - name: Lint
+        # ยังไม่บล็อก PR — โค้ดที่มีอยู่เดิมมี lint issue ที่รู้จักและบันทึกไว้แล้ว 47 จุด
+        # (ดู autonomous-batch-progress.md หัวข้อ A2 สำหรับรายละเอียดทีละหมวด) รันไว้ให้เห็น
+        # ผลใน log ทุกครั้ง แต่ยังไม่ fail job จนกว่าจะเคลียร์ค้างนั้นหมดหรือมีมติให้บล็อกจริง
+        run: npm run lint
+        continue-on-error: true
+
+  frontend:
+    name: Frontend (vue-tsc + vitest + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tradingjournal-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tradingjournal-frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx vue-tsc --noEmit
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        # quasar build ยังรัน ESLint เป็นส่วนหนึ่งของขั้นตอน build เสมอ (จุดเดียวในสี่ขั้นตอน
+        # regression ของ repo นี้ที่ lint จริง — tsc/jest/vitest ไม่ lint) เป็น step เดียวที่คุม
+        # ทั้งสองเรื่องพร้อมกัน ไม่ต้องแยก step lint ต่างหากแบบฝั่ง backend
+        run: npx quasar build
