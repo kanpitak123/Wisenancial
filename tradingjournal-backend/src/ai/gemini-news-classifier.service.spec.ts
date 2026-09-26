@@ -45,9 +45,11 @@ describe('GeminiNewsClassifierService', () => {
 
     expect(executeSystemAiRequest).toHaveBeenCalledTimes(1);
     const [request] = executeSystemAiRequest.mock.calls[0] as [
-      { modelId?: string; preferredOnly?: boolean },
+      { modelId?: string; preferredOnly?: boolean; temperature?: number },
     ];
     expect(request.modelId).toBe('gemini-2.5-flash');
+    // temperature 0 must reach the provider as 0, not be dropped for a default.
+    expect(request.temperature).toBe(0);
     expect(request.preferredOnly).toBe(true);
   });
 

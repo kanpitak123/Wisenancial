@@ -63,6 +63,8 @@ export class GeminiNewsClassifierService {
         preferredOnly: true,
         prompt: buildGeminiNewsClassificationPrompt(input),
         systemPrompt: GEMINI_NEWS_CLASSIFICATION_SYSTEM_PROMPT,
+        // Classification wants the same label for the same article, not creativity.
+        temperature: 0,
         maxOutputTokens: 1000,
       });
 
