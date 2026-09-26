@@ -7,8 +7,8 @@ import type {
   NewsSentiment,
 } from './ai-news.types';
 import {
-  NEWS_CLASSIFICATION_SYSTEM_PROMPT,
   buildNewsClassificationPrompt,
+  buildNewsClassificationSystemPrompt,
   scanForbiddenAdvisoryLanguage,
   type NewsClassificationInput,
   type RawNewsClassification,
@@ -65,10 +65,13 @@ export class NewsClassifierService {
         modelId: NEWS_CLASSIFIER_MODEL_ID,
         preferredOnly: true,
         prompt: buildNewsClassificationPrompt(input),
-        systemPrompt: NEWS_CLASSIFICATION_SYSTEM_PROMPT,
+        systemPrompt: buildNewsClassificationSystemPrompt(input.language),
         // Classification wants the same label for the same article, not creativity.
         temperature: 0,
         maxOutputTokens: 1000,
+        // aiTranslatedSummary is deliberately not checked: it is Thai by design
+        expectedLanguage: input.language,
+        languageProbe: (data) => [data?.aiSummary, data?.stockImpactAnalysis],
       });
 
     const normalized = this.validateAndNormalize(result.data);

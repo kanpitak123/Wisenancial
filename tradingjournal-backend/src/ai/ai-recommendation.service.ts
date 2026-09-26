@@ -9,6 +9,7 @@ import {
   concisenessRule,
   investmentGuardrail,
   outputLanguageRule,
+  withLanguage,
   resolveOutputLanguage,
   screeningOnlyGuardrail,
 } from './ai-prompt.shared';
@@ -91,10 +92,16 @@ export class AiRecommendationService {
             'Return a valid JSON array only, matching exactly:',
             '[{"symbol":"string — must be one of candidates[].symbol","reasoning":{"growth":"string","profit":"string","customerBase":"string","liquidity":"string"},"aiSummary":"string"}]',
           ].join('\n'),
-          prompt: JSON.stringify({
-            task: 'Rank the 4-5 strongest growth candidates from the list below and explain each one using only the metrics given.',
-            candidates,
-          }),
+          prompt: JSON.stringify(
+            withLanguage(
+              {
+                task: 'Rank the 4-5 strongest growth candidates from the list below and explain each one using only the metrics given.',
+                candidates,
+              },
+              outputLanguage,
+            ),
+          ),
+          expectedLanguage: outputLanguage,
           /**
            * สูงสุดในระบบเพราะ output ก้อนใหญ่สุด: 5 หุ้น × (reasoning 4 ช่อง +
            * aiSummary) = 25 ฟิลด์ข้อความในคำตอบเดียว

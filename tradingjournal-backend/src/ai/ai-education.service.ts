@@ -7,6 +7,7 @@ import { AiManagerService } from './ai-manager.service';
 import {
   concisenessRule,
   outputLanguageRule,
+  withLanguage,
   resolveOutputLanguage,
 } from './ai-prompt.shared';
 import type { QuizResponse } from './ai-feature.types';
@@ -36,22 +37,28 @@ export class AiEducationService {
         concisenessRule(),
         'Return valid JSON only.',
       ].join('\n'),
-      prompt: JSON.stringify({
-        task: 'Generate exactly 2 multiple-choice questions',
-        lessonTitle,
-        lessonDescription,
-        requiredShape: {
-          questions: [
-            {
-              question: 'string',
-              options: ['string', 'string', 'string', 'string'],
-              correctAnswer: 'integer 0-3',
-              explanation: 'string',
+      prompt: JSON.stringify(
+        withLanguage(
+          {
+            task: 'Generate exactly 2 multiple-choice questions',
+            lessonTitle,
+            lessonDescription,
+            requiredShape: {
+              questions: [
+                {
+                  question: 'string',
+                  options: ['string', 'string', 'string', 'string'],
+                  correctAnswer: 'integer 0-3',
+                  explanation: 'string',
+                },
+              ],
             },
-          ],
-        },
-      }),
+          },
+          outputLanguage,
+        ),
+      ),
       maxOutputTokens: 1600,
+      expectedLanguage: outputLanguage,
     });
 
     const quiz = result.data;

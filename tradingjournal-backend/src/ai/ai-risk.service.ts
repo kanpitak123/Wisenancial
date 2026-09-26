@@ -5,6 +5,7 @@ import {
   investmentGuardrail,
   outputLanguageRule,
   resolveOutputLanguage,
+  withLanguage,
 } from './ai-prompt.shared';
 import type {
   PortfolioRiskAnalysis,
@@ -38,24 +39,30 @@ export class AiRiskService {
         'When a field is null, exclude that holding from that rule and state the gap in analysisSummary instead of guessing.',
         'Return valid JSON only.',
       ].join('\n'),
-      prompt: JSON.stringify({
-        task: 'Assess portfolio risk',
-        requiredShape: {
-          riskLevel: 'Low|Moderate|Aggressive',
-          riskScore: 'number 0-100',
-          analysisSummary: 'string',
-          keyRiskFactors: ['string'],
-        },
-        rules: {
-          highBeta: '>1.2',
-          highDebtToEquity: '>1.0',
-          highPe: '>30',
-          // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
-          concentration: 'single holding weight >25%',
-        },
-        holdings: normalized,
-      }),
+      prompt: JSON.stringify(
+        withLanguage(
+          {
+            task: 'Assess portfolio risk',
+            requiredShape: {
+              riskLevel: 'Low|Moderate|Aggressive',
+              riskScore: 'number 0-100',
+              analysisSummary: 'string',
+              keyRiskFactors: ['string'],
+            },
+            rules: {
+              highBeta: '>1.2',
+              highDebtToEquity: '>1.0',
+              highPe: '>30',
+              // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
+              concentration: 'single holding weight >25%',
+            },
+            holdings: normalized,
+          },
+          outputLanguage,
+        ),
+      ),
       maxOutputTokens: 1600,
+      expectedLanguage: outputLanguage,
     });
 
     const data = result.data;

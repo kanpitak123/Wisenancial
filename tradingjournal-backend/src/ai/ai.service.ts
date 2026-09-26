@@ -21,8 +21,10 @@ import type { NewsEnrichmentResult } from './ai-news.types';
 import {
   concisenessRule,
   investmentGuardrail,
+  newsLanguageRule,
   outputLanguageRule,
   resolveOutputLanguage,
+  withLanguage,
 } from './ai-prompt.shared';
 
 /**
@@ -60,6 +62,16 @@ const NEWS_ENRICHMENT_SYSTEM_PROMPT = [
   'If uncertain about impact, prefer a value near 50 and say so in stockImpactAnalysis rather than guessing confidently.',
 ].join('\n');
 
+/** ระบุภาษาตามภาษาของข่าวตรง ๆ ท้าย prompt — ดู newsLanguageRule() */
+const newsEnrichmentSystemPrompt = (language: 'en' | 'th') =>
+  `${NEWS_ENRICHMENT_SYSTEM_PROMPT}\n${newsLanguageRule(language)}`;
+
+/** เฉพาะฟิลด์ที่ต้องเป็นภาษาของข่าว (aiTranslatedSummary เป็นไทยเสมอ ไม่ตรวจ) */
+const newsLanguageProbe = (data: Partial<NewsEnrichmentResult> | undefined) => [
+  data?.aiSummary,
+  data?.stockImpactAnalysis,
+];
+
 @Injectable()
 export class AiService {
   constructor(
@@ -93,13 +105,20 @@ export class AiService {
         concisenessRule(),
         'Return valid JSON only: {"insight":"concise actionable analysis grounded only in supplied data"}.',
       ].join('\n'),
-      prompt: JSON.stringify({
-        portfolioType: dto.portfolioType,
-        chartType: dto.chartType,
-        data: dto.data,
-        extraContext: dto.extraContext ?? {},
-      }),
+      prompt: JSON.stringify(
+        withLanguage(
+          {
+            portfolioType: dto.portfolioType,
+            chartType: dto.chartType,
+            data: dto.data,
+            extraContext: dto.extraContext ?? {},
+          },
+          outputLanguage,
+        ),
+      ),
       maxOutputTokens: 1200,
+      expectedLanguage: outputLanguage,
+      languageProbe: (data) => data?.insight,
     });
 
     return {
@@ -147,20 +166,26 @@ export class AiService {
           concisenessRule(),
           'Return valid JSON only.',
         ].join('\n'),
-        prompt: JSON.stringify({
-          task: 'Review trader performance and journal behavior',
-          requiredShape: {
-            summary: 'string',
-            strengths: ['string'],
-            weaknesses: ['string'],
-            riskWarnings: ['string'],
-            actionableRecommendations: ['string'],
-            disciplineScore: 'number 0-100',
-          },
-          trades: suppliedItems ?? [],
-          analytics,
-        }),
+        prompt: JSON.stringify(
+          withLanguage(
+            {
+              task: 'Review trader performance and journal behavior',
+              requiredShape: {
+                summary: 'string',
+                strengths: ['string'],
+                weaknesses: ['string'],
+                riskWarnings: ['string'],
+                actionableRecommendations: ['string'],
+                disciplineScore: 'number 0-100',
+              },
+              trades: suppliedItems ?? [],
+              analytics,
+            },
+            outputLanguage,
+          ),
+        ),
         maxOutputTokens: 1800,
+        expectedLanguage: outputLanguage,
       });
 
       return {
@@ -191,20 +216,26 @@ export class AiService {
         concisenessRule(),
         'Return valid JSON only.',
       ].join('\n'),
-      prompt: JSON.stringify({
-        task: 'Review investor portfolio health, diversification, and risk',
-        requiredShape: {
-          summary: 'string',
-          diversificationScore: 'number 0-100',
-          riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
-          concentrationRisks: ['string'],
-          strengths: ['string'],
-          actionableRecommendations: ['string'],
-        },
-        holdings,
-        analytics,
-      }),
+      prompt: JSON.stringify(
+        withLanguage(
+          {
+            task: 'Review investor portfolio health, diversification, and risk',
+            requiredShape: {
+              summary: 'string',
+              diversificationScore: 'number 0-100',
+              riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
+              concentrationRisks: ['string'],
+              strengths: ['string'],
+              actionableRecommendations: ['string'],
+            },
+            holdings,
+            analytics,
+          },
+          outputLanguage,
+        ),
+      ),
       maxOutputTokens: 1800,
+      expectedLanguage: outputLanguage,
     });
 
     return {
@@ -233,15 +264,22 @@ export class AiService {
       const result = await this.manager.executeSystemAiRequest<
         Omit<NewsEnrichmentResult, 'fromFallback'>
       >({
-        prompt: JSON.stringify({
-          language,
-          headline: headline.slice(0, 300),
-          summary: summary.slice(0, 800),
-          content: content.slice(0, 1500),
-        }),
-        systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
+        prompt: JSON.stringify(
+          withLanguage(
+            {
+              language,
+              headline: headline.slice(0, 300),
+              summary: summary.slice(0, 800),
+              content: content.slice(0, 1500),
+            },
+            language,
+          ),
+        ),
+        systemPrompt: newsEnrichmentSystemPrompt(language),
         maxOutputTokens: 1400,
         excludeProviders: options?.excludeProviders,
+        expectedLanguage: language,
+        languageProbe: newsLanguageProbe,
       });
 
       return this.normalizeNewsResult(result.data, fallback);
@@ -266,14 +304,21 @@ export class AiService {
     >({
       userId,
       modelId,
-      prompt: JSON.stringify({
-        language,
-        headline: headline.slice(0, 300),
-        summary: summary.slice(0, 800),
-        content: content.slice(0, 1500),
-      }),
-      systemPrompt: NEWS_ENRICHMENT_SYSTEM_PROMPT,
+      prompt: JSON.stringify(
+        withLanguage(
+          {
+            language,
+            headline: headline.slice(0, 300),
+            summary: summary.slice(0, 800),
+            content: content.slice(0, 1500),
+          },
+          language,
+        ),
+      ),
+      systemPrompt: newsEnrichmentSystemPrompt(language),
       maxOutputTokens: 1400,
+      expectedLanguage: language,
+      languageProbe: newsLanguageProbe,
     });
 
     return {

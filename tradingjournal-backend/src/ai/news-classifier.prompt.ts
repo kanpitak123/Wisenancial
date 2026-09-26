@@ -18,6 +18,8 @@
  * if the team wants the full 8-example set back.
  */
 
+import { newsLanguageRule, withLanguage } from './ai-prompt.shared';
+
 export interface NewsClassificationInput {
   headline: string;
   summary: string;
@@ -156,13 +158,26 @@ export const NEWS_CLASSIFICATION_SYSTEM_PROMPT = [
   JSON.stringify(FEW_SHOT_EXAMPLES),
 ].join('\n');
 
+/** The language rule sits last in the system prompt, right before the model answers. */
+export function buildNewsClassificationSystemPrompt(
+  language: 'en' | 'th',
+): string {
+  return `${NEWS_CLASSIFICATION_SYSTEM_PROMPT}
+${newsLanguageRule(language)}`;
+}
+
 export function buildNewsClassificationPrompt(
   input: NewsClassificationInput,
 ): string {
-  return JSON.stringify({
-    language: input.language,
-    headline: input.headline.slice(0, 300),
-    summary: input.summary.slice(0, 800),
-    content: input.content.slice(0, 1500),
-  });
+  return JSON.stringify(
+    withLanguage(
+      {
+        language: input.language,
+        headline: input.headline.slice(0, 300),
+        summary: input.summary.slice(0, 800),
+        content: input.content.slice(0, 1500),
+      },
+      input.language,
+    ),
+  );
 }

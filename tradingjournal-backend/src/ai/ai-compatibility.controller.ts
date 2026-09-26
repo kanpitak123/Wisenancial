@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +13,13 @@ import { AiRecommendationService } from './ai-recommendation.service';
 import { AiRiskService } from './ai-risk.service';
 import { AiEducationService } from './ai-education.service';
 import { AiManagerService } from './ai-manager.service';
+import {
+  concisenessRule,
+  investmentGuardrail,
+  outputLanguageRule,
+  resolveOutputLanguage,
+  withLanguage,
+} from './ai-prompt.shared';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai-advisor')
@@ -31,32 +39,47 @@ export class AiCompatibilityController {
     body: {
       holdings: unknown[];
       modelId: string;
+      outputLanguage?: string;
     },
   ) {
+    const outputLanguage = resolveOutputLanguage(body.outputLanguage);
+
     const result = await this.manager.executeAiRequest({
       userId: req.user.userId,
       modelId: body.modelId,
-      systemPrompt: 'You are a portfolio advisor. Return valid JSON only.',
-      prompt: JSON.stringify({
-        task: 'Analyze holdings',
-        requiredShape: {
-          timeframeRecommendations: [
-            {
-              symbol: 'string',
-              recommendation: 'LONG_TERM|SHORT_TERM',
-              reasoning: 'string',
-              confidence: 'number 0-100',
+      systemPrompt: [
+        'You are a portfolio advisor.',
+        outputLanguageRule(outputLanguage),
+        investmentGuardrail(),
+        concisenessRule(),
+        'Return valid JSON only.',
+      ].join('\n'),
+      prompt: JSON.stringify(
+        withLanguage(
+          {
+            task: 'Analyze holdings',
+            requiredShape: {
+              timeframeRecommendations: [
+                {
+                  symbol: 'string',
+                  recommendation: 'LONG_TERM|SHORT_TERM',
+                  reasoning: 'string',
+                  confidence: 'number 0-100',
+                },
+              ],
+              portfolioHealth: {
+                diversificationScore: 'number 0-100',
+                riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
+                concentrationRisk: 'string',
+                recommendations: ['string'],
+              },
             },
-          ],
-          portfolioHealth: {
-            diversificationScore: 'number 0-100',
-            riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
-            concentrationRisk: 'string',
-            recommendations: ['string'],
+            holdings: body.holdings,
           },
-        },
-        holdings: body.holdings,
-      }),
+          outputLanguage,
+        ),
+      ),
+      expectedLanguage: outputLanguage,
     });
 
     return {
@@ -71,9 +94,13 @@ export class AiCompatibilityController {
 
   @UseGuards(VerifiedEmailGuard)
   @Get('recommendations')
-  async recommendationsLegacy(@Request() req: any) {
+  async recommendationsLegacy(
+    @Request() req: any,
+    @Query('outputLanguage') outputLanguage?: string,
+  ) {
     const result = await this.recommendations.getGrowthRecommendations(
       req.user.userId,
+      outputLanguage,
     );
 
     return {
@@ -90,12 +117,14 @@ export class AiCompatibilityController {
   @Post('analyze-risk')
   async riskLegacy(
     @Request() req: any,
-    @Body() body: { holdings: any[]; modelId: string },
+    @Body()
+    body: { holdings: any[]; modelId: string; outputLanguage?: string },
   ) {
     const result = await this.risk.analyze(
       req.user.userId,
       body.holdings,
       body.modelId,
+      body.outputLanguage,
     );
 
     return {
@@ -117,12 +146,14 @@ export class AiCompatibilityController {
     body: {
       lessonTitle: string;
       lessonDescription: string;
+      outputLanguage?: string;
     },
   ) {
     const result = await this.education.generateQuiz(
       req.user.userId,
       body.lessonTitle,
       body.lessonDescription,
+      body.outputLanguage,
     );
 
     return {

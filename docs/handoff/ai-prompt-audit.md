@@ -582,6 +582,8 @@ backend jest **283 ผ่าน** · frontend vitest **413 ผ่าน** · `ts
 
 ## รอดำเนินการ — debtToEquity
 
+> **อัปเดต 2026-09-27: ทำแล้ว** — `MarketDataService.getRiskFundamentals` ดึง D/E ต่อ symbol (concurrency 5, cache 12 ชม.) และหาร 100 ตามหัวข้อ "บั๊กหน่วย" ด้านล่าง; `/stocks/fundamentals` ส่ง `debtToEquity` และ `AnalyticsPage` แนบเข้า risk-analysis แล้ว รายละเอียดใน `docs/internal/ai-services-integration-plan.md` §9
+
 **สถานะ**: ยกออกจากเฟส 5 โดยตั้งใจ (Rem อนุมัติทางเลือก C — ส่ง `peRatio` + `beta` ก่อน)
 ตอนนี้ `AnalyticsPage.vue` ส่ง `debtToEquity: null` เข้า `/ai/portfolio/risk-analysis` เสมอ
 คอลัมน์ D/E ในตารางของ `AiRiskAnalysisCard.vue` จึงยังขึ้น "—" ทุกแถว — **เป็นของที่ค้างไว้ ไม่ใช่บั๊ก**

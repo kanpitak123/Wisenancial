@@ -34,9 +34,32 @@ export function resolveOutputLanguage(value?: string | null): AiOutputLanguage {
  * ค่า config มากกว่าคำสั่ง
  */
 export function outputLanguageRule(language: AiOutputLanguage): string {
-  const name = language === 'th' ? 'Thai' : 'English';
+  const name = languageName(language);
 
-  return `Output language: ${name} — always match this exactly, regardless of the language of the supplied data.`;
+  return `Output language: ${name}. Respond only in ${name}: every text field must be written in ${name}, regardless of the language of the supplied data. Never answer in Korean, Chinese, Japanese or any other language. Ticker symbols, numbers and standard finance abbreviations (P/E, beta) may stay as they are.`;
+}
+
+export function languageName(language: AiOutputLanguage): string {
+  return language === 'th' ? 'Thai' : 'English';
+}
+
+/**
+ * คำสั่งภาษาสั้น ๆ ที่ต้องอยู่ "ในข้อความของผู้ใช้" ด้วย ไม่ใช่แค่ system prompt
+ *
+ * โมเดลเล็กอย่าง Haiku เคยตอบเป็นภาษาเกาหลีทั้งที่ system prompt สั่งไทยไว้ — ข้อมูลที่ยัด
+ * ลงใน user message เป็นก้อนใหญ่ ทำให้คำสั่งใน system prompt จางลง จึงย้ำอีกครั้งท้ายสุด
+ * ใกล้จุดที่โมเดลเริ่มเขียนคำตอบที่สุด
+ */
+export function languageInstruction(language: AiOutputLanguage): string {
+  return `Respond only in ${languageName(language)}.`;
+}
+
+/** ใส่คำสั่งภาษาเข้าไปใน payload ที่จะถูก JSON.stringify เป็น user message */
+export function withLanguage<T extends object>(
+  payload: T,
+  language: AiOutputLanguage,
+): T & { languageInstruction: string } {
+  return { ...payload, languageInstruction: languageInstruction(language) };
 }
 
 /**
@@ -82,4 +105,14 @@ export function concisenessRule(): string {
 
 export function screeningOnlyGuardrail(): string {
   return "This is educational screening output only, not personalized investment advice. Do not imply any candidate is a 'good buy' or better than the others beyond what the supplied metrics show.";
+}
+
+/**
+ * ข่าวเป็นกรณีพิเศษ: มีสองภาษาในคำตอบเดียว (aiSummary/stockImpactAnalysis ตามภาษาข่าว
+ * ส่วน aiTranslatedSummary เป็นไทยเสมอ) จึงบอกให้ชัดว่า "ตอบภาษาเดียว" ใช้กับฟิลด์ไหน
+ */
+export function newsLanguageRule(language: AiOutputLanguage): string {
+  const name = languageName(language);
+
+  return `Respond only in ${name} in aiSummary and stockImpactAnalysis (aiTranslatedSummary is always Thai). Never answer in Korean, Chinese, Japanese or any other language.`;
 }

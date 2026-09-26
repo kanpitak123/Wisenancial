@@ -23,6 +23,12 @@ import {
   type AiProviderId,
 } from './ai.models';
 import { loadEnabledAiProviders } from './ai.config';
+import {
+  assessOutputLanguage,
+  languageCorrection,
+  WrongLanguageError,
+} from './ai-language';
+import type { AiOutputLanguage } from './ai-prompt.shared';
 import { classifyAiFailure, type AiFailureKind } from './ai-retry';
 import type {
   AiTokenUsage,
@@ -33,7 +39,19 @@ import { GeminiProvider } from './providers/gemini.provider';
 import { GroqProvider } from './providers/groq.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
-export interface AiRequest {
+/**
+ * Language guard. When set, the answer's prose is checked against `expectedLanguage`;
+ * a wrong-language answer is retried once (with a correction appended to the user
+ * message) and, if still wrong, refused with WrongLanguageError. A refused answer is
+ * never charged. `languageProbe` narrows the check to the fields that are meant to be
+ * in that language (default: the whole answer).
+ */
+export interface AiLanguageGuard<T> {
+  readonly expectedLanguage?: AiOutputLanguage;
+  readonly languageProbe?: (data: T) => unknown;
+}
+
+export interface AiRequest<T = unknown> extends AiLanguageGuard<T> {
   readonly userId: number;
   readonly modelId: string;
   readonly prompt: string;
@@ -110,7 +128,7 @@ export class AiManagerService {
     return user.ai_token_balance;
   }
 
-  async executeAiRequest<T>(request: AiRequest): Promise<AiResponse<T>> {
+  async executeAiRequest<T>(request: AiRequest<T>): Promise<AiResponse<T>> {
     const pricing = this.resolveModel(request.modelId);
     const provider = this.resolveProvider(pricing);
 
@@ -128,14 +146,29 @@ export class AiManagerService {
     const startedAt = Date.now();
 
     try {
-      result = await provider.generateJsonResponse<T>({
-        upstreamModel: pricing.upstreamModel,
-        prompt: request.prompt,
-        systemPrompt: request.systemPrompt,
-        temperature: request.temperature,
-        maxOutputTokens: request.maxOutputTokens,
-      });
+      result = await this.generateInExpectedLanguage<T>(
+        provider,
+        pricing,
+        request,
+        (usage) =>
+          this.logFailure(
+            request.userId,
+            pricing,
+            Date.now() - startedAt,
+            'WRONG_LANGUAGE',
+            usage,
+          ),
+      );
     } catch (error) {
+      // ตอบผิดภาษาสองรอบ: ไม่ใช่ provider ล่ม จึงไม่ใช้ข้อความ "provider unavailable"
+      // และไม่คิดเครดิต (ยังไม่ถึง chargeAndLog)
+      if (error instanceof WrongLanguageError) {
+        this.logger.error(
+          `[${pricing.id}] wrong language for user ${request.userId}: ${error.detail}`,
+        );
+        throw error;
+      }
+
       const kind = classifyAiFailure(error);
       const reason = error instanceof Error ? error.message : String(error);
 
@@ -195,6 +228,8 @@ export class AiManagerService {
     preferredOnly?: boolean;
     /** Skip these providers entirely, e.g. to avoid retrying one that just failed. */
     excludeProviders?: AiProviderId[];
+    expectedLanguage?: AiOutputLanguage;
+    languageProbe?: (data: T) => unknown;
   }): Promise<{
     data: T;
     model: AiModelId;
@@ -223,13 +258,15 @@ export class AiManagerService {
       }
 
       try {
-        const result = await provider.generateJsonResponse<T>({
-          upstreamModel: pricing.upstreamModel,
-          prompt: request.prompt,
-          systemPrompt: request.systemPrompt,
-          temperature: request.temperature,
-          maxOutputTokens: request.maxOutputTokens,
-        });
+        const result = await this.generateInExpectedLanguage<T>(
+          provider,
+          pricing,
+          request,
+          (usage) =>
+            this.logger.warn(
+              `[system:${pricing.id}] discarded a wrong-language answer (${usage.inputTokens} in / ${usage.outputTokens} out tokens)`,
+            ),
+        );
 
         if (index > 0) {
           this.logger.log(
@@ -243,6 +280,16 @@ export class AiManagerService {
           usage: result.usage,
         };
       } catch (error) {
+        if (error instanceof WrongLanguageError) {
+          // ผิดภาษาสองรอบบน model นี้ — ลองตัวถัดไปใน chain ถ้ามี (ปกติไม่มี:
+          // ตอนนี้ chain มี claude-fast ตัวเดียว) ไม่ใช่ error แบบ permanent
+          attempted.push(`${pricing.id}(wrong-language)`);
+          this.logger.warn(
+            `[system:${pricing.id}] wrong language after retry: ${error.detail}`,
+          );
+          continue;
+        }
+
         const kind = classifyAiFailure(error);
         const reason = error instanceof Error ? error.message : String(error);
 
@@ -391,11 +438,62 @@ export class AiManagerService {
     );
   }
 
+  /**
+   * Calls the provider and, when the request carries a language guard, checks the
+   * answer's language. At most two provider calls: the second only after a wrong-language
+   * first answer, with a correction appended. The usage of a discarded answer goes to
+   * `onDiscarded` (we paid for it, the user does not). Only the accepted answer's usage
+   * is returned, so only that is ever billed.
+   */
+  private async generateInExpectedLanguage<T>(
+    provider: IAiProvider,
+    pricing: AiModelPricing,
+    request: AiLanguageGuard<T> & {
+      prompt: string;
+      systemPrompt?: string;
+      temperature?: number;
+      maxOutputTokens?: number;
+    },
+    onDiscarded: (usage: AiTokenUsage) => Promise<void> | void,
+  ): Promise<{ data: T; usage: AiTokenUsage }> {
+    const expected = request.expectedLanguage;
+    let prompt = request.prompt;
+    let lastReason = '';
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await provider.generateJsonResponse<T>({
+        upstreamModel: pricing.upstreamModel,
+        prompt,
+        systemPrompt: request.systemPrompt,
+        temperature: request.temperature,
+        maxOutputTokens: request.maxOutputTokens,
+      });
+
+      if (!expected) return result;
+
+      const verdict = assessOutputLanguage(
+        request.languageProbe
+          ? request.languageProbe(result.data)
+          : result.data,
+        expected,
+      );
+      if (verdict.ok) return result;
+
+      lastReason = verdict.reason ?? 'wrong language';
+      await onDiscarded(result.usage);
+
+      prompt = request.prompt + languageCorrection(expected);
+    }
+
+    throw new WrongLanguageError(expected ?? 'th', lastReason);
+  }
+
   private async logFailure(
     userId: number,
     pricing: AiModelPricing,
     latencyMs: number,
     reason: string,
+    usage: AiTokenUsage = { inputTokens: 0, outputTokens: 0 },
   ): Promise<void> {
     try {
       await this.prisma.ai_usage_logs.create({
@@ -403,8 +501,8 @@ export class AiManagerService {
           user_id: userId,
           model_used: pricing.id,
           provider: pricing.provider,
-          tokens_input: 0,
-          tokens_output: 0,
+          tokens_input: usage.inputTokens,
+          tokens_output: usage.outputTokens,
           credits_deducted: 0,
           latency_ms: latencyMs,
           status: 'FAILED',
