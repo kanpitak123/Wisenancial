@@ -1,0 +1,26 @@
+node_modules
+dist
+coverage
+.git
+.github
+
+# secrets and local env files: the image gets its configuration from the environment
+.env
+.env.*
+!.env.production.example
+
+# local state, logs and dumps that must never end up in an image
+*.log
+backups
+data
+uploads
+/*.sql
+*.dump
+*.backup.sql
+
+# editor / OS noise
+.vscode
+.idea
+.DS_Store
+Dockerfile
+.dockerignore
