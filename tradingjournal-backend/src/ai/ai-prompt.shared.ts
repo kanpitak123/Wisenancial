@@ -124,11 +124,16 @@ export function newsLanguageRule(language: AiOutputLanguage): string {
  * ย้ำเรื่องชื่อเรียกด้วย เพราะเคยเกิด "total profit 2,874.76" กับ "unrealized profit
  * 4,154.76" ในคำตอบเดียวกันโดยไม่มีอะไรบอกผู้อ่านว่าเป็นคนละตัวชี้วัด
  */
-export function numberQuotingRule(): string {
+export function numberQuotingRule(
+  sources: readonly string[] = ['metrics', 'holdings'],
+): string {
+  const named = sources.map((name) => `"${name}"`).join(' and ');
+
   return [
-    'NUMBERS: quote figures only from "metrics" and "holdings", exactly as given and with their unit (the unit is the last part of each key).',
+    `NUMBERS: quote figures only from ${named}, exactly as given and with their unit (the unit is the last part of each key).`,
     'Never calculate, estimate, convert, sum, compare into a new figure, or re-round any number.',
-    "Name each figure by its glossary meaning: keep UNREALIZED (paper gain on shares still held), REALIZED (completed sales) and TOTAL profit/loss (realized + unrealized + dividends) clearly apart, and never call one by another's name.",
+    'LABELS: refer to every figure by its entry in "labels" / "holdingLabels" (use that wording exactly, it is already in the answer language) or by ordinary words. Never write a key name, an identifier with an underscore or camelCase, or an ALL-CAPS word for emphasis.',
+    "Keep unrealized profit/loss (paper gain on shares still held), realized profit/loss (completed sales) and total profit/loss (realized + unrealized + dividends) clearly apart by using their three labels, and never call one by another's name.",
     'If a figure you would need is not provided, describe the point in words instead of producing a number.',
   ].join(' ');
 }

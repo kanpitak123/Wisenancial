@@ -95,10 +95,10 @@ describe('buildInvestorReviewMetrics', () => {
   it('keeps unrealized, realized and total profit apart, each with a definition', () => {
     const { glossary } = built;
 
-    expect(glossary.unrealizedProfitLoss_USD).toMatch(/UNREALIZED/);
+    expect(glossary.unrealizedProfitLoss_USD).toMatch(/^Unrealized/);
     expect(glossary.unrealizedProfitLoss_USD).toMatch(/still held/);
-    expect(glossary.realizedProfitLoss_USD).toMatch(/REALIZED/);
-    expect(glossary.totalProfitLoss_USD).toMatch(/TOTAL/);
+    expect(glossary.realizedProfitLoss_USD).toMatch(/^Realized/);
+    expect(glossary.totalProfitLoss_USD).toMatch(/^Total/);
     expect(glossary.totalProfitLoss_USD).toMatch(
       /realized \+ unrealized \+ dividends/,
     );

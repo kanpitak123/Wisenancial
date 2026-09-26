@@ -24,6 +24,11 @@ import {
 } from './ai.models';
 import { loadEnabledAiProviders } from './ai.config';
 import {
+  assessKeyNameLeak,
+  keyLeakCorrection,
+  KeyNameLeakError,
+} from './ai-key-leak';
+import {
   assessNumericGrounding,
   groundingCorrection,
   UngroundedNumbersError,
@@ -45,7 +50,8 @@ import { GroqProvider } from './providers/groq.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
 /** An answer the guards refused twice. Both kinds are surfaced as errors and never charged. */
-type RejectedOutputError = WrongLanguageError | UngroundedNumbersError;
+type RejectedOutputError =
+  WrongLanguageError | UngroundedNumbersError | KeyNameLeakError;
 
 interface OutputRejection {
   code: string;
@@ -55,7 +61,8 @@ interface OutputRejection {
 
 const isRejectedOutput = (error: unknown): error is RejectedOutputError =>
   error instanceof WrongLanguageError ||
-  error instanceof UngroundedNumbersError;
+  error instanceof UngroundedNumbersError ||
+  error instanceof KeyNameLeakError;
 
 /**
  * Output guards. Each is optional; a request without them is neither checked nor retried.
@@ -64,6 +71,8 @@ const isRejectedOutput = (error: unknown): error is RejectedOutputError =>
  *   narrows it to the fields meant to be in that language; default: the whole answer).
  * - Grounding: every percent/money figure in the answer must appear in `groundedIn` (the
  *   data the prompt was built from), see ai-grounding.ts.
+ * - Key names: with `rejectKeyNames`, prose must not contain metric key names or ALL-CAPS
+ *   labels, see ai-key-leak.ts (`groundedIn` supplies the allowed tickers/enums).
  *
  * A failing answer is retried once with a correction appended to the user message; if the
  * second answer fails too, the request is refused (WrongLanguageError /
@@ -74,6 +83,7 @@ export interface AiOutputGuard<T> {
   readonly languageProbe?: (data: T) => unknown;
   readonly groundedIn?: unknown;
   readonly groundingProbe?: (data: T) => unknown;
+  readonly rejectKeyNames?: boolean;
 }
 
 export interface AiRequest<T = unknown> extends AiOutputGuard<T> {
@@ -257,6 +267,7 @@ export class AiManagerService {
     languageProbe?: (data: T) => unknown;
     groundedIn?: unknown;
     groundingProbe?: (data: T) => unknown;
+    rejectKeyNames?: boolean;
   }): Promise<{
     data: T;
     model: AiModelId;
@@ -544,6 +555,23 @@ export class AiManagerService {
           code: 'UNGROUNDED_NUMBERS',
           correction: groundingCorrection(verdict.ungrounded ?? []),
           toError: () => new UngroundedNumbersError(reason),
+        };
+      }
+    }
+
+    if (guard.rejectKeyNames) {
+      const verdict = assessKeyNameLeak(
+        guard.languageProbe ? guard.languageProbe(data) : data,
+        guard.groundedIn ?? {},
+      );
+
+      if (!verdict.ok) {
+        const reason = verdict.reason ?? 'key names in the prose';
+
+        return {
+          code: 'KEY_NAME_LEAK',
+          correction: keyLeakCorrection(verdict.found ?? []),
+          toError: () => new KeyNameLeakError(reason),
         };
       }
     }

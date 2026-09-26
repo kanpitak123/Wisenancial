@@ -13,13 +13,18 @@
  * side. The model quotes; it does not calculate.
  */
 
+import type { AiOutputLanguage } from './ai-prompt.shared';
+import { labelsFor } from './review-labels';
+
 type Row = Record<string, unknown>;
 
 export interface ReviewMetricBlock {
   /** Every value is a finite number, rounded to 2 decimals, with its unit in the key. */
   metrics: Record<string, number>;
-  /** Plain-language definition of each metric key. */
+  /** Plain-language definition of each metric key (for the model; not for display). */
   glossary: Record<string, string>;
+  /** The words to use for each metric key in the answer, in the output language. */
+  labels: Record<string, string>;
 }
 
 export interface InvestorReviewMetrics extends ReviewMetricBlock {
@@ -27,6 +32,8 @@ export interface InvestorReviewMetrics extends ReviewMetricBlock {
   holdings: Array<Record<string, string | number | null>>;
   /** Plain-language definition of each per-holding key. */
   holdingFields: Record<string, string>;
+  /** The words to use for each per-holding key in the answer, in the output language. */
+  holdingLabels: Record<string, string>;
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
@@ -59,6 +66,7 @@ function put(
 export function buildInvestorReviewMetrics(
   analytics: unknown,
   holdings: readonly unknown[],
+  language: AiOutputLanguage = 'th',
 ): InvestorReviewMetrics {
   const overview = asRow(analytics);
   const summary = asRow(overview.summary);
@@ -72,7 +80,7 @@ export function buildInvestorReviewMetrics(
     'USD';
   const c = currency;
 
-  const block: ReviewMetricBlock = { metrics: {}, glossary: {} };
+  const block: ReviewMetricBlock = { metrics: {}, glossary: {}, labels: {} };
 
   put(
     block,
@@ -102,13 +110,13 @@ export function buildInvestorReviewMetrics(
   put(
     block,
     `unrealizedProfitLoss_${c}`,
-    'UNREALIZED profit/loss: paper gain on shares still held (market value minus cost basis). Not yet sold, so not locked in.',
+    'Unrealized profit/loss: paper gain on shares still held (market value minus cost basis). Not yet sold, so not locked in.',
     summary.unrealized_pnl,
   );
   put(
     block,
     `realizedProfitLoss_${c}`,
-    'REALIZED profit/loss from completed sales, already locked in. Negative means sold shares lost money overall.',
+    'Realized profit/loss from completed sales, already locked in. Negative means sold shares lost money overall.',
     summary.realized_pnl,
   );
   put(
@@ -120,7 +128,7 @@ export function buildInvestorReviewMetrics(
   put(
     block,
     `totalProfitLoss_${c}`,
-    'TOTAL profit/loss since inception = realized + unrealized + dividends. Differs from the unrealized figure whenever realized results or dividends are not zero.',
+    'Total profit/loss since inception = realized + unrealized + dividends. Differs from the unrealized figure whenever realized results or dividends are not zero.',
     summary.total_pnl,
   );
   put(
@@ -171,28 +179,34 @@ export function buildInvestorReviewMetrics(
     };
   });
 
+  block.labels = labelsFor(Object.keys(block.metrics), language);
+
+  const holdingFields: Record<string, string> = {
+    sharesHeld_shares: 'Number of shares currently held.',
+    [`averageCostPerShare_${c}`]: 'Average price paid per share.',
+    [`currentPrice_${c}`]: 'Latest market price per share.',
+    [`costBasis_${c}`]: 'Amount originally paid for the shares held.',
+    [`marketValue_${c}`]: 'Current market value of the shares held.',
+    [`unrealizedProfitLoss_${c}`]:
+      'Unrealized profit/loss on this holding (market value minus cost basis).',
+    unrealizedReturn_percent:
+      'Unrealized profit/loss divided by cost basis, in percent (932.34 means +932.34%).',
+    weightInHoldings_percent:
+      "This holding's share of the total market value of all holdings, in percent.",
+  };
+
   return {
     currency: c,
     ...block,
     holdings: perHolding,
-    holdingFields: {
-      sharesHeld_shares: 'Number of shares currently held.',
-      [`averageCostPerShare_${c}`]: 'Average price paid per share.',
-      [`currentPrice_${c}`]: 'Latest market price per share.',
-      [`costBasis_${c}`]: 'Amount originally paid for the shares held.',
-      [`marketValue_${c}`]: 'Current market value of the shares held.',
-      [`unrealizedProfitLoss_${c}`]:
-        'Unrealized profit/loss on this holding (market value minus cost basis).',
-      unrealizedReturn_percent:
-        'Unrealized profit/loss divided by cost basis, in percent (932.34 means +932.34%).',
-      weightInHoldings_percent:
-        "This holding's share of the total market value of all holdings, in percent.",
-    },
+    holdingFields,
+    holdingLabels: labelsFor(Object.keys(holdingFields), language),
   };
 }
 
 export function buildTraderReviewMetrics(
   analytics: unknown,
+  language: AiOutputLanguage = 'th',
 ): ReviewMetricBlock & { currency: string } {
   const overview = asRow(analytics);
   const summary = asRow(overview.summary);
@@ -202,7 +216,7 @@ export function buildTraderReviewMetrics(
       : 'USD';
   const c = currency;
 
-  const block: ReviewMetricBlock = { metrics: {}, glossary: {} };
+  const block: ReviewMetricBlock = { metrics: {}, glossary: {}, labels: {} };
 
   put(
     block,
@@ -260,6 +274,8 @@ export function buildTraderReviewMetrics(
     'Average profit/loss per closed trade.',
     summary.average_pnl,
   );
+
+  block.labels = labelsFor(Object.keys(block.metrics), language);
 
   return { currency: c, ...block };
 }

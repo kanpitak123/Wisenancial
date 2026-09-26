@@ -111,6 +111,38 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
     expect(sent.prompt).not.toContain('total_pnl');
   });
 
+  it.each(['th', 'en'] as const)(
+    'INVESTOR: carries the %s label glossary and asks for the key-name check',
+    async (language) => {
+      const { service, executeAiRequest } = makeService('INVESTOR');
+
+      await service.reviewPortfolio(
+        1,
+        17,
+        'claude-fast',
+        undefined,
+        undefined,
+        language,
+      );
+
+      const sent = (
+        executeAiRequest.mock.calls[0] as [Sent & { rejectKeyNames?: boolean }]
+      )[0];
+      const payload = JSON.parse(sent.prompt) as {
+        labels: Record<string, string>;
+      };
+
+      expect(payload.labels.unrealizedProfitLoss_USD).toBe(
+        language === 'th' ? 'กำไร/ขาดทุนที่ยังไม่รับรู้' : 'unrealized P&L',
+      );
+      expect(payload.labels.totalReturn_percent).toBe(
+        language === 'th' ? 'ผลตอบแทนรวม' : 'total return',
+      );
+      expect(sent.rejectKeyNames).toBe(true);
+      expect(sent.systemPrompt).toContain('"labels"');
+    },
+  );
+
   it('INVESTOR: system prompt tells the model to quote, never compute', async () => {
     const { service, executeAiRequest } = makeService('INVESTOR');
 
@@ -119,8 +151,9 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
 
     expect(sent.systemPrompt).toContain('Never calculate, estimate, convert');
-    expect(sent.systemPrompt).toContain('UNREALIZED');
-    expect(sent.systemPrompt).toContain('TOTAL profit/loss');
+    expect(sent.systemPrompt).toContain('unrealized profit/loss');
+    expect(sent.systemPrompt).toContain('total profit/loss');
+    expect(sent.systemPrompt).toContain('Never write a key name');
   });
 
   it.each(['INVESTOR', 'TRADER'] as const)(

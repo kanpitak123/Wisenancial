@@ -1,4 +1,5 @@
 import { UngroundedNumbersError } from './ai-grounding';
+import { KeyNameLeakError } from './ai-key-leak';
 import { AiManagerService } from './ai-manager.service';
 import type { IAiProvider } from './providers/ai-provider.interface';
 
@@ -143,6 +144,58 @@ describe('executeAiRequest — numeric grounding', () => {
       ...request,
       groundedIn: undefined,
     });
+
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('executeAiRequest — key names in the prose', () => {
+  const LEAKY =
+    'กำไร/ขาดทุนรวมคือ 2,874.76 ดอลลาร์ โดยส่วน UNREALIZED มีมูลค่าสูงมากเมื่อเทียบกับส่วนอื่นของพอร์ต';
+  const CLEAN =
+    'กำไร/ขาดทุนรวมคือ 2,874.76 ดอลลาร์ โดยส่วนที่ยังไม่รับรู้มีมูลค่าสูงมากเมื่อเทียบกับส่วนอื่นของพอร์ต';
+
+  const leakRequest = { ...request, rejectKeyNames: true };
+
+  it('leaky first, clean on retry: correction names the token, charged once', async () => {
+    const { manager, prompts, prisma } = makeManager([LEAKY, CLEAN]);
+
+    const result = await manager.executeAiRequest<{ summary: string }>(
+      leakRequest,
+    );
+
+    expect(result.data.summary).toBe(CLEAN);
+    expect(prompts[1]).toContain('UNREALIZED');
+    expect(prompts[1]).toContain('plain-language label');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.ai_usage_logs.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: 'FAILED',
+        credits_deducted: 0,
+        error_code: 'KEY_NAME_LEAK',
+      }) as unknown,
+    });
+  });
+
+  it('still leaking after the retry: AI_KEY_NAME_LEAK and NOT charged', async () => {
+    const { manager, prisma, generate } = makeManager([LEAKY, LEAKY]);
+
+    const error = await manager
+      .executeAiRequest<{ summary: string }>(leakRequest)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(KeyNameLeakError);
+    expect(
+      ((error as KeyNameLeakError).getResponse() as { error: string }).error,
+    ).toBe('AI_KEY_NAME_LEAK');
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('not checked unless asked for', async () => {
+    const { manager, generate } = makeManager([LEAKY]);
+
+    await manager.executeAiRequest<{ summary: string }>(request);
 
     expect(generate).toHaveBeenCalledTimes(1);
   });

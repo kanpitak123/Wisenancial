@@ -174,7 +174,7 @@ export class AiService {
             actionableRecommendations: ['string'],
             disciplineScore: 'number 0-100',
           },
-          ...buildTraderReviewMetrics(analytics),
+          ...buildTraderReviewMetrics(analytics, outputLanguage),
           trades: suppliedItems ?? [],
         },
         outputLanguage,
@@ -195,6 +195,7 @@ export class AiService {
         maxOutputTokens: 1800,
         expectedLanguage: outputLanguage,
         groundedIn: payload,
+        rejectKeyNames: true,
       });
 
       return {
@@ -228,7 +229,7 @@ export class AiService {
           strengths: ['string'],
           actionableRecommendations: ['string'],
         },
-        ...buildInvestorReviewMetrics(analytics, holdings),
+        ...buildInvestorReviewMetrics(analytics, holdings, outputLanguage),
       },
       outputLanguage,
     );
@@ -248,6 +249,7 @@ export class AiService {
       maxOutputTokens: 1800,
       expectedLanguage: outputLanguage,
       groundedIn: payload,
+      rejectKeyNames: true,
     });
 
     return {
