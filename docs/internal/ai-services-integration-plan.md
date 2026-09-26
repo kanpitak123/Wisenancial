@@ -1,5 +1,7 @@
 # AI services handover — integration discovery & plan
 
+> **2026-09-26 plan change:** Claude is now the only AI provider; Groq/Gemini/OpenAI are parked. Where §3, §5 and §6 talk about Gemini or a multi-provider chain, **§8 is authoritative**.
+
 Date: 2026-09-26 · Investigation only. No repo code changed. Package: `wisenancial-ai-services.zip`,
 extracted to `C:\Users\iamre\Desktop\ai-services-handover` (outside the repo).
 
@@ -196,3 +198,52 @@ Decision: **parked, no integration work.** It only yields the 3-value sentiment 
 accuracy numbers, and costs a fixed ~$250–800/month for a GPU host versus ~$0.2–1.2 per 1,000 items on the APIs (§4). No flag,
 env var, or code exists for it. Revisit only with a concrete need the APIs do not meet (scale, data residency, offline) and an
 evaluation on our own labelled set showing it matches Gemini/Groq.
+
+## 8. Plan change: Claude is the only AI provider (branch `feat/claude-only-ai`, local commits, not pushed)
+
+**Supersedes** the Gemini-first parts of §3, §5 (flags/keys/cost rows for Gemini/Groq/OpenAI) and the `GEMINI_NEWS_ENRICHMENT_ENABLED` flag. Groq, Gemini and OpenAI are parked: the provider code, registry entries and their tests stay, but `AI_PROVIDERS` (default `anthropic`) is an allow-list — a provider that is not listed cannot answer, bill, or appear in the model picker even if its key is set.
+
+### Behaviour
+- `AI_PROVIDERS=anthropic` (default). Unknown names ignored; an empty/unusable value falls back to `anthropic`, never to "no provider".
+- Claude failing → `AI_PROVIDER_UNAVAILABLE` (503) for users, credits **not** charged (the charge happens only after a successful call; a `FAILED` usage row with 0 credits is logged). System jobs throw / fall back to their static default. No fallback to a parked provider and no silent climb from FAST to SMART.
+- A stale client that still sends a parked model id (`groq-llama3`, …) gets 503 "not enabled on this server" with the list of models that work, and nothing is billed.
+- Tiers: public ids `claude-fast` / `claude-smart`; upstream ids come from `AI_MODEL_FAST` / `AI_MODEL_SMART` (defaults in `src/ai/ai.config.ts`: `claude-haiku-4-5-20251001` / `claude-sonnet-5`, **unverified** — see key status below). Old public id `claude-sonnet-5` is replaced by `claude-smart` (historic `ai_usage_logs.model_used` rows keep the old string).
+- `ANTHROPIC_WORKSPACE_ID` (optional): sent as `anthropic-workspace-id` for keys that are not workspace-scoped.
+- The Chunk A classifier (`GeminiNewsClassifierService` → `NewsClassifierService`, same output schema, temperature 0) now runs on `claude-fast`. Flag: `NEWS_CLASSIFIER_ENABLED` (default off); the Gemini-only flag is removed (setting it no longer does anything — covered by a test). On any classifier failure the legacy enrichment prompt runs through the system chain (FAST only).
+- Guardrails second pass stays system-paid, `preferredOnly`, and moves to `claude-smart` (Sonnet-class, what the prompt was validated on).
+
+### Feature → tier
+| Feature | Paid by | Tier | Notes |
+|---|---|---|---|
+| News classifier (first pass) | system | FAST | temperature 0, ~$4.5 / 1,000 items |
+| News enrichment (legacy prompt, cron + fallback) | system | FAST | ~$3.3 / 1,000 |
+| Guardrails second pass (shadow) | system | SMART | ~$0.09 per item, daily budget caps spend |
+| User-triggered news enrich | user | user picks | default in UI should be FAST |
+| AI Picks (growth recommendations) | user, server picks | FAST | no model selector on that page |
+| Education quiz | user, server picks | FAST | |
+| Chart insight | user | user picks | rule-based path costs nothing |
+| Portfolio review (Trader / Investor) | user | user picks, suggest SMART | |
+| Risk analysis | user | user picks, suggest SMART | |
+| Coach | — | — | human-coach booking, no AI call |
+
+### Credits vs real Claude cost (report only, prices unchanged)
+Assumptions (no usage data was queried): list prices FAST $1/$5, SMART $3/$15 per 1M tokens in/out; token sizes are estimates from the prompt shapes and `maxOutputTokens`; 35 THB/USD. Registry rates: FAST 20/100, SMART 60/300 credits per 1k in/out (FAST is new, set at cost parity like SMART). Credit packs: Starter 99 THB = 500 credits, Pro 249 = 1,500, Max 499 = 3,500 → 0.14–0.20 THB per credit.
+
+| Feature (est. tokens in/out) | Tier | Credits / call | Claude cost / call | Pack revenue / call (Max … Starter) |
+|---|---|---|---|---|
+| Chart insight (1.5k/0.5k) | smart / fast | 240 / 80 | $0.012 / $0.004 | 34–48 / 11–16 THB |
+| Portfolio review Trader (4k/1k) | smart / fast | 540 / 180 | $0.027 / $0.009 | 77–107 / 26–36 THB |
+| Portfolio review Investor (3k/1k) | smart / fast | 480 / 160 | $0.024 / $0.008 | 68–95 / 23–32 THB |
+| Risk analysis (2k/0.9k) | smart / fast | 390 / 130 | $0.020 / $0.0065 | 56–77 / 19–26 THB |
+| News enrich, user (0.8k/0.7k) | smart / fast | 258 / 86 | $0.013 / $0.004 | 37–51 / 12–17 THB |
+| AI Picks (3k/1.8k) | fast | 240 | $0.012 | 34–48 THB |
+| Education quiz (0.5k/1k) | fast | 110 | $0.0055 | 16–22 THB |
+
+Findings:
+1. **No user-paid feature loses money.** Credits are priced at cost parity (1 credit ≈ $0.00005) but sold at ~$0.004–0.006, so every call returns ~81× its Claude cost at any pack size; the ratio is constant because pricing is linear.
+2. **The real problem is the other direction.** Groq was 1/1 credits per 1k; the cheapest option is now FAST at 20/100, so the same chart insight goes from ~2 credits to ~80. A Trader portfolio review on SMART (540) costs more than a whole Starter pack (500); the 10-credit minimum balance is also far below what one call now needs. Worth a pricing/UX decision, not changed here.
+3. **Cost that has no revenue behind it:** (a) system-paid jobs — classifier + enrichment ≈ $3–5 per 1,000 items, guardrails ≈ $0.09/item, capped at 20/day ≈ $55/month; (b) credits obtained free via gamification (10 points → 1 credit) are a subsidy at the same rate.
+4. Every number above is an estimate from assumed list prices; replace with real `ai_usage_logs` averages (tokens_input / tokens_output by model) before acting on any of it.
+
+### Key status (2026-09-26)
+`ANTHROPIC_API_KEY` has the `sk-ant-` format, but both `GET /v1/models` and a minimal `POST /v1/messages` return **400 invalid_request_error: "This API key is not scoped to a workspace … must include the anthropic-workspace-id header"**. So the key is not yet verified and the real model list is unknown. Fix: set `ANTHROPIC_WORKSPACE_ID` (the backend now sends it), or create a workspace-scoped key. Then set `AI_MODEL_FAST` / `AI_MODEL_SMART` from the listing.
