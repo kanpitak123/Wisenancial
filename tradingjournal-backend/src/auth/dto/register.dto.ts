@@ -1,5 +1,6 @@
 import {
   IsEmail,
+  IsNotEmpty,
   IsString,
   Matches,
   MaxLength,
@@ -31,4 +32,13 @@ export class RegisterDto {
     message: 'รหัสผ่านต้องมีตัวอักษรและตัวเลขอย่างน้อยอย่างละ 1 ตัว',
   })
   password!: string;
+
+  /**
+   * เวอร์ชัน Terms + Privacy ที่ผู้ใช้เห็นตอนติ๊กยอมรับ — บังคับส่ง (ไม่ติ๊ก = สมัครไม่ได้)
+   * เซิร์ฟเวอร์เทียบกับ CURRENT_TERMS_VERSION เอง และเป็นฝ่ายกำหนดเวลาที่ยอมรับ
+   */
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  accepted_terms_version!: string;
 }

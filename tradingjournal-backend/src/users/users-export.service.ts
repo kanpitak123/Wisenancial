@@ -26,6 +26,8 @@ const USER_EXPORT_SELECT = {
   current_streak: true,
   longest_streak: true,
   last_active_date: true,
+  accepted_terms_version: true,
+  accepted_terms_at: true,
   created_at: true,
   updated_at: true,
 } as const;

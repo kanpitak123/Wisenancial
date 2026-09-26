@@ -83,6 +83,57 @@
             </q-input>
           </div>
 
+          <!-- ต้องติ๊กเองเท่านั้น (ไม่ติ๊กไว้ให้ล่วงหน้า) — PDPA ถือว่าความยินยอมต้องเป็นการกระทำที่ชัดเจน
+               ลิงก์เปิดแท็บใหม่ เพื่อไม่ให้ข้อมูลที่กรอกไว้ในฟอร์มหาย -->
+          <div class="consent-row" data-test="register-consent">
+            <q-checkbox
+              v-model="acceptedTerms"
+              dense
+              :dark="$q.dark.isActive"
+              :aria-label="consentAriaLabel"
+              data-test="register-terms"
+            />
+            <span class="consent-label dash-text-muted" data-test="register-terms-label">
+              <template v-if="languageStore.isThai">
+                ฉันยอมรับ
+                <router-link
+                  :to="TERMS_ROUTE"
+                  target="_blank"
+                  class="consent-link"
+                  data-test="register-terms-link"
+                  >ข้อกำหนดการให้บริการ</router-link
+                >
+                และ
+                <router-link
+                  :to="PRIVACY_ROUTE"
+                  target="_blank"
+                  class="consent-link"
+                  data-test="register-privacy-link"
+                  >นโยบายความเป็นส่วนตัว</router-link
+                >
+                รวมถึงการใช้ฟีเจอร์ AI ตามที่อธิบายไว้
+              </template>
+              <template v-else>
+                I agree to the
+                <router-link
+                  :to="TERMS_ROUTE"
+                  target="_blank"
+                  class="consent-link"
+                  data-test="register-terms-link"
+                  >Terms of Service</router-link
+                >
+                and
+                <router-link
+                  :to="PRIVACY_ROUTE"
+                  target="_blank"
+                  class="consent-link"
+                  data-test="register-privacy-link"
+                  >Privacy Policy</router-link
+                >, including the use of AI features as described.
+              </template>
+            </span>
+          </div>
+
           <q-btn
             type="submit"
             unelevated
@@ -90,6 +141,8 @@
             label="Sign Up"
             class="full-width custom-theme-btn text-white text-weight-bold q-py-sm shadow-3 q-mt-md"
             :loading="auth.loading"
+            :disable="!acceptedTerms"
+            data-test="register-submit"
           >
             <template v-slot:loading>
               <q-spinner-dots class="on-left" />
@@ -108,8 +161,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useAuthStore } from 'stores/AuthStore';
+import { useLanguageStore } from 'stores/LanguageStore';
+import { PRIVACY_ROUTE, TERMS_ROUTE, TERMS_VERSION } from 'src/constants/legal.constants';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
@@ -117,6 +172,7 @@ import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 const auth = useAuthStore();
 const router = useRouter();
 const $q = useQuasar();
+const languageStore = useLanguageStore();
 
 const form = reactive({
   username: '',
@@ -124,6 +180,15 @@ const form = reactive({
   email: '',
   password: '',
 });
+
+/** ยังไม่ติ๊ก = สมัครไม่ได้ — ตั้งเป็น false เสมอ ห้ามจำค่าจากรอบก่อน */
+const acceptedTerms = ref(false);
+
+const consentAriaLabel = computed(() =>
+  languageStore.isThai
+    ? 'ฉันยอมรับข้อกำหนดการให้บริการและนโยบายความเป็นส่วนตัว'
+    : 'I agree to the Terms of Service and Privacy Policy',
+);
 
 const handleRegister = async () => {
   // Basic validation (Optional: add more as needed)
@@ -136,8 +201,20 @@ const handleRegister = async () => {
     return;
   }
 
+  // ปุ่มถูก disable อยู่แล้ว แต่กด Enter ในช่องกรอกยัง submit ฟอร์มได้ — กันซ้ำที่นี่ด้วย
+  if (!acceptedTerms.value) {
+    $q.notify({
+      type: 'warning',
+      message: languageStore.isThai
+        ? 'กรุณายอมรับข้อกำหนดและนโยบายความเป็นส่วนตัวก่อนสมัคร'
+        : 'Please accept the Terms and Privacy Policy to sign up.',
+      position: 'top',
+    });
+    return;
+  }
+
   try {
-    await auth.register(form);
+    await auth.register({ ...form, accepted_terms_version: TERMS_VERSION });
     $q.notify({
       type: 'positive',
       message: 'Account created successfully!',
@@ -264,6 +341,25 @@ body.body--dark .dash-text-muted {
 }
 
 /* Links */
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.consent-label {
+  flex: 1;
+}
+
+.consent-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .login-link {
   color: var(--accent-700);
   text-decoration: none;

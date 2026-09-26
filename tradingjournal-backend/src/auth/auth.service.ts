@@ -12,6 +12,7 @@ import { EmailFlowsService } from './email-flows.service';
 import {
   AUTH_CONSTANTS,
   AUTH_ERROR_MESSAGES,
+  CURRENT_TERMS_VERSION,
 } from './constants/auth.constants';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
@@ -56,6 +57,11 @@ export class AuthService {
   ) {}
 
   async register(data: RegisterDto) {
+    // เช็กก่อนแตะฐานข้อมูล — ไม่บันทึกการยอมรับข้อกำหนดที่ผู้ใช้ไม่ได้เห็นจริง
+    if (data.accepted_terms_version !== CURRENT_TERMS_VERSION) {
+      throw new BadRequestException(AUTH_ERROR_MESSAGES.termsVersionOutdated);
+    }
+
     const email = data.email.trim().toLowerCase();
     const username = data.username.trim();
 
@@ -81,6 +87,8 @@ export class AuthService {
         username,
         full_name: data.full_name.trim(),
         password: hashedPassword,
+        accepted_terms_version: data.accepted_terms_version,
+        accepted_terms_at: new Date(),
       },
       select: {
         id: true,

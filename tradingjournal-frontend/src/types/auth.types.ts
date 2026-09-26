@@ -30,6 +30,8 @@ export interface RegisterPayload {
   username: string;
   full_name: string;
   password: string;
+  /** เวอร์ชัน Terms + Privacy ที่ผู้ใช้เห็นตอนติ๊กยอมรับ (หลังบ้านเทียบกับเวอร์ชันปัจจุบันเอง) */
+  accepted_terms_version: string;
 }
 
 export interface AuthResponse {

@@ -154,6 +154,13 @@ model users {
   // a password reset (both prove control of the mailbox).
   email_verified_at DateTime? @db.Timestamp(6)
 
+  // Consent to the Terms of Service + Privacy Policy, recorded at signup. The version is the
+  // one the user saw (server-checked against CURRENT_TERMS_VERSION); the timestamp is set by the
+  // server, never by the client. NULL on both = no consent was recorded (accounts created before
+  // the checkbox existed - deliberately NOT backfilled, we cannot claim consent nobody gave).
+  accepted_terms_version String?   @db.VarChar(32)
+  accepted_terms_at      DateTime? @db.Timestamp(6)
+
   created_at DateTime? @default(now()) @db.Timestamp(6)
   updated_at DateTime? @default(now()) @db.Timestamp(6)
 

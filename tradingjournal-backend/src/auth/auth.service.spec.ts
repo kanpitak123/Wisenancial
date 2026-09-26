@@ -4,6 +4,10 @@ import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import {
+  AUTH_ERROR_MESSAGES,
+  CURRENT_TERMS_VERSION,
+} from './constants/auth.constants';
 import { EmailFlowsService } from './email-flows.service';
 import { RefreshTokenService } from './refresh-token.service';
 
@@ -163,6 +167,7 @@ describe('AuthService', () => {
         username: 'user',
         full_name: 'Example User',
         password: 'Password123',
+        accepted_terms_version: CURRENT_TERMS_VERSION,
       });
 
       expect(emailFlowsMock.sendVerificationForNewUser).toHaveBeenCalledWith({
@@ -171,6 +176,57 @@ describe('AuthService', () => {
         full_name: 'Example User',
       });
       expect(result.user.email_verified).toBe(false);
+    });
+  });
+
+  describe('register: terms consent', () => {
+    const REGISTER_INPUT = {
+      email: 'new@example.com',
+      username: 'newuser',
+      full_name: 'New User',
+      password: 'Password123',
+    };
+
+    beforeEach(() => {
+      prismaMock.users.findFirst.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed');
+      prismaMock.users.create.mockResolvedValue({ ...USER_ROW });
+      emailFlowsMock.sendVerificationForNewUser.mockResolvedValue(undefined);
+    });
+
+    it('stores the accepted version and a server-side timestamp', async () => {
+      const before = Date.now();
+
+      await service.register({
+        ...REGISTER_INPUT,
+        accepted_terms_version: CURRENT_TERMS_VERSION,
+      });
+
+      const data = (
+        prismaMock.users.create.mock.calls[0] as [
+          { data: { accepted_terms_version: string; accepted_terms_at: Date } },
+        ]
+      )[0].data;
+
+      expect(data.accepted_terms_version).toBe(CURRENT_TERMS_VERSION);
+      expect(data.accepted_terms_at).toBeInstanceOf(Date);
+      expect(data.accepted_terms_at.getTime()).toBeGreaterThanOrEqual(before);
+    });
+
+    it('rejects an outdated/unknown version with 400 and touches nothing', async () => {
+      await expect(
+        service.register({
+          ...REGISTER_INPUT,
+          accepted_terms_version: 'draft-0.0',
+        }),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: AUTH_ERROR_MESSAGES.termsVersionOutdated,
+      });
+
+      expect(prismaMock.users.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.users.create).not.toHaveBeenCalled();
+      expect(emailFlowsMock.sendVerificationForNewUser).not.toHaveBeenCalled();
     });
   });
 
