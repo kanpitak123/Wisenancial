@@ -132,6 +132,9 @@ export function assessOutputLanguage(
  * never charged: the fault is ours, not something the user should pay for.
  */
 export class WrongLanguageError extends HttpException {
+  readonly tag = 'wrong-language';
+  readonly code = 'WRONG_LANGUAGE';
+
   constructor(
     readonly expected: AiOutputLanguage,
     readonly detail: string,

@@ -19,9 +19,14 @@ import type {
 } from './ai.types';
 import type { NewsEnrichmentResult } from './ai-news.types';
 import {
+  buildInvestorReviewMetrics,
+  buildTraderReviewMetrics,
+} from './portfolio-review-metrics';
+import {
   concisenessRule,
   investmentGuardrail,
   newsLanguageRule,
+  numberQuotingRule,
   outputLanguageRule,
   resolveOutputLanguage,
   withLanguage,
@@ -156,6 +161,25 @@ export class AiService {
         suppliedAnalytics ??
         (await this.analytics.overview(userId, portfolioId));
 
+      // ตัวเลขทั้งหมดที่โมเดลเห็นอยู่ใน payload นี้ก้อนเดียว — และเป็นก้อนเดียวกับที่
+      // manager ใช้ตรวจว่าคำตอบอ้างตัวเลขที่ไม่มีอยู่จริงหรือเปล่า (groundedIn)
+      const payload = withLanguage(
+        {
+          task: 'Review trader performance and journal behavior',
+          requiredShape: {
+            summary: 'string',
+            strengths: ['string'],
+            weaknesses: ['string'],
+            riskWarnings: ['string'],
+            actionableRecommendations: ['string'],
+            disciplineScore: 'number 0-100',
+          },
+          ...buildTraderReviewMetrics(analytics),
+          trades: suppliedItems ?? [],
+        },
+        outputLanguage,
+      );
+
       const result = await this.manager.executeAiRequest<TraderReviewResult>({
         userId,
         modelId,
@@ -163,29 +187,14 @@ export class AiService {
           'You are a disciplined trading coach.',
           outputLanguageRule(outputLanguage),
           investmentGuardrail(),
+          numberQuotingRule(),
           concisenessRule(),
           'Return valid JSON only.',
         ].join('\n'),
-        prompt: JSON.stringify(
-          withLanguage(
-            {
-              task: 'Review trader performance and journal behavior',
-              requiredShape: {
-                summary: 'string',
-                strengths: ['string'],
-                weaknesses: ['string'],
-                riskWarnings: ['string'],
-                actionableRecommendations: ['string'],
-                disciplineScore: 'number 0-100',
-              },
-              trades: suppliedItems ?? [],
-              analytics,
-            },
-            outputLanguage,
-          ),
-        ),
+        prompt: JSON.stringify(payload),
         maxOutputTokens: 1800,
         expectedLanguage: outputLanguage,
+        groundedIn: payload,
       });
 
       return {
@@ -206,6 +215,24 @@ export class AiService {
     const analytics =
       suppliedAnalytics ?? (await this.analytics.overview(userId, portfolioId));
 
+    // แทนที่จะส่ง analytics overview + holdings ดิบ (มี holdings ซ้ำสองชุดและ recent_activity
+    // ทั้งก้อน) ส่ง metrics ที่คำนวณแล้วติดป้ายหน่วยและคำนิยามไว้ ดู portfolio-review-metrics.ts
+    const payload = withLanguage(
+      {
+        task: 'Review investor portfolio health, diversification, and risk',
+        requiredShape: {
+          summary: 'string',
+          diversificationScore: 'number 0-100',
+          riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
+          concentrationRisks: ['string'],
+          strengths: ['string'],
+          actionableRecommendations: ['string'],
+        },
+        ...buildInvestorReviewMetrics(analytics, holdings),
+      },
+      outputLanguage,
+    );
+
     const result = await this.manager.executeAiRequest<InvestorReviewResult>({
       userId,
       modelId,
@@ -213,29 +240,14 @@ export class AiService {
         'You are a professional portfolio advisor. Do not predict prices.',
         outputLanguageRule(outputLanguage),
         investmentGuardrail(),
+        numberQuotingRule(),
         concisenessRule(),
         'Return valid JSON only.',
       ].join('\n'),
-      prompt: JSON.stringify(
-        withLanguage(
-          {
-            task: 'Review investor portfolio health, diversification, and risk',
-            requiredShape: {
-              summary: 'string',
-              diversificationScore: 'number 0-100',
-              riskProfile: 'CONSERVATIVE|MODERATE|AGGRESSIVE',
-              concentrationRisks: ['string'],
-              strengths: ['string'],
-              actionableRecommendations: ['string'],
-            },
-            holdings,
-            analytics,
-          },
-          outputLanguage,
-        ),
-      ),
+      prompt: JSON.stringify(payload),
       maxOutputTokens: 1800,
       expectedLanguage: outputLanguage,
+      groundedIn: payload,
     });
 
     return {

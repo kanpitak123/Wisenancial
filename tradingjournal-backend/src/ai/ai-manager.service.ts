@@ -24,6 +24,11 @@ import {
 } from './ai.models';
 import { loadEnabledAiProviders } from './ai.config';
 import {
+  assessNumericGrounding,
+  groundingCorrection,
+  UngroundedNumbersError,
+} from './ai-grounding';
+import {
   assessOutputLanguage,
   languageCorrection,
   WrongLanguageError,
@@ -39,19 +44,39 @@ import { GeminiProvider } from './providers/gemini.provider';
 import { GroqProvider } from './providers/groq.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
-/**
- * Language guard. When set, the answer's prose is checked against `expectedLanguage`;
- * a wrong-language answer is retried once (with a correction appended to the user
- * message) and, if still wrong, refused with WrongLanguageError. A refused answer is
- * never charged. `languageProbe` narrows the check to the fields that are meant to be
- * in that language (default: the whole answer).
- */
-export interface AiLanguageGuard<T> {
-  readonly expectedLanguage?: AiOutputLanguage;
-  readonly languageProbe?: (data: T) => unknown;
+/** An answer the guards refused twice. Both kinds are surfaced as errors and never charged. */
+type RejectedOutputError = WrongLanguageError | UngroundedNumbersError;
+
+interface OutputRejection {
+  code: string;
+  correction: string;
+  toError: () => RejectedOutputError;
 }
 
-export interface AiRequest<T = unknown> extends AiLanguageGuard<T> {
+const isRejectedOutput = (error: unknown): error is RejectedOutputError =>
+  error instanceof WrongLanguageError ||
+  error instanceof UngroundedNumbersError;
+
+/**
+ * Output guards. Each is optional; a request without them is neither checked nor retried.
+ *
+ * - Language: the answer's prose is checked against `expectedLanguage` (`languageProbe`
+ *   narrows it to the fields meant to be in that language; default: the whole answer).
+ * - Grounding: every percent/money figure in the answer must appear in `groundedIn` (the
+ *   data the prompt was built from), see ai-grounding.ts.
+ *
+ * A failing answer is retried once with a correction appended to the user message; if the
+ * second answer fails too, the request is refused (WrongLanguageError /
+ * UngroundedNumbersError). A refused answer is never charged.
+ */
+export interface AiOutputGuard<T> {
+  readonly expectedLanguage?: AiOutputLanguage;
+  readonly languageProbe?: (data: T) => unknown;
+  readonly groundedIn?: unknown;
+  readonly groundingProbe?: (data: T) => unknown;
+}
+
+export interface AiRequest<T = unknown> extends AiOutputGuard<T> {
   readonly userId: number;
   readonly modelId: string;
   readonly prompt: string;
@@ -146,25 +171,25 @@ export class AiManagerService {
     const startedAt = Date.now();
 
     try {
-      result = await this.generateInExpectedLanguage<T>(
+      result = await this.generateWithGuards<T>(
         provider,
         pricing,
         request,
-        (usage) =>
+        (usage, code) =>
           this.logFailure(
             request.userId,
             pricing,
             Date.now() - startedAt,
-            'WRONG_LANGUAGE',
+            code,
             usage,
           ),
       );
     } catch (error) {
-      // ตอบผิดภาษาสองรอบ: ไม่ใช่ provider ล่ม จึงไม่ใช้ข้อความ "provider unavailable"
-      // และไม่คิดเครดิต (ยังไม่ถึง chargeAndLog)
-      if (error instanceof WrongLanguageError) {
+      // ตอบผิดภาษา/ตัวเลขนอกข้อมูลสองรอบ: ไม่ใช่ provider ล่ม จึงไม่ใช้ข้อความ
+      // "provider unavailable" และไม่คิดเครดิต (ยังไม่ถึง chargeAndLog)
+      if (isRejectedOutput(error)) {
         this.logger.error(
-          `[${pricing.id}] wrong language for user ${request.userId}: ${error.detail}`,
+          `[${pricing.id}] ${error.tag} for user ${request.userId}: ${error.detail}`,
         );
         throw error;
       }
@@ -230,6 +255,8 @@ export class AiManagerService {
     excludeProviders?: AiProviderId[];
     expectedLanguage?: AiOutputLanguage;
     languageProbe?: (data: T) => unknown;
+    groundedIn?: unknown;
+    groundingProbe?: (data: T) => unknown;
   }): Promise<{
     data: T;
     model: AiModelId;
@@ -258,13 +285,13 @@ export class AiManagerService {
       }
 
       try {
-        const result = await this.generateInExpectedLanguage<T>(
+        const result = await this.generateWithGuards<T>(
           provider,
           pricing,
           request,
-          (usage) =>
+          (usage, code) =>
             this.logger.warn(
-              `[system:${pricing.id}] discarded a wrong-language answer (${usage.inputTokens} in / ${usage.outputTokens} out tokens)`,
+              `[system:${pricing.id}] discarded an answer (${code}; ${usage.inputTokens} in / ${usage.outputTokens} out tokens)`,
             ),
         );
 
@@ -280,12 +307,12 @@ export class AiManagerService {
           usage: result.usage,
         };
       } catch (error) {
-        if (error instanceof WrongLanguageError) {
-          // ผิดภาษาสองรอบบน model นี้ — ลองตัวถัดไปใน chain ถ้ามี (ปกติไม่มี:
+        if (isRejectedOutput(error)) {
+          // ถูก guard ปฏิเสธสองรอบบน model นี้ — ลองตัวถัดไปใน chain ถ้ามี (ปกติไม่มี:
           // ตอนนี้ chain มี claude-fast ตัวเดียว) ไม่ใช่ error แบบ permanent
-          attempted.push(`${pricing.id}(wrong-language)`);
+          attempted.push(`${pricing.id}(${error.tag})`);
           this.logger.warn(
-            `[system:${pricing.id}] wrong language after retry: ${error.detail}`,
+            `[system:${pricing.id}] ${error.tag} after retry: ${error.detail}`,
           );
           continue;
         }
@@ -439,26 +466,25 @@ export class AiManagerService {
   }
 
   /**
-   * Calls the provider and, when the request carries a language guard, checks the
-   * answer's language. At most two provider calls: the second only after a wrong-language
-   * first answer, with a correction appended. The usage of a discarded answer goes to
-   * `onDiscarded` (we paid for it, the user does not). Only the accepted answer's usage
-   * is returned, so only that is ever billed.
+   * Calls the provider and runs the request's output guards (language, numeric grounding)
+   * on the answer. At most two provider calls: the second only after a rejected first
+   * answer, with the guard's correction appended to the user message. The usage of a
+   * discarded answer goes to `onDiscarded` (we paid for it, the user does not). Only the
+   * accepted answer's usage is returned, so only that is ever billed.
    */
-  private async generateInExpectedLanguage<T>(
+  private async generateWithGuards<T>(
     provider: IAiProvider,
     pricing: AiModelPricing,
-    request: AiLanguageGuard<T> & {
+    request: AiOutputGuard<T> & {
       prompt: string;
       systemPrompt?: string;
       temperature?: number;
       maxOutputTokens?: number;
     },
-    onDiscarded: (usage: AiTokenUsage) => Promise<void> | void,
+    onDiscarded: (usage: AiTokenUsage, code: string) => Promise<void> | void,
   ): Promise<{ data: T; usage: AiTokenUsage }> {
-    const expected = request.expectedLanguage;
     let prompt = request.prompt;
-    let lastReason = '';
+    let lastRejection: OutputRejection | null = null;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = await provider.generateJsonResponse<T>({
@@ -469,23 +495,60 @@ export class AiManagerService {
         maxOutputTokens: request.maxOutputTokens,
       });
 
-      if (!expected) return result;
+      const rejection = this.judgeOutput(result.data, request);
+      if (!rejection) return result;
 
-      const verdict = assessOutputLanguage(
-        request.languageProbe
-          ? request.languageProbe(result.data)
-          : result.data,
-        expected,
-      );
-      if (verdict.ok) return result;
+      lastRejection = rejection;
+      await onDiscarded(result.usage, rejection.code);
 
-      lastReason = verdict.reason ?? 'wrong language';
-      await onDiscarded(result.usage);
-
-      prompt = request.prompt + languageCorrection(expected);
+      prompt = request.prompt + rejection.correction;
     }
 
-    throw new WrongLanguageError(expected ?? 'th', lastReason);
+    throw (lastRejection as OutputRejection).toError();
+  }
+
+  /** First guard the answer fails, or null when it passes all of them. */
+  private judgeOutput<T>(
+    data: T,
+    guard: AiOutputGuard<T>,
+  ): OutputRejection | null {
+    const expected = guard.expectedLanguage;
+
+    if (expected) {
+      const verdict = assessOutputLanguage(
+        guard.languageProbe ? guard.languageProbe(data) : data,
+        expected,
+      );
+
+      if (!verdict.ok) {
+        const reason = verdict.reason ?? 'wrong language';
+
+        return {
+          code: 'WRONG_LANGUAGE',
+          correction: languageCorrection(expected),
+          toError: () => new WrongLanguageError(expected, reason),
+        };
+      }
+    }
+
+    if (guard.groundedIn !== undefined) {
+      const verdict = assessNumericGrounding(
+        guard.groundingProbe ? guard.groundingProbe(data) : data,
+        guard.groundedIn,
+      );
+
+      if (!verdict.ok) {
+        const reason = verdict.reason ?? 'figures not found in the data';
+
+        return {
+          code: 'UNGROUNDED_NUMBERS',
+          correction: groundingCorrection(verdict.ungrounded ?? []),
+          toError: () => new UngroundedNumbersError(reason),
+        };
+      }
+    }
+
+    return null;
   }
 
   private async logFailure(
