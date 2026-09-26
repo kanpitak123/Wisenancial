@@ -121,3 +121,20 @@ Notes that apply to all: (1) Neon in `us-east-1` is about 250 ms from Thailand; 
 13. Postgres advisory locks for the crons; shared throttler storage; socket.io Redis adapter and sticky sessions.
 14. Lint gate (currently non-blocking), a staging environment, and an uptime monitor on `/health`.
 15. Re-check the unofficial data sources (Yahoo, NewsAPI free quota, Finnhub blocked) under real traffic.
+
+## 8. Status after `chore/deploy-blockers` (2026-09-27)
+
+Code-level items from section 7 that are now done on that branch (local commits, not pushed, not merged):
+
+| # | Blocker | State |
+|---|---|---|
+| 2 | `backup.sql` tracked | Untracked and ignored (`/*.sql`, `*.dump`, `*backup.sql`; migration SQL stays tracked). **History not rewritten:** the file is in one commit, `bf28dc9` (2026-08-13), reachable from `main`, `backup/local-main` and `spike/mt5-cloud` on the remote. |
+| 3 | `trust proxy` | `TRUST_PROXY` (unset: 1 in production, off elsewhere). |
+| 5 | Env validation | `assertProductionEnv()` at boot; example files cleaned (Neon, `EXPORT_THROTTLE_*`, `TRUST_PROXY`, `SWAGGER_ENABLED`, storage variables). |
+| 4 | Deploy definition | `prisma` in dependencies, `.nvmrc` + `engines` (Node 22), multi-stage `Dockerfile` that runs `prisma migrate deploy` then the API. **Not built or run here (no Docker on this machine).** |
+| 8 | helmet / Swagger / shutdown | helmet, Swagger off in production unless `SWAGGER_ENABLED=true`, `enableShutdownHooks` + Prisma disconnect. |
+| 13 | Cron on N instances | Postgres advisory locks (dedicated single-connection client on `DIRECT_URL`): forex + investor news sync (and the classifier inside them), guardrails, account purge, holdings price sync. Verified live against Neon with two instances. |
+| 6 | Uploads | `StorageService` with local (default) and S3-compatible (R2) drivers, off until `STORAGE_DRIVER=s3`. Also fixed post images, which never saved (`/uploads/posts/undefined`). |
+| 7 | Frontend `VITE_API_URL` | Production build fails without a public https `VITE_API_URL` (CI supplies a placeholder). |
+
+Still open: real email transport (P0 #1), cache headers on the static host, Sentry SDK, Stripe live-mode checks, Neon plan and backup drill, and the decision on purging `backup.sql` from history.
