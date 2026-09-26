@@ -69,3 +69,10 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Runtime data written by local dev/spike code (e.g. the encrypted MT5 investor-password
 # store) — machine-local state, never belongs in version control
 /data/
+
+# database dumps: root-level *.sql files in the backend folder and any *.dump / *.backup.sql.
+# (Not a blanket *.sql: prisma/migrations/**/migration.sql must stay tracked.)
+/*.sql
+*.dump
+*.backup.sql
+*-backup.sql
