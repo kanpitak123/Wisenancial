@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { NewsController } from './news.controller';
 import { NewsEnrichmentService } from './news-enrichment.service';
 import { NewsFeedService } from './news-feed.service';
+import { NewsGuardrailsSecondPassService } from './news-guardrails-second-pass.service';
 import { NewsGateway } from './news.gateway';
 import { NewsService } from './news.service';
 import { NewsSyncService } from './news-sync.service';
@@ -19,6 +20,7 @@ import { NewsSyncService } from './news-sync.service';
     NewsFeedService,
     NewsSyncService,
     NewsEnrichmentService,
+    NewsGuardrailsSecondPassService,
     NewsGateway,
   ],
   exports: [NewsService],
