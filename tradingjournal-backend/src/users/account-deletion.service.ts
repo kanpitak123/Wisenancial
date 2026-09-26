@@ -4,9 +4,15 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import * as bcrypt from 'bcrypt';
+import {
+  AdvisoryLockService,
+  JOB_LOCKS,
+  runLocked,
+} from '../common/advisory-lock.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ACCOUNT_DELETION } from './constants/users.constants';
 
@@ -34,7 +40,28 @@ export class AccountDeletionService {
   private readonly logger = new Logger(AccountDeletionService.name);
   private purging = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly locks?: AdvisoryLockService,
+  ) {}
+
+  /**
+   * Cron entry point. The purge is idempotent, but with several instances every one would
+   * repeat the whole run and its Stripe lookups, so only the instance holding the lock runs it.
+   */
+  @Cron('0 3 * * *')
+  async scheduledPurge(): Promise<void> {
+    try {
+      await runLocked(this.locks, JOB_LOCKS.accountPurge, () =>
+        this.purgeExpiredAccounts(),
+      );
+    } catch (error) {
+      this.logger.error(
+        'Account purge failed',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
 
   async requestDeletion(userId: number, password: string) {
     const user = await this.prisma.users.findUnique({
@@ -96,7 +123,6 @@ export class AccountDeletionService {
    * deleteMany ที่มีเงื่อนไข deletion_scheduled_at <= now ซ้ำอีกรอบ ทำให้ถ้าผู้ใช้ล็อกอิน
    * ยกเลิกการลบตัดหน้าระหว่างที่งานกำลังวิ่ง แถวนั้นจะไม่ถูกลบ (การล็อกอินชนะเสมอ)
    */
-  @Cron('0 3 * * *')
   async purgeExpiredAccounts(): Promise<AccountPurgeSummary> {
     const summary: AccountPurgeSummary = {
       purged: 0,

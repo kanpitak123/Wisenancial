@@ -2,10 +2,16 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PortfolioType, Prisma } from '@prisma/client';
+import {
+  AdvisoryLockService,
+  JOB_LOCKS,
+  runLocked,
+} from '../common/advisory-lock.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type FinnhubQuote = {
@@ -43,7 +49,10 @@ export class FinnhubMarketDataService {
   private static readonly MAX_FETCH_ATTEMPTS = 3;
   private static readonly RETRY_BASE_DELAY_MS = 600;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly locks?: AdvisoryLockService,
+  ) {}
 
   async syncSymbol(symbolInput: string, currencyInput = 'USD') {
     const symbol = this.normalizeSymbol(symbolInput);
@@ -148,6 +157,16 @@ export class FinnhubMarketDataService {
   }
 
   @Cron(CronExpression.EVERY_30_MINUTES)
+  async scheduledHoldingsSync() {
+    if (!process.env.FINNHUB_API_KEY) {
+      return;
+    }
+
+    await runLocked(this.locks, JOB_LOCKS.holdingsPriceSync, () =>
+      this.syncAllOpenHoldings(),
+    );
+  }
+
   async syncAllOpenHoldings() {
     if (!process.env.FINNHUB_API_KEY) {
       return;

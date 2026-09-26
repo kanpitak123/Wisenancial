@@ -1,7 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
 import axios from 'axios';
+import {
+  AdvisoryLockService,
+  JOB_LOCKS,
+  runLocked,
+} from '../common/advisory-lock.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsScope } from './dto/news-query.dto';
 import { NewsEnrichmentService } from './news-enrichment.service';
@@ -88,6 +93,8 @@ export class NewsSyncService {
     private readonly prisma: PrismaService,
     private readonly enrichment: NewsEnrichmentService,
     private readonly gateway: NewsGateway,
+    // cluster-wide lock (no lock = single process, e.g. unit tests)
+    @Optional() private readonly locks?: AdvisoryLockService,
   ) {}
 
   async sync(scope: NewsScope, language: 'en' | 'th') {
@@ -157,7 +164,21 @@ export class NewsSyncService {
     this.investorSyncRunning = true;
 
     try {
-      return await this.syncInvestorMarketNews(language);
+      // อีกชั้นหนึ่งข้ามหลาย instance: ธงด้านบนกันซ้อนใน process เดียว ตัวนี้กันข้ามเครื่อง
+      const outcome = await runLocked(this.locks, JOB_LOCKS.investorSync, () =>
+        this.syncInvestorMarketNews(language),
+      );
+
+      if (!outcome.acquired) {
+        return {
+          fetched: 0,
+          persisted: 0,
+          skipped: true,
+          reason: 'sync running on another instance',
+        };
+      }
+
+      return outcome.result;
     } finally {
       this.investorSyncRunning = false;
     }
@@ -178,7 +199,15 @@ export class NewsSyncService {
     this.forexSyncRunning = true;
 
     try {
-      return await this.runForexCalendarSync(language);
+      const outcome = await runLocked(this.locks, JOB_LOCKS.forexSync, () =>
+        this.runForexCalendarSync(language),
+      );
+
+      if (!outcome.acquired) {
+        return { created: 0, updated: 0, enriched: 0, skipped: true };
+      }
+
+      return outcome.result;
     } finally {
       this.forexSyncRunning = false;
     }

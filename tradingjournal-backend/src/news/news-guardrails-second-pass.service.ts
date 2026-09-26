@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NewsImportance, Prisma } from '@prisma/client';
 import {
@@ -11,6 +11,11 @@ import {
   toSpecEnvelope,
 } from '../ai/news-analysis/news-analysis.service';
 import type { NewsArticleInput } from '../ai/news-analysis/types';
+import {
+  AdvisoryLockService,
+  JOB_LOCKS,
+  runLocked,
+} from '../common/advisory-lock.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   loadNewsGuardrailsConfig,
@@ -82,12 +87,20 @@ export class NewsGuardrailsSecondPassService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly manager: AiManagerService,
+    @Optional() private readonly locks?: AdvisoryLockService,
   ) {}
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async scheduledRun(): Promise<void> {
     try {
-      await this.runOnce();
+      // ปิดอยู่ก็ไม่ต้องไปขอ lock ทุก 10 นาที
+      if (!loadNewsGuardrailsConfig().enabled) return;
+
+      // ข้ามหลาย instance: งบรายวันนับจากแถวใน DB ถ้าสองเครื่องรันพร้อมกันจะเช็กงบผ่านทั้งคู่
+      // แล้วเกินเพดาน/วิเคราะห์ข่าวซ้ำ — lock ทำให้รอบเดียวทำงานทีละเครื่อง
+      await runLocked(this.locks, JOB_LOCKS.guardrailsSecondPass, () =>
+        this.runOnce(),
+      );
     } catch (error) {
       this.logger.error(
         'News guardrails second pass failed',
