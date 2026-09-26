@@ -60,7 +60,7 @@ function makeManager(answers: string[]) {
 
 const request = {
   userId: 7,
-  modelId: 'claude-fast',
+  feature: 'chart_insight' as const,
   prompt: '{"task":"review"}',
   expectedLanguage: 'th' as const,
   groundedIn: payload,
@@ -92,8 +92,8 @@ describe('executeAiRequest — numeric grounding', () => {
     expect(prompts[1]).toContain('31.5');
     expect(prompts[1]).toContain('Do not compute');
 
-    // one answer's tokens only: 1k in x20 + 0.5k out x100 = 70 credits
-    expect(result.creditsCharged).toBe(70);
+    // flat price of the feature (chart_insight = 5), whatever the tokens or retries
+    expect(result.creditsCharged).toBe(5);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.ai_usage_logs.create).toHaveBeenCalledWith({
       data: expect.objectContaining({

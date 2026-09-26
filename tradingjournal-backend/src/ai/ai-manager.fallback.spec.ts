@@ -278,15 +278,17 @@ describe('executeAiRequest — ฝั่งผู้ใช้ ต้องไม
         findUnique: jest.fn().mockResolvedValue({ ai_token_balance: balance }),
       },
       ai_usage_logs: { create: jest.fn().mockResolvedValue({}) },
+      $transaction: jest.fn().mockResolvedValue(balance),
     }) as never;
 
-  function makeUserManager(fails: Error) {
+  // ราคาแบบ flat ต่อฟีเจอร์ โมเดลถูกกำหนดตามฟีเจอร์ (portfolio_review -> claude-smart -> anthropic)
+  function makeUserManager(fails: Error, balance = 500) {
     const calls: string[] = [];
     const provider = (id: ProviderId) =>
-      fakeProvider(id, id === 'groq' ? { fails } : {}, calls);
+      fakeProvider(id, id === 'anthropic' ? { fails } : {}, calls);
 
     const manager = new AiManagerService(
-      prismaWithBalance(500),
+      prismaWithBalance(balance),
       provider('groq') as never,
       provider('gemini') as never,
       provider('openai') as never,
@@ -300,22 +302,22 @@ describe('executeAiRequest — ฝั่งผู้ใช้ ต้องไม
 
   const userRequest = {
     userId: 1,
-    modelId: 'groq-llama3',
+    feature: 'portfolio_review' as const,
     prompt: 'analyse my portfolio',
   };
 
-  it('model ที่เลือกล้ม -> ไม่ไปเรียกเจ้าอื่นแทน (เรตเครดิตต่างกันถึง 300 เท่า)', async () => {
+  it('Claude ล้ม -> ไม่ไปเรียกเจ้าอื่นแทน แม้ทุกเจ้าจะเปิดอยู่', async () => {
     const { manager, calls } = makeUserManager(httpError(429));
 
     await expect(manager.executeAiRequest(userRequest)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
 
-    // ต้องไม่มี gemini/openai/anthropic โผล่มา
-    expect(calls).toEqual(['groq']);
+    // ต้องไม่มี groq/gemini/openai โผล่มา
+    expect(calls).toEqual(['anthropic']);
   });
 
-  it('error บอกได้ว่าเลือกรุ่นไหนแทนได้', async () => {
+  it('error ชัดเจนและบอกว่าไม่ถูกหักเครดิต', async () => {
     const { manager } = makeUserManager(httpError(429));
 
     const error = await manager
@@ -326,34 +328,34 @@ describe('executeAiRequest — ฝั่งผู้ใช้ ต้องไม
       error: string;
       message: string;
       failureKind: string;
-      availableModels: string[];
+      creditsCharged: number;
     };
 
     expect(body.error).toBe('AI_PROVIDER_UNAVAILABLE');
     expect(body.failureKind).toBe('rate-limit');
-    expect(body.availableModels).toEqual([
-      'gemini-2.5-flash',
-      'gpt-4o',
-      'claude-fast',
-      'claude-smart',
-    ]);
-    expect(body.message).toContain('rate limit');
-    expect(body.message).toContain('gemini-2.5-flash');
+    expect(body.creditsCharged).toBe(0);
+    expect(body.message).toContain('busy');
+    expect(body.message).toContain('No credits were charged');
   });
 
-  it('เครดิตไม่พอ -> ไม่ยิง provider เลย', async () => {
-    const calls: string[] = [];
-    const provider = (id: ProviderId) => fakeProvider(id, {}, calls);
+  it('เครดิตไม่พอสำหรับฟีเจอร์นั้น -> ไม่ยิง provider เลย', async () => {
+    const { manager, calls } = makeUserManager(httpError(500), 19);
 
-    const manager = new AiManagerService(
-      prismaWithBalance(1),
-      provider('groq') as never,
-      provider('gemini') as never,
-      provider('openai') as never,
-      provider('anthropic') as never,
-    );
-
-    await expect(manager.executeAiRequest(userRequest)).rejects.toBeDefined();
+    // portfolio_review = 20 credits, the user has 19
+    await expect(manager.executeAiRequest(userRequest)).rejects.toMatchObject({
+      response: { error: 'INSUFFICIENT_CREDITS', required: 20, balance: 19 },
+    });
     expect(calls).toEqual([]);
+  });
+
+  it('ฟีเจอร์ที่ถูกกว่าใช้ได้ด้วยเครดิตที่น้อยกว่า (เกณฑ์คือราคาของฟีเจอร์นั้น)', async () => {
+    const { manager, calls } = makeUserManager(httpError(500), 5);
+
+    // chart_insight = 5 credits: allowed to start with exactly 5
+    await manager
+      .executeAiRequest({ ...userRequest, feature: 'chart_insight' })
+      .catch(() => undefined);
+
+    expect(calls).toEqual(['anthropic']);
   });
 });

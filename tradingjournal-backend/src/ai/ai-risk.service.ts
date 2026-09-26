@@ -21,7 +21,6 @@ export class AiRiskService {
   async analyze(
     userId: number,
     holdings: PortfolioRiskHolding[],
-    modelId: string,
     requestedLanguage?: string,
   ) {
     const normalized = this.normalizeWeights(holdings);
@@ -77,7 +76,7 @@ export class AiRiskService {
 
     const result = await this.manager.executeAiRequest<PortfolioRiskAnalysis>({
       userId,
-      modelId,
+      feature: 'risk_analysis',
       systemPrompt: [
         'You are a portfolio risk analyst. Rely only on supplied data.',
         outputLanguageRule(outputLanguage),

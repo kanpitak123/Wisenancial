@@ -63,7 +63,7 @@ describe('Risk Analysis — grounded numbers', () => {
   it('sends weights as percent, with labels and a field guide', async () => {
     const { service, executeAiRequest } = riskService();
 
-    await service.analyze(1, HOLDINGS, 'claude-fast', 'th');
+    await service.analyze(1, HOLDINGS, 'th');
 
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
     const payload = JSON.parse(sent.prompt) as {
@@ -87,7 +87,7 @@ describe('Risk Analysis — grounded numbers', () => {
   it('asks the manager to check figures and key names against exactly what was sent', async () => {
     const { service, executeAiRequest } = riskService();
 
-    await service.analyze(1, HOLDINGS, 'claude-fast', 'en');
+    await service.analyze(1, HOLDINGS, 'en');
 
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
 
@@ -99,7 +99,7 @@ describe('Risk Analysis — grounded numbers', () => {
 
   it('a normal risk write-up is grounded; an invented or summed figure is not', async () => {
     const { service, executeAiRequest } = riskService();
-    await service.analyze(1, HOLDINGS, 'claude-fast', 'en');
+    await service.analyze(1, HOLDINGS, 'en');
     const { groundedIn } = (executeAiRequest.mock.calls[0] as [Sent])[0];
 
     const good = {
@@ -128,7 +128,7 @@ describe('Risk Analysis — grounded numbers', () => {
   it('the holdings returned to the caller are unchanged (fractions stay fractions)', async () => {
     const { service } = riskService();
 
-    const result = await service.analyze(1, HOLDINGS, 'claude-fast', 'th');
+    const result = await service.analyze(1, HOLDINGS, 'th');
 
     expect(result.holdingsData[0]?.weight).toBe(0.6);
     expect(result.holdingsData[0]).not.toHaveProperty('weightPercent');

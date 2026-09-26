@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { AiManagerService } from './ai-manager.service';
 import {
   concisenessRule,
@@ -22,12 +18,11 @@ export class AiEducationService {
     lessonDescription: string,
     requestedLanguage?: string,
   ) {
-    const modelId = this.defaultModel();
     const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
     const result = await this.manager.executeAiRequest<QuizResponse>({
       userId,
-      modelId,
+      feature: 'education_quiz',
       systemPrompt: [
         'You create finance education quizzes.',
         outputLanguageRule(outputLanguage),
@@ -87,19 +82,5 @@ export class AiEducationService {
       creditsCharged: result.creditsCharged,
       creditsRemaining: result.creditsRemaining,
     };
-  }
-
-  private defaultModel(): string {
-    const models = this.manager.listAvailableModels();
-    const selected =
-      models.find((model) => model.id === 'claude-fast') ?? models[0];
-
-    if (!selected) {
-      throw new ServiceUnavailableException(
-        'No AI provider is configured on this server.',
-      );
-    }
-
-    return selected.id;
   }
 }

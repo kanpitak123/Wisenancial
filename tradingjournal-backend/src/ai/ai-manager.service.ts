@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -10,11 +9,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  AI_MODEL_REGISTRY,
   AI_SYSTEM_FALLBACK_ORDER,
-  MIN_CREDITS_PER_CALL,
-  MIN_CREDIT_BALANCE,
-  calculateCredits,
   getModelPricing,
   isAiModelId,
   listAiModels,
@@ -23,6 +18,11 @@ import {
   type AiProviderId,
 } from './ai.models';
 import { loadEnabledAiProviders } from './ai.config';
+import {
+  featureModel,
+  featurePrice,
+  type AiFeatureId,
+} from './ai-pricing.config';
 import {
   assessKeyNameLeak,
   keyLeakCorrection,
@@ -88,7 +88,11 @@ export interface AiOutputGuard<T> {
 
 export interface AiRequest<T = unknown> extends AiOutputGuard<T> {
   readonly userId: number;
-  readonly modelId: string;
+  /**
+   * What the user is paying for. It fixes both the price (flat credits, see
+   * ai-pricing.config.ts) and the model tier; the caller does not pick a model.
+   */
+  readonly feature: AiFeatureId;
   readonly prompt: string;
   readonly systemPrompt?: string;
   readonly temperature?: number;
@@ -106,8 +110,6 @@ export interface AiResponse<T> {
 export interface AiModelOption {
   readonly id: AiModelId;
   readonly label: string;
-  readonly creditsPer1kInput: number;
-  readonly creditsPer1kOutput: number;
 }
 
 @Injectable()
@@ -140,12 +142,7 @@ export class AiManagerService {
   listAvailableModels(): AiModelOption[] {
     return listAiModels()
       .filter((model) => this.isProviderUsable(model.provider))
-      .map(({ id, label, creditsPer1kInput, creditsPer1kOutput }) => ({
-        id,
-        label,
-        creditsPer1kInput,
-        creditsPer1kOutput,
-      }));
+      .map(({ id, label }) => ({ id, label }));
   }
 
   async getBalance(userId: number): Promise<number> {
@@ -164,13 +161,15 @@ export class AiManagerService {
   }
 
   async executeAiRequest<T>(request: AiRequest<T>): Promise<AiResponse<T>> {
-    const pricing = this.resolveModel(request.modelId);
+    const pricing = getModelPricing(featureModel(request.feature));
     const provider = this.resolveProvider(pricing);
+    // flat price: the same for every call of this feature, whatever it cost us to serve
+    const creditsCharged = featurePrice(request.feature).credits;
 
     const balance = await this.getBalance(request.userId);
 
-    if (balance < MIN_CREDIT_BALANCE) {
-      throw this.insufficientCredits(balance, MIN_CREDIT_BALANCE);
+    if (balance < creditsCharged) {
+      throw this.insufficientCredits(balance, creditsCharged);
     }
 
     let result: {
@@ -188,6 +187,7 @@ export class AiManagerService {
         (usage, code) =>
           this.logFailure(
             request.userId,
+            request.feature,
             pricing,
             Date.now() - startedAt,
             code,
@@ -213,26 +213,19 @@ export class AiManagerService {
 
       await this.logFailure(
         request.userId,
+        request.feature,
         pricing,
         Date.now() - startedAt,
         reason,
       );
 
-      // ไม่ fallback ข้าม provider ให้อัตโนมัติ — เรตเครดิตต่าง model ห่างกันถึง 300 เท่า
-      // (groq 1 vs claude 300 ต่อ 1k output) การสลับเงียบๆ = คิดเงินผู้ใช้เกินที่เขาเลือก
-      // แทนที่ด้วยการบอกให้ชัดว่าเลือกตัวไหนแทนได้บ้าง
+      // ไม่ fallback ข้าม provider ให้อัตโนมัติ และไม่คิดเครดิต — ยังไม่ถึง chargeAndLog
       throw this.providerUnavailable(pricing, kind, reason);
     }
 
-    const exactCost = calculateCredits(
-      pricing,
-      result.usage.inputTokens,
-      result.usage.outputTokens,
-    );
-    const creditsCharged = Math.max(MIN_CREDITS_PER_CALL, Math.ceil(exactCost));
-
     const creditsRemaining = await this.chargeAndLog(
       request.userId,
+      request.feature,
       pricing,
       result.usage,
       creditsCharged,
@@ -400,6 +393,7 @@ export class AiManagerService {
 
   private async chargeAndLog(
     userId: number,
+    feature: AiFeatureId,
     pricing: AiModelPricing,
     usage: AiTokenUsage,
     creditsCharged: number,
@@ -442,6 +436,7 @@ export class AiManagerService {
         await tx.ai_usage_logs.create({
           data: {
             user_id: userId,
+            feature,
             model_used: pricing.id,
             provider: pricing.provider,
             tokens_input: usage.inputTokens,
@@ -457,7 +452,7 @@ export class AiManagerService {
             user_id: userId,
             amount: -creditsCharged,
             type: 'AI_USAGE',
-            description: `${pricing.id}: ${usage.inputTokens} input / ${usage.outputTokens} output tokens`,
+            description: `${feature} (${pricing.id}): ${usage.inputTokens} input / ${usage.outputTokens} output tokens`,
           },
         });
 
@@ -581,6 +576,7 @@ export class AiManagerService {
 
   private async logFailure(
     userId: number,
+    feature: AiFeatureId,
     pricing: AiModelPricing,
     latencyMs: number,
     reason: string,
@@ -590,6 +586,7 @@ export class AiManagerService {
       await this.prisma.ai_usage_logs.create({
         data: {
           user_id: userId,
+          feature,
           model_used: pricing.id,
           provider: pricing.provider,
           tokens_input: usage.inputTokens,
@@ -606,40 +603,28 @@ export class AiManagerService {
   }
 
   /**
-   * error ของฝั่งผู้ใช้ — ต้องบอกได้ว่าลองรุ่นไหนแทนได้
-   *
-   * ของเดิมคืนแค่ "provider X is unavailable" ผู้ใช้จึงไม่รู้ว่าควรทำอะไรต่อ
-   * ทั้งที่ปกติมีอีก 3 รุ่นให้เลือกอยู่ในเมนู
+   * error ของฝั่งผู้ใช้ — ไม่มีรุ่นให้เลือกแล้ว จึงบอกแค่ว่ายังใช้ไม่ได้ตอนนี้และไม่ถูกหักเครดิต
    */
   private providerUnavailable(
     pricing: AiModelPricing,
     kind: AiFailureKind,
     reason: string,
   ) {
-    const alternatives = this.listAvailableModels()
-      .filter((model) => model.id !== pricing.id)
-      .map((model) => model.id);
-
     const detail =
       kind === 'rate-limit'
-        ? `Model "${pricing.id}" hit its rate limit.`
+        ? 'The AI service is busy right now.'
         : kind === 'permanent'
-          ? `Model "${pricing.id}" rejected the request: ${reason}`
-          : `Provider "${pricing.provider}" is unavailable right now.`;
-
-    const hint =
-      alternatives.length > 0
-        ? ` Try another model: ${alternatives.join(', ')}.`
-        : '';
+          ? `The AI service rejected the request: ${reason}`
+          : 'The AI service is unavailable right now.';
 
     return new ServiceUnavailableException({
       statusCode: HttpStatus.SERVICE_UNAVAILABLE,
       error: 'AI_PROVIDER_UNAVAILABLE',
-      message: `${detail}${hint}`,
+      message: `${detail} No credits were charged; please try again shortly.`,
       model: pricing.id,
       provider: pricing.provider,
       failureKind: kind,
-      availableModels: alternatives,
+      creditsCharged: 0,
     });
   }
 
@@ -656,29 +641,12 @@ export class AiManagerService {
     );
   }
 
-  private resolveModel(modelId: string): AiModelPricing {
-    if (!isAiModelId(modelId)) {
-      throw new BadRequestException(
-        `Unknown AI model "${modelId}". Supported: ${Object.keys(
-          AI_MODEL_REGISTRY,
-        ).join(', ')}`,
-      );
-    }
-
-    return getModelPricing(modelId);
-  }
-
   private resolveProvider(pricing: AiModelPricing): IAiProvider {
     const provider = this.providers.get(pricing.provider);
 
     if (!this.enabledProviders.has(pricing.provider) || !provider) {
-      // เช่น client ที่จำ id ของ provider ที่ปิดไว้ (groq/gemini/gpt-4o) ไว้ใน localStorage —
-      // บอกตรง ๆ พร้อมรุ่นที่ใช้ได้ ไม่สลับไปรุ่นอื่นให้เอง เพราะเรตเครดิตต่างกัน
-      const available = this.listAvailableModels().map((model) => model.id);
       throw new ServiceUnavailableException(
-        `Model "${pricing.id}" is not enabled on this server.${
-          available.length > 0 ? ` Available: ${available.join(', ')}.` : ''
-        }`,
+        `Model "${pricing.id}" is not enabled on this server.`,
       );
     }
 

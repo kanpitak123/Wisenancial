@@ -51,15 +51,15 @@ describe('AiController', () => {
   });
 
   /**
-   * ฟีเจอร์ AI ที่กินโควตาต้องยืนยันอีเมลก่อน — แต่ /ai/models กับ /ai/credits ต้องเปิดไว้
+   * ฟีเจอร์ AI ที่กินโควตาต้องยืนยันอีเมลก่อน — แต่ /ai/pricing กับ /ai/credits ต้องเปิดไว้
    * เพราะ badge โควตาบนหัวเว็บเรียกทุกหน้า ถ้าปิดผู้ใช้ที่ยังไม่ยืนยันจะเจอ error ทุกหน้า
    */
-  it('routes that run AI are behind VerifiedEmailGuard; models/credits are not', () => {
+  it('routes that run AI are behind VerifiedEmailGuard; pricing/credits are not', () => {
     const guardsOf = (handler: unknown): unknown[] =>
       (Reflect.getMetadata('__guards__', handler as object) as unknown[]) ?? [];
 
     const proto = AiController.prototype as unknown as Record<string, unknown>;
-    const open = new Set(['listModels', 'getCredits']);
+    const open = new Set(['getPricing', 'getCredits']);
 
     const routeNames = Object.getOwnPropertyNames(proto).filter(
       (name) => name !== 'constructor' && typeof proto[name] === 'function',
@@ -76,6 +76,21 @@ describe('AiController', () => {
         guarded: !open.has(name),
       });
     }
+  });
+
+  it('GET /ai/pricing returns the flat price of every feature and the balance floor', () => {
+    const body = controller.getPricing();
+
+    expect(body.minBalance).toBe(20);
+    expect(body.features).toEqual(
+      expect.arrayContaining([
+        { feature: 'chart_insight', credits: 5, tier: 'fast' },
+        { feature: 'ai_picks', credits: 10, tier: 'fast' },
+        { feature: 'portfolio_review', credits: 20, tier: 'smart' },
+      ]),
+    );
+    // no model list any more: users do not pick a model
+    expect(body).not.toHaveProperty('models');
   });
 
   it('growthRecommendations ใช้ userId จาก request ไม่ใช่ค่าจาก client', () => {

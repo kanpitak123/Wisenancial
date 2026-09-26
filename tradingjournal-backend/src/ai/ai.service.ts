@@ -91,7 +91,8 @@ export class AiService {
     userId: number,
     dto: AnalyzeChartDto,
   ): Promise<ChartInsightResponse> {
-    if (dto.useRuleBased || !dto.modelId) {
+    // ฟรีเฉพาะเมื่อขอแบบ rule-based ตรง ๆ — ไม่มีการเลือกโมเดลแล้ว ค่าเริ่มต้นคือ AI (คิดเครดิต)
+    if (dto.useRuleBased === true) {
       return {
         insight: this.rules.analyze(dto.chartType, dto.data),
         source: 'RULE_BASED',
@@ -113,7 +114,7 @@ export class AiService {
 
     const result = await this.manager.executeAiRequest<{ insight: string }>({
       userId,
-      modelId: dto.modelId,
+      feature: 'chart_insight',
       systemPrompt: [
         'You are a professional financial analytics coach.',
         outputLanguageRule(outputLanguage),
@@ -142,7 +143,6 @@ export class AiService {
   async reviewPortfolio(
     userId: number,
     portfolioId: number,
-    modelId: string,
     suppliedItems?: unknown[],
     suppliedAnalytics?: Record<string, unknown>,
     requestedLanguage?: string,
@@ -186,7 +186,7 @@ export class AiService {
 
       const result = await this.manager.executeAiRequest<TraderReviewResult>({
         userId,
-        modelId,
+        feature: 'portfolio_review',
         systemPrompt: [
           'You are a disciplined trading coach.',
           outputLanguageRule(outputLanguage),
@@ -240,7 +240,7 @@ export class AiService {
 
     const result = await this.manager.executeAiRequest<InvestorReviewResult>({
       userId,
-      modelId,
+      feature: 'portfolio_review',
       systemPrompt: [
         'You are a professional portfolio advisor. Do not predict prices.',
         outputLanguageRule(outputLanguage),
@@ -309,7 +309,6 @@ export class AiService {
   /** User-triggered enrichment that is billed to the selected model. */
   async enrichUserNewsArticle(
     userId: number,
-    modelId: string,
     headline: string,
     summary: string,
     content = '',
@@ -321,7 +320,7 @@ export class AiService {
       Omit<NewsEnrichmentResult, 'fromFallback'>
     >({
       userId,
-      modelId,
+      feature: 'news_enrich',
       prompt: JSON.stringify(
         withLanguage(
           {

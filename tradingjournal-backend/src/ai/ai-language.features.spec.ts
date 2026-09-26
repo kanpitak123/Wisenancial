@@ -83,7 +83,6 @@ describe.each<Lang>(['th', 'en'])('AI language instruction — %s', (lang) => {
       portfolioType: 'TRADER',
       chartType: 'equity_curve',
       data: {},
-      modelId: 'claude-fast',
       outputLanguage: lang,
     });
 
@@ -112,14 +111,7 @@ describe.each<Lang>(['th', 'en'])('AI language instruction — %s', (lang) => {
         { getHoldings: jest.fn().mockResolvedValue([]) } as never,
       );
 
-      await service.reviewPortfolio(
-        1,
-        5,
-        'claude-fast',
-        undefined,
-        undefined,
-        lang,
-      );
+      await service.reviewPortfolio(1, 5, undefined, undefined, lang);
 
       expectLanguageEverywhere(captured.request, lang);
     },
@@ -133,12 +125,7 @@ describe.each<Lang>(['th', 'en'])('AI language instruction — %s', (lang) => {
       keyRiskFactors: ['a'],
     });
 
-    await new AiRiskService(manager as never).analyze(
-      1,
-      holdings,
-      'claude-fast',
-      lang,
-    );
+    await new AiRiskService(manager as never).analyze(1, holdings, lang);
 
     expectLanguageEverywhere(captured.request, lang);
   });
@@ -219,7 +206,7 @@ describe.each<Lang>(['th', 'en'])('AI language instruction — %s', (lang) => {
       {} as never,
       {} as never,
       {} as never,
-    ).enrichUserNewsArticle(1, 'claude-fast', 'Headline', 'Summary', '', lang);
+    ).enrichUserNewsArticle(1, 'Headline', 'Summary', '', lang);
 
     expectLanguageEverywhere(captured.request, lang);
     // only the fields that follow the article language are checked
@@ -273,7 +260,7 @@ describe.each<Lang>(['th', 'en'])('AI language instruction — %s', (lang) => {
 
     await controller.analyzeLegacyPortfolio(
       { user: { userId: 1 } },
-      { holdings: [], modelId: 'claude-fast', outputLanguage: lang },
+      { holdings: [], outputLanguage: lang },
     );
 
     expectLanguageEverywhere(captured.request, lang);
@@ -289,11 +276,7 @@ describe('AI language instruction — defaults', () => {
       keyRiskFactors: ['a'],
     });
 
-    await new AiRiskService(manager as never).analyze(
-      1,
-      holdings,
-      'claude-fast',
-    );
+    await new AiRiskService(manager as never).analyze(1, holdings);
 
     expectLanguageEverywhere(captured.request, 'th');
   });
@@ -306,12 +289,7 @@ describe('AI language instruction — defaults', () => {
       keyRiskFactors: ['a'],
     });
 
-    await new AiRiskService(manager as never).analyze(
-      1,
-      holdings,
-      'claude-fast',
-      'ko',
-    );
+    await new AiRiskService(manager as never).analyze(1, holdings, 'ko');
 
     expectLanguageEverywhere(captured.request, 'th');
   });

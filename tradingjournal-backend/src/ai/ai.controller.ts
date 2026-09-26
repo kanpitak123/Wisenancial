@@ -12,7 +12,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { VerifiedEmailGuard } from '../auth/verified-email.guard';
 import { AiManagerService } from './ai-manager.service';
-import { MIN_CREDIT_BALANCE } from './ai.models';
+import { MIN_CREDIT_BALANCE, listFeaturePricing } from './ai-pricing.config';
 import { AiService } from './ai.service';
 import { AiRecommendationService } from './ai-recommendation.service';
 import { AiRiskService } from './ai-risk.service';
@@ -36,10 +36,15 @@ export class AiController {
     private readonly education: AiEducationService,
   ) {}
 
-  @Get('models')
-  listModels() {
+  /**
+   * Flat price of every AI feature — the frontend shows these on the buttons, so the
+   * numbers come from ai-pricing.config.ts and nowhere else. No model list: users do
+   * not choose a model, each feature has a fixed tier.
+   */
+  @Get('pricing')
+  getPricing() {
     return {
-      models: this.manager.listAvailableModels(),
+      features: listFeaturePricing(),
       minBalance: MIN_CREDIT_BALANCE,
     };
   }
@@ -66,7 +71,6 @@ export class AiController {
     return this.ai.reviewPortfolio(
       req.user.userId,
       portfolioId,
-      dto.modelId,
       dto.items,
       dto.analytics,
       dto.outputLanguage,
@@ -76,12 +80,7 @@ export class AiController {
   @UseGuards(VerifiedEmailGuard)
   @Post('portfolio/risk-analysis')
   riskAnalysis(@Request() req: any, @Body() dto: RiskAnalysisDto) {
-    return this.risk.analyze(
-      req.user.userId,
-      dto.holdings,
-      dto.modelId,
-      dto.outputLanguage,
-    );
+    return this.risk.analyze(req.user.userId, dto.holdings, dto.outputLanguage);
   }
 
   /**
@@ -114,18 +113,10 @@ export class AiController {
   @UseGuards(VerifiedEmailGuard)
   @Post('news/enrich')
   enrichNews(@Request() req: any, @Body() dto: EnrichNewsDto) {
-    if (!dto.modelId) {
-      return this.ai.enrichNewsArticle(
-        dto.headline,
-        dto.summary,
-        dto.content,
-        dto.language,
-      );
-    }
-
+    // always billed: the old "no modelId" branch ran the system-paid enrichment for
+    // anyone who asked, which is free AI for every logged-in user
     return this.ai.enrichUserNewsArticle(
       req.user.userId,
-      dto.modelId,
       dto.headline,
       dto.summary,
       dto.content,

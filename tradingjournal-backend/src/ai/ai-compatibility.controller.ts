@@ -38,7 +38,6 @@ export class AiCompatibilityController {
     @Body()
     body: {
       holdings: unknown[];
-      modelId: string;
       outputLanguage?: string;
     },
   ) {
@@ -46,7 +45,7 @@ export class AiCompatibilityController {
 
     const result = await this.manager.executeAiRequest({
       userId: req.user.userId,
-      modelId: body.modelId,
+      feature: 'portfolio_review',
       systemPrompt: [
         'You are a portfolio advisor.',
         outputLanguageRule(outputLanguage),
@@ -118,12 +117,11 @@ export class AiCompatibilityController {
   async riskLegacy(
     @Request() req: any,
     @Body()
-    body: { holdings: any[]; modelId: string; outputLanguage?: string },
+    body: { holdings: any[]; outputLanguage?: string },
   ) {
     const result = await this.risk.analyze(
       req.user.userId,
       body.holdings,
-      body.modelId,
       body.outputLanguage,
     );
 

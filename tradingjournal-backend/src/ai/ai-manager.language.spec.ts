@@ -58,7 +58,7 @@ function makeManager(answers: string[]) {
 
 const userRequest = {
   userId: 7,
-  modelId: 'claude-fast',
+  feature: 'chart_insight' as const,
   prompt: '{"task":"x"}',
   expectedLanguage: 'th' as const,
   languageProbe: (data: { summary: string }) => data.summary,
@@ -90,8 +90,8 @@ describe('executeAiRequest — language guard', () => {
     expect(prompts[1]).toContain(userRequest.prompt);
     expect(prompts[1]).toContain('Respond only in Thai.');
 
-    // billed once, for one answer's tokens: 1k in x20 + 0.5k out x100 = 70 credits
-    expect(result.creditsCharged).toBe(70);
+    // billed once, at the feature's flat price (chart_insight = 5)
+    expect(result.creditsCharged).toBe(5);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
 
     // the discarded answer is on record as FAILED with 0 credits
@@ -140,7 +140,7 @@ describe('executeAiRequest — language guard', () => {
 
     await manager.executeAiRequest<{ summary: string }>({
       userId: 7,
-      modelId: 'claude-fast',
+      feature: 'chart_insight' as const,
       prompt: 'x',
     });
 

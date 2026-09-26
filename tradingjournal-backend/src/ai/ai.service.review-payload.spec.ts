@@ -84,14 +84,7 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
   it('INVESTOR: sends labelled metrics, not the raw overview', async () => {
     const { service, executeAiRequest } = makeService('INVESTOR');
 
-    await service.reviewPortfolio(
-      1,
-      17,
-      'claude-fast',
-      undefined,
-      undefined,
-      'th',
-    );
+    await service.reviewPortfolio(1, 17, undefined, undefined, 'th');
 
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
     const payload = JSON.parse(sent.prompt) as Record<string, unknown>;
@@ -116,14 +109,7 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
     async (language) => {
       const { service, executeAiRequest } = makeService('INVESTOR');
 
-      await service.reviewPortfolio(
-        1,
-        17,
-        'claude-fast',
-        undefined,
-        undefined,
-        language,
-      );
+      await service.reviewPortfolio(1, 17, undefined, undefined, language);
 
       const sent = (
         executeAiRequest.mock.calls[0] as [Sent & { rejectKeyNames?: boolean }]
@@ -146,7 +132,7 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
   it('INVESTOR: system prompt tells the model to quote, never compute', async () => {
     const { service, executeAiRequest } = makeService('INVESTOR');
 
-    await service.reviewPortfolio(1, 17, 'claude-fast');
+    await service.reviewPortfolio(1, 17);
 
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
 
@@ -161,7 +147,7 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
     async (type) => {
       const { service, executeAiRequest } = makeService(type);
 
-      await service.reviewPortfolio(1, 17, 'claude-fast');
+      await service.reviewPortfolio(1, 17);
 
       const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
 
@@ -172,7 +158,7 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
   it('INVESTOR: the review that started this (MSFT 932%, total 2,874.76, unrealized 4,154.76) is grounded', async () => {
     const { service, executeAiRequest } = makeService('INVESTOR');
 
-    await service.reviewPortfolio(1, 17, 'claude-fast');
+    await service.reviewPortfolio(1, 17);
 
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
     const answer = {
@@ -193,7 +179,7 @@ describe('AiService.reviewPortfolio — labelled metrics and grounding', () => {
   it('TRADER: sends labelled metrics with units', async () => {
     const { service, executeAiRequest } = makeService('TRADER');
 
-    await service.reviewPortfolio(1, 15, 'claude-fast');
+    await service.reviewPortfolio(1, 15);
 
     const sent = (executeAiRequest.mock.calls[0] as [Sent])[0];
     const payload = JSON.parse(sent.prompt) as {

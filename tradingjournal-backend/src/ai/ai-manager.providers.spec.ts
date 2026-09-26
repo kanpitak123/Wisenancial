@@ -145,35 +145,42 @@ describe('AI_PROVIDERS default (anthropic only)', () => {
     expect(seen).toEqual([]);
   });
 
-  it('a user request for a parked model is refused with the models that do work, and nothing is charged', async () => {
+  it('when anthropic is not in AI_PROVIDERS a user request is refused, not rerouted, and nothing is charged', async () => {
+    process.env.AI_PROVIDERS = 'groq';
     const { manager, seen, prisma } = makeManager();
 
     const error = await manager
-      .executeAiRequest({ userId: 1, modelId: 'groq-llama3', prompt: 'x' })
+      .executeAiRequest({ userId: 1, feature: 'portfolio_review', prompt: 'x' })
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ServiceUnavailableException);
     expect((error as Error).message).toContain('not enabled');
-    expect((error as Error).message).toContain('claude-fast, claude-smart');
     expect(seen).toEqual([]);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('a user request served by Claude uses the tier model and charges credits', async () => {
-    const { manager, seen, prisma } = makeManager();
+  it('each feature is served by its fixed tier and charged its flat price', async () => {
+    const cases = [
+      ['chart_insight', 'test-fast-model', 5],
+      ['ai_picks', 'test-fast-model', 10],
+      ['risk_analysis', 'test-smart-model', 20],
+      ['portfolio_review', 'test-smart-model', 20],
+    ] as const;
 
-    const result = await manager.executeAiRequest({
-      userId: 1,
-      modelId: 'claude-smart',
-      prompt: 'x',
-    });
+    for (const [feature, upstreamModel, credits] of cases) {
+      const { manager, seen, prisma } = makeManager();
 
-    expect(seen).toEqual([
-      { provider: 'anthropic', upstreamModel: 'test-smart-model' },
-    ]);
-    // 1k in + 1k out at 60/300
-    expect(result.creditsCharged).toBe(360);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const result = await manager.executeAiRequest({
+        userId: 1,
+        feature,
+        prompt: 'x',
+      });
+
+      expect(seen).toEqual([{ provider: 'anthropic', upstreamModel }]);
+      // the fake provider reports 1k in + 1k out; the price does not depend on that
+      expect(result.creditsCharged).toBe(credits);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('Claude failing on a user request: clear AI_PROVIDER_UNAVAILABLE, no fallback, credits NOT charged', async () => {
@@ -182,7 +189,7 @@ describe('AI_PROVIDERS default (anthropic only)', () => {
     });
 
     const error = await manager
-      .executeAiRequest({ userId: 1, modelId: 'claude-smart', prompt: 'x' })
+      .executeAiRequest({ userId: 1, feature: 'portfolio_review', prompt: 'x' })
       .catch((caught: unknown) => caught);
 
     const body = (error as ServiceUnavailableException).getResponse() as {

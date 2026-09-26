@@ -38,18 +38,22 @@ export class AnalyzeChartDto {
   @IsObject()
   extraContext?: Record<string, unknown>;
 
+  /** Ignored: the model is fixed per feature. Accepted only so a stale client is not 400'd. */
   @IsOptional()
   @IsString()
   modelId?: string;
 
+  /** true = free rule-based insight; anything else runs the AI (flat credits). */
   @IsOptional()
   @IsBoolean()
   useRuleBased?: boolean;
 }
 
 export class ReviewPortfolioDto {
+  /** Ignored: the model is fixed per feature. Accepted only so a stale client is not 400'd. */
+  @IsOptional()
   @IsString()
-  modelId!: string;
+  modelId?: string;
 
   @IsOptional()
   @IsIn(['th', 'en'])
@@ -79,6 +83,7 @@ export class EnrichNewsDto {
   @IsIn(['en', 'th'])
   language?: 'en' | 'th';
 
+  /** Ignored: the model is fixed per feature. Accepted only so a stale client is not 400'd. */
   @IsOptional()
   @IsString()
   modelId?: string;
@@ -96,8 +101,10 @@ export class RiskAnalysisDto {
     currentPrice?: number;
   }>;
 
+  /** Ignored: the model is fixed per feature. Accepted only so a stale client is not 400'd. */
+  @IsOptional()
   @IsString()
-  modelId!: string;
+  modelId?: string;
 
   @IsOptional()
   @IsIn(['th', 'en'])
