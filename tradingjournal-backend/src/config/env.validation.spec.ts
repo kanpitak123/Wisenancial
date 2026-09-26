@@ -23,6 +23,12 @@ const VALID: NodeJS.ProcessEnv = {
   AI_MODEL_SMART: 'smart-model',
   NEWS_API_KEY: 'news',
   MAIL_TRANSPORT: 'resend',
+  STORAGE_DRIVER: 's3',
+  S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
+  S3_BUCKET: 'bucket',
+  S3_ACCESS_KEY_ID: 'id',
+  S3_SECRET_ACCESS_KEY: 'secret',
+  S3_PUBLIC_BASE_URL: 'https://cdn.example.com',
 };
 
 const without = (...names: string[]): NodeJS.ProcessEnv => {
@@ -165,6 +171,45 @@ describe('validateProductionEnv', () => {
         }),
       ).toMatch(
         /REQUIRE_VERIFIED_EMAIL_FOR_AI=true needs a real MAIL_TRANSPORT/,
+      );
+    });
+  });
+
+  describe('uploads', () => {
+    it('s3 needs every S3_* setting', () => {
+      for (const name of [
+        'S3_ENDPOINT',
+        'S3_BUCKET',
+        'S3_ACCESS_KEY_ID',
+        'S3_SECRET_ACCESS_KEY',
+        'S3_PUBLIC_BASE_URL',
+      ]) {
+        expect(errorsOf(without(name))).toContain(name);
+      }
+    });
+
+    it('s3 endpoints must be https', () => {
+      expect(
+        errorsOf({ ...VALID, S3_PUBLIC_BASE_URL: 'http://cdn.example.com' }),
+      ).toMatch(/S3_PUBLIC_BASE_URL must be an https URL/);
+    });
+
+    it('local storage is allowed but warned about (ephemeral disk, single instance)', () => {
+      const report = validateProductionEnv({
+        ...VALID,
+        STORAGE_DRIVER: 'local',
+      });
+
+      expect(report.errors).toEqual([]);
+      expect(report.warnings.join()).toMatch(/lost on redeploy/);
+    });
+
+    it('unset means local; an unknown driver is an error', () => {
+      expect(
+        validateProductionEnv(without('STORAGE_DRIVER')).warnings.join(),
+      ).toMatch(/STORAGE_DRIVER is "local"/);
+      expect(errorsOf({ ...VALID, STORAGE_DRIVER: 'ftp' })).toMatch(
+        /must be "local" or "s3"/,
       );
     });
   });

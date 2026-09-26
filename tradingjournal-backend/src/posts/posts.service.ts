@@ -10,15 +10,50 @@ import {
   Prisma,
   Sentiment,
 } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostsQueryDto } from './dto/posts-query.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 
+/** Accepted post image types and the file extension each is stored with. */
+export const POST_IMAGE_TYPES: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
 @Injectable()
 export class PostsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
+
+  /**
+   * Post images go through the storage driver. The upload used the default multer
+   * (memory) storage and then read `file.filename`, which does not exist there, so the
+   * stored URL was always "/uploads/posts/undefined" and no image was ever written.
+   */
+  private async storeImage(file: Express.Multer.File): Promise<string> {
+    const extension = POST_IMAGE_TYPES[file.mimetype];
+    if (!extension) {
+      throw new BadRequestException(
+        'รองรับเฉพาะรูปภาพ PNG, JPEG, WebP หรือ GIF เท่านั้น',
+      );
+    }
+
+    const stored = await this.storage.put(
+      `posts/${randomUUID()}.${extension}`,
+      file.buffer,
+      file.mimetype,
+    );
+
+    return stored.url;
+  }
 
   async create(userId: number, dto: CreatePostDto, file?: Express.Multer.File) {
     const portfolio = await this.requireOwnedPortfolio(
@@ -36,6 +71,9 @@ export class PostsService {
       dto.reference_id,
     );
 
+    // upload before the transaction: a rejected file must not leave a post behind
+    const imageUrl = file ? await this.storeImage(file) : null;
+
     return this.prisma.$transaction(async (tx) => {
       const post = await tx.posts.create({
         data: {
@@ -52,11 +90,11 @@ export class PostsService {
         },
       });
 
-      if (file) {
+      if (imageUrl) {
         await tx.post_images.create({
           data: {
             post_id: post.id,
-            image_url: `/uploads/posts/${file.filename}`,
+            image_url: imageUrl,
           },
         });
       }

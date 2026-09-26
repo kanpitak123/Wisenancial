@@ -2,7 +2,7 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
-import { API_BASE_URL } from 'src/constants/auth.constants';
+import { mediaUrl } from 'src/utils/media-url';
 import { useCommunityStore } from 'stores/CommunityStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
 import { useGlobalFilterStore } from 'stores/GlobalFilterStore'; // 👈 นำเข้า Date Filter Store
@@ -253,7 +253,7 @@ const submitComment = async (postId: number) => {
 
             <div v-if="post.post_images && post.post_images.length > 0" class="q-mt-md">
               <q-img
-                :src="`${API_BASE_URL}${post.post_images[0]?.image_url}`"
+                :src="mediaUrl(post.post_images[0]?.image_url)"
                 class="rounded-borders"
                 style="
                   max-height: 400px;

@@ -28,7 +28,9 @@ export class PostsController {
   constructor(private readonly posts: PostsService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(
+    FileInterceptor('image', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
   create(
     @CurrentUser() user: AuthUser,
     @Body() body: CreatePostDto,

@@ -4,10 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
-import { join } from 'path';
 import { PortfolioType, Prisma, RecordStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import type { ShareContentType, SharePlatform } from './dto/share-platform.dto';
 
 type MonthlyPerformance = {
@@ -39,7 +38,10 @@ type PortfolioRow = {
 
 @Injectable()
 export class ShareStatisticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async getShareStatistics(userId: number, portfolioId: number) {
     const portfolio = await this.requirePortfolio(userId, portfolioId);
@@ -72,25 +74,18 @@ export class ShareStatisticsService {
     const stats = await this.getShareStatistics(userId, portfolioId);
 
     const fileName = `${portfolioId}-${Date.now()}-${randomUUID()}.svg`;
-    const relativePath = `/uploads/share/${fileName}`;
-    const outputDirectory = join(process.cwd(), 'uploads', 'share');
-    const outputPath = join(outputDirectory, fileName);
-
-    await mkdir(outputDirectory, {
-      recursive: true,
-    });
-
     const svg = this.renderShareCardSvg(stats);
 
-    await writeFile(outputPath, svg, 'utf8');
-
-    const apiBaseUrl = (
-      process.env.API_PUBLIC_URL ?? 'http://localhost:3000'
-    ).replace(/\/$/, '');
+    // local disk or an S3-compatible bucket, depending on STORAGE_DRIVER
+    const stored = await this.storage.put(
+      `share/${fileName}`,
+      svg,
+      'image/svg+xml',
+    );
 
     return {
-      image_url: `${apiBaseUrl}${relativePath}`,
-      relative_url: relativePath,
+      image_url: stored.absoluteUrl,
+      relative_url: stored.url,
       mime_type: 'image/svg+xml',
       file_name: fileName,
       template:

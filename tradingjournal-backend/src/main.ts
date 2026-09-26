@@ -5,10 +5,10 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common'; // 👈 เพิ่ม Import ตัวนี้เข้ามา
 import { NestExpressApplication } from '@nestjs/platform-express'; // 👈 1. Import ตัวนี้
-import { join } from 'path';
 import { assertCorsOriginsValid } from './config/cors-origins.util';
 import { assertProductionEnv } from './config/env.validation';
 import { resolveTrustProxy } from './config/trust-proxy.util';
+import { uploadsRoot } from './storage/storage.service';
 import {
   buildHelmetOptions,
   isSwaggerEnabled,
@@ -61,7 +61,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+  app.useStaticAssets(uploadsRoot(), {
     prefix: '/uploads',
   });
 

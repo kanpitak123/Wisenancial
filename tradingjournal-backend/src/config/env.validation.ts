@@ -200,6 +200,31 @@ export function validateProductionEnv(env: Env): EnvReport {
     }
   }
 
+  // ── Uploads ─────────────────────────────────────────────────────────────────
+  const storage = (valueOf(env, 'STORAGE_DRIVER') || 'local').toLowerCase();
+  if (storage === 's3') {
+    for (const name of [
+      'S3_ENDPOINT',
+      'S3_BUCKET',
+      'S3_ACCESS_KEY_ID',
+      'S3_SECRET_ACCESS_KEY',
+      'S3_PUBLIC_BASE_URL',
+    ]) {
+      need(name, 'STORAGE_DRIVER=s3 needs it');
+    }
+    for (const name of ['S3_ENDPOINT', 'S3_PUBLIC_BASE_URL']) {
+      if (isSet(env, name) && !isUrl(valueOf(env, name), ['https:'])) {
+        errors.push(`${name} must be an https URL`);
+      }
+    }
+  } else if (storage === 'local') {
+    warnings.push(
+      'STORAGE_DRIVER is "local": uploads are written to disk and are lost on redeploy unless a persistent volume is mounted (and only one instance may run)',
+    );
+  } else {
+    errors.push('STORAGE_DRIVER must be "local" or "s3"');
+  }
+
   // ── Numbers, flags and soft checks ──────────────────────────────────────────
   for (const name of [
     'PORT',

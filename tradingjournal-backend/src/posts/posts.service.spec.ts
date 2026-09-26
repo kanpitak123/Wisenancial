@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { PostsService } from './posts.service';
 
 const prismaMock = {
@@ -24,6 +25,7 @@ describe('PostsService', () => {
       providers: [
         PostsService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: StorageService, useValue: { put: jest.fn() } },
       ],
     }).compile();
 
