@@ -3,8 +3,16 @@
 
 import { defineConfig } from '#q-app/wrappers';
 import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
+import { assertProductionBuildEnv } from './src/build-checks/production-env';
 
 export default defineConfig((ctx) => {
+  // `quasar build` (production): refuse to bake in a missing/localhost API address. Reads the
+  // same sources Vite does (process env + .env files) so a CI-provided VITE_API_URL counts.
+  if (ctx.prod) {
+    assertProductionBuildEnv(loadEnv('production', process.cwd(), 'VITE_'));
+  }
+
   return {
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
     // preFetch: true,

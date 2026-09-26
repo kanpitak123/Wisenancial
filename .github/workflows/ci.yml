@@ -80,3 +80,7 @@ jobs:
         # regression ของ repo นี้ที่ lint จริง — tsc/jest/vitest ไม่ lint) เป็น step เดียวที่คุม
         # ทั้งสองเรื่องพร้อมกัน ไม่ต้องแยก step lint ต่างหากแบบฝั่ง backend
         run: npx quasar build
+        env:
+          # a production build refuses to run without an API address (VITE_API_URL is baked into
+          # the bundle); CI only checks that the app compiles, so any public https URL will do
+          VITE_API_URL: https://api.ci.example.com
