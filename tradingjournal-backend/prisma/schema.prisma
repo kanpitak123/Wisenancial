@@ -1028,6 +1028,12 @@ model market_news {
   // See news.ai_confidence for rationale — same column, same purpose, on the
   // INVESTOR-side table.
   ai_confidence         Float?
+  // Shadow second pass (news-analysis / claude-guardrails): the full spec-12.1 envelope
+  // (two-sided factors, claim status, conflicts, or an error envelope). Never read by
+  // the news pages yet. ai_analysis_at is set whenever an envelope was persisted, so
+  // NULL = "never analysed" and drives both row selection and the daily budget count.
+  ai_analysis           Json?
+  ai_analysis_at        DateTime?      @db.Timestamp(6)
   ai_translated_summary Json?
   sector                String?        @db.VarChar(100)
   stock_symbols         String[]       @default([])
