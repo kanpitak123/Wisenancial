@@ -338,3 +338,27 @@ Endpoints (all under `/auth`): `POST forgot-password`, `reset-password`, `send-v
 - Access tokens (15 min) issued before a password reset stay valid until they expire (no deny-list) - same limit as change-password.
 - Real mail provider: add a transport to `MAIL_TRANSPORTS` in `src/mail/mail.module.ts`, set `MAIL_TRANSPORT`, then consider `REQUIRE_VERIFIED_EMAIL_FOR_AI=true`.
 - Email templates are bilingual TH/EN in one message (no per-user locale is stored yet); plain text only.
+
+## B3 — implementation status (2026-09-27)
+
+Everything here is a **draft** — the texts are copied from the B3 documents above and still carry every `[Placeholder]`. Nothing was filled in or reworded legally.
+
+| Piece | What shipped |
+|---|---|
+| `/terms`, `/privacy` | Public pages (no login), TH + EN, follow the app language (TH/EN switch on the page). A "DRAFT — pending legal review" banner is always on top, with the count of unresolved placeholders; every `[ ... ]` is highlighted, not hidden. Source: `src/constants/legal.content.ts`. |
+| Footer links | Landing footer, the auth pages (Login/Register/forgot/reset/verify), the in-app layout, and the legal pages themselves. |
+| AI disclaimer | One component (`WsAiDisclaimer`): short line "Not financial advice…" + link "Read the full disclaimer" to `/terms#ai-disclaimer` (the full draft AI Disclaimer is the last section of Terms). Now on AI Insights, Portfolio Advisor, Risk Analysis, AI Picks **and the AI summaries in News** (that one was missing). A coverage test fails if a new screen renders `.aiSummary` without it. |
+| Signup consent | Required checkbox, unticked by default, links open in a new tab. The client sends the terms version it displayed; the server rejects a stale version (400), sets `accepted_at` itself and stores both. **Branch `feat/legal-consent` — the migration `20260928000000_add_terms_acceptance_to_users` is NOT applied.** Two nullable columns on `users`: `accepted_terms_version`, `accepted_terms_at`. Included in the data export. |
+
+Decisions worth knowing:
+- Existing users are **not** backfilled: NULL/NULL = "no consent recorded". We do not claim a consent nobody gave.
+- The version string (`draft-0.1`) lives in two places that must change together: `TERMS_VERSION` (frontend `legal.constants.ts`) and `CURRENT_TERMS_VERSION` (backend `auth.constants.ts`).
+- The short AI line on the cards is our wording, not lawyer text; only the full disclaimer on the Terms page is the reviewed-candidate draft. Same for the Thai banner text.
+- The links to `/terms` from the consent checkbox and the AI cards open in a new tab so a half-filled form or a paid analysis is not lost.
+
+Backlog found while doing B3 (not done):
+- **Existing users have no consent record.** Needs a "please accept the updated terms" prompt on next login once the texts are final (and again whenever `CURRENT_TERMS_VERSION` changes).
+- **Landing page copy contradicts "no advice"**: it promises "คำแนะนำการลงทุน … จาก AI" (`LandingPage.vue`, features section). Marketing wording, left for the owner to decide.
+- `generateQuiz` exists in the AI store but no screen renders it yet — add the disclaimer (and the file to the coverage test list) when a quiz UI is built.
+- Privacy Policy §6 says "Export my data … once built": the export now exists (`GET /users/me/export`); the wording is a lawyer/owner call.
+- Every `[Placeholder]` in Terms/Privacy still needs a real answer (refund policy, liability cap, governing law, live AI providers, retention schedule, encryption standards, minimum age, contact/DPO, last-updated date).
