@@ -23,8 +23,8 @@ describe('StocksController.getRiskFundamentals', () => {
   it('คืนค่าตามลำดับ symbol ที่ขอมา และ normalize เป็นตัวพิมพ์ใหญ่', async () => {
     const { controller, getRiskFundamentals } = makeController(
       new Map([
-        ['AAPL', { peRatio: 36.099, beta: 1.086 }],
-        ['PTT.BK', { peRatio: 9.274, beta: 0.322 }],
+        ['AAPL', { peRatio: 36.099, beta: 1.086, debtToEquity: 0.784 }],
+        ['PTT.BK', { peRatio: 9.274, beta: 0.322, debtToEquity: 0.589 }],
       ]),
     );
 
@@ -32,8 +32,13 @@ describe('StocksController.getRiskFundamentals', () => {
 
     expect(getRiskFundamentals).toHaveBeenCalledWith(['AAPL', 'PTT.BK']);
     expect(result).toEqual([
-      { symbol: 'AAPL', peRatio: 36.099, beta: 1.086 },
-      { symbol: 'PTT.BK', peRatio: 9.274, beta: 0.322 },
+      { symbol: 'AAPL', peRatio: 36.099, beta: 1.086, debtToEquity: 0.784 },
+      {
+        symbol: 'PTT.BK',
+        peRatio: 9.274,
+        beta: 0.322,
+        debtToEquity: 0.589,
+      },
     ]);
   });
 
@@ -41,16 +46,18 @@ describe('StocksController.getRiskFundamentals', () => {
    * symbol ที่ Yahoo ไม่รู้จักต้อง "อยู่ในผลลัพธ์แต่เป็น null" ไม่ใช่หายไปเฉย ๆ
    * ผู้เรียกจะได้แยกออกว่าไม่มีข้อมูล ต่างจากไม่ได้ขอ
    */
-  it('symbol ที่หาไม่เจอ -> อยู่ในผลลัพธ์แต่ค่าเป็น null ทั้งคู่', async () => {
+  it('symbol ที่หาไม่เจอ -> อยู่ในผลลัพธ์แต่ค่าเป็น null ทุกช่อง', async () => {
     const { controller } = makeController(
-      new Map([['AAPL', { peRatio: 36.099, beta: 1.086 }]]),
+      new Map([
+        ['AAPL', { peRatio: 36.099, beta: 1.086, debtToEquity: 0.784 }],
+      ]),
     );
 
     const result = await controller.getRiskFundamentals('AAPL,NOSUCH');
 
     expect(result).toEqual([
-      { symbol: 'AAPL', peRatio: 36.099, beta: 1.086 },
-      { symbol: 'NOSUCH', peRatio: null, beta: null },
+      { symbol: 'AAPL', peRatio: 36.099, beta: 1.086, debtToEquity: 0.784 },
+      { symbol: 'NOSUCH', peRatio: null, beta: null, debtToEquity: null },
     ]);
   });
 

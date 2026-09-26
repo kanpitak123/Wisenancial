@@ -63,12 +63,18 @@ const listingMetricCache = new Map<
 /**
  * ปัจจัยพื้นฐานรายตัวที่ AI Risk Analysis ใช้ตัดสินความเสี่ยง
  *
- * debtToEquity ไม่ได้อยู่ในนี้เพราะ Yahoo ให้เฉพาะทาง quoteSummary() ซึ่งยิงได้
- * ทีละ symbol เท่านั้น (ดูหัวข้อ "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
+ * peRatio/beta มาจาก quote() แบบ batch ส่วน debtToEquity มีเฉพาะใน quoteSummary()
+ * ซึ่งยิงได้ทีละ symbol เท่านั้น จึงแยก cache/concurrency ออกไป (ดู DEBT_TO_EQUITY_*
+ * ด้านล่าง และหัวข้อ "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
  */
+/** ส่วนที่ยิงรวมทีเดียวได้ (quote batch) — debtToEquity ต้องแยกไปอีกทาง */
+type PriceFundamental = Pick<RiskFundamental, 'peRatio' | 'beta'>;
+
 export interface RiskFundamental {
   peRatio: number | null;
   beta: number | null;
+  /** อัตราส่วนดิบ (0.78 = หนี้ 78% ของทุน) ไม่ใช่เปอร์เซ็นต์ที่ Yahoo คืนมา */
+  debtToEquity: number | null;
 }
 
 /**
@@ -82,7 +88,21 @@ export interface RiskFundamental {
 const RISK_FUNDAMENTAL_TTL_MS = 5 * 60 * 1000;
 const riskFundamentalCache = new Map<
   string,
-  { fundamental: RiskFundamental; expires: number }
+  { fundamental: PriceFundamental; expires: number }
+>();
+
+/**
+ * debtToEquity เปลี่ยนตามงบรายไตรมาส ไม่ใช่รายนาที → แคช 12 ชม. แยกจากราคา/P-E/beta
+ * (5 นาที) และยิงทีละ symbol ที่ concurrency 5 เพราะ quoteSummary() ไม่รับหลายตัว
+ *
+ * เก็บ null ลงแคชด้วยเมื่อ Yahoo ตอบแต่ไม่มีค่า (เช่น ธนาคาร/กองทุนบางตัวไม่มี D/E)
+ * จะได้ไม่ยิงซ้ำทุกครั้งที่กดวิเคราะห์ — แต่ "ยิงพัง" ไม่เก็บ ให้ลองใหม่ครั้งหน้า
+ */
+const DEBT_TO_EQUITY_TTL_MS = 12 * 60 * 60 * 1000;
+const DEBT_TO_EQUITY_CONCURRENCY = 5;
+const debtToEquityCache = new Map<
+  string,
+  { value: number | null; expires: number }
 >();
 
 /**
@@ -404,7 +424,98 @@ export class MarketDataService {
   }
 
   /**
-   * P/E และ beta ของหลาย symbol พร้อมกัน สำหรับ AI Risk Analysis
+   * P/E, beta และ debtToEquity ของหลาย symbol สำหรับ AI Risk Analysis
+   *
+   * สองทางที่ต่างกันโดยธรรมชาติของ Yahoo: P/E+beta ยิงรวมทีเดียวต่อ chunk
+   * (getPriceFundamentals) ส่วน D/E ต้องยิงทีละ symbol แต่แคช 12 ชม.
+   * (getDebtToEquity) — ทั้งสองทางล้มเหลวได้อิสระ และ symbol ที่ไม่มีข้อมูลจะได้
+   * null ไม่ใช่ค่าที่แต่งขึ้น
+   */
+  async getRiskFundamentals(
+    symbols: string[],
+  ): Promise<Map<string, RiskFundamental>> {
+    const [prices, debt] = await Promise.all([
+      this.getPriceFundamentals(symbols),
+      this.getDebtToEquity(symbols),
+    ]);
+
+    const out = new Map<string, RiskFundamental>();
+    for (const symbol of symbols) {
+      const price = prices.get(symbol);
+      const debtToEquity = debt.get(symbol) ?? null;
+      if (!price && debtToEquity === null) continue;
+
+      out.set(symbol, {
+        peRatio: price?.peRatio ?? null,
+        beta: price?.beta ?? null,
+        debtToEquity,
+      });
+    }
+
+    return out;
+  }
+
+  /**
+   * debtToEquity ต่อ symbol จาก quoteSummary().financialData
+   *
+   * ⚠️ Yahoo คืนเป็นเปอร์เซ็นต์ (AAPL 78.445 = D/E 0.78) แต่เกณฑ์ใน prompt เป็น
+   * ratio ('>1.0') จึงหาร 100 ที่นี่ ที่เดียว — ตัวเลขที่โชว์ในตารางการ์ดจะได้เป็น D/E
+   * ที่คนอ่านงบคุ้นเคย และไม่ทำให้หุ้นเกือบทุกตัวเข้าเกณฑ์ "หนี้สูง"
+   */
+  private async getDebtToEquity(
+    symbols: string[],
+  ): Promise<Map<string, number | null>> {
+    const now = Date.now();
+    const out = new Map<string, number | null>();
+    const toFetch: string[] = [];
+
+    for (const symbol of symbols) {
+      const cached = debtToEquityCache.get(symbol);
+      if (cached && cached.expires > now) {
+        out.set(symbol, cached.value);
+      } else if (!toFetch.includes(symbol)) {
+        toFetch.push(symbol);
+      }
+    }
+
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(DEBT_TO_EQUITY_CONCURRENCY, toFetch.length) },
+      async () => {
+        while (cursor < toFetch.length) {
+          const symbol = toFetch[cursor++];
+          try {
+            const summary = (await yahooFinance.quoteSummary(symbol, {
+              modules: ['financialData'],
+            })) as any;
+            const raw = Number(summary?.financialData?.debtToEquity);
+            const value = Number.isFinite(raw)
+              ? Number((raw / 100).toFixed(3))
+              : null;
+
+            debtToEquityCache.set(symbol, {
+              value,
+              expires: now + DEBT_TO_EQUITY_TTL_MS,
+            });
+            out.set(symbol, value);
+          } catch (error) {
+            this.logger.warn(
+              `Yahoo debtToEquity failed for ${symbol}: ${
+                error instanceof Error ? error.message : error
+              }`,
+            );
+          }
+        }
+      },
+    );
+
+    await Promise.all(workers);
+
+    return out;
+  }
+
+  /**
+   * P/E และ beta ของหลาย symbol พร้อมกัน
    *
    * ยิง Yahoo ครั้งเดียวต่อ chunk ไม่ใช่ทีละตัว — การ์ดความเสี่ยงต้องการค่าพวกนี้
    * ให้ครบทุกหุ้นในพอร์ตพร้อมกัน ถ้าวนยิงทีละตัวพอร์ต 30 ตัวก็ 30 request
@@ -413,11 +524,11 @@ export class MarketDataService {
    * ให้โมเดลเห็นว่า "ไม่มีข้อมูล" ดีกว่าแต่งตัวเลขปลอมขึ้นมา) และถ้าทั้ง chunk พัง
    * ก็ยังคืน map ที่มีของเท่าที่ได้ ไม่โยน error ทิ้งทั้งงาน
    */
-  async getRiskFundamentals(
+  private async getPriceFundamentals(
     symbols: string[],
-  ): Promise<Map<string, RiskFundamental>> {
+  ): Promise<Map<string, PriceFundamental>> {
     const now = Date.now();
-    const out = new Map<string, RiskFundamental>();
+    const out = new Map<string, PriceFundamental>();
     const toFetch: string[] = [];
 
     for (const symbol of symbols) {
@@ -446,7 +557,7 @@ export class MarketDataService {
         for (const quote of arr) {
           const symbol = quote?.symbol;
           if (!symbol) continue;
-          const fundamental: RiskFundamental = {
+          const fundamental: PriceFundamental = {
             peRatio: num(quote?.trailingPE),
             beta: num(quote?.beta),
           };

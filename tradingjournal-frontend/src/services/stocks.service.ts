@@ -50,6 +50,8 @@ export interface RiskFundamental {
   symbol: string;
   peRatio: number | null;
   beta: number | null;
+  /** อัตราส่วนดิบ (0.78) ไม่ใช่เปอร์เซ็นต์ — backend แปลงหน่วยจาก Yahoo ให้แล้ว */
+  debtToEquity: number | null;
 }
 
 export const stocksService = {
@@ -78,10 +80,10 @@ export const stocksService = {
   },
 
   /**
-   * P/E + beta ของหลาย symbol ในคำขอเดียว — ใช้ประกอบ AI Risk Analysis
+   * P/E + beta + D/E ของหลาย symbol ในคำขอเดียว — ใช้ประกอบ AI Risk Analysis
    *
    * ยิงรวมทีเดียวไม่ใช่วนทีละตัว พอร์ตหลายสิบหุ้นจะได้ไม่กลายเป็นหลายสิบ request
-   * (debtToEquity ยังไม่มีในนี้ — ดู "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
+   * (backend เป็นคนไล่ดึง D/E ทีละ symbol พร้อมแคช 12 ชม. — หน้าบ้านไม่ต้องรู้)
    */
   async getRiskFundamentals(symbols: string[]): Promise<RiskFundamental[]> {
     if (symbols.length === 0) return [];

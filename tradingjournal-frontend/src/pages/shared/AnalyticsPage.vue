@@ -252,7 +252,12 @@ const loadInvestorTools = async () => {
  * ฝั่ง backend ตั้งกติกาไว้ด้วย beta/P/E — โมเดลจึงตัดสินความเสี่ยงจากฟิลด์ที่เป็น
  * null ทุกครั้ง ตรงนี้คือส่วนที่เติมค่าจริงเข้าไป
  */
-const riskFundamentals = ref(new Map<string, { peRatio: number | null; beta: number | null }>());
+const riskFundamentals = ref(
+  new Map<
+    string,
+    { peRatio: number | null; beta: number | null; debtToEquity: number | null }
+  >(),
+);
 
 async function loadRiskFundamentals(symbols: string[]) {
   if (symbols.length === 0) {
@@ -263,7 +268,10 @@ async function loadRiskFundamentals(symbols: string[]) {
   try {
     const rows = await stocksService.getRiskFundamentals(symbols);
     riskFundamentals.value = new Map(
-      rows.map((row) => [row.symbol, { peRatio: row.peRatio, beta: row.beta }]),
+      rows.map((row) => [
+        row.symbol,
+        { peRatio: row.peRatio, beta: row.beta, debtToEquity: row.debtToEquity ?? null },
+      ]),
     );
   } catch (error) {
     // ไม่ใช่ข้อมูลหลักของหน้า — พลาดแล้วปล่อยให้ส่ง null ไปดีกว่าทำทั้งแท็บพัง
@@ -292,9 +300,7 @@ const riskHoldings = computed<PortfolioRiskHolding[]>(() => {
       ...(item.market_price !== null ? { currentPrice: Number(item.market_price) } : {}),
       peRatio: fundamental?.peRatio ?? null,
       beta: fundamental?.beta ?? null,
-      // ยังไม่มีแหล่งที่ยิงรวมทีเดียวได้ — ตั้งใจส่ง null ไม่ใช่ลืมใส่
-      // (ดู "รอดำเนินการ — debtToEquity" ใน ai-prompt-audit.md)
-      debtToEquity: null,
+      debtToEquity: fundamental?.debtToEquity ?? null,
     };
   });
 });

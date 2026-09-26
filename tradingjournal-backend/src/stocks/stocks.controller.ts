@@ -55,10 +55,10 @@ export class StocksController {
   }
 
   /**
-   * P/E + beta ของหลาย symbol พร้อมกัน — ใช้โดยการ์ด AI Risk Analysis
+   * P/E + beta + debtToEquity ของหลาย symbol — ใช้โดยการ์ด AI Risk Analysis
    *
    * รับเป็น comma list ตามแบบเดียวกับ /market/prices ที่มีอยู่แล้ว คืนเป็น array
-   * เรียงตาม symbol ที่ขอมา symbol ที่ Yahoo ไม่รู้จักได้ค่า null ทั้งคู่ ไม่ใช่หายไป
+   * เรียงตาม symbol ที่ขอมา symbol ที่ Yahoo ไม่รู้จักได้ค่า null ทุกช่อง ไม่ใช่หายไป
    * เฉย ๆ เพื่อให้ผู้เรียกแยกออกว่า "ไม่มีข้อมูล" กับ "ไม่ได้ขอ"
    */
   @Get('fundamentals')
@@ -76,6 +76,7 @@ export class StocksController {
       symbol,
       peRatio: found.get(symbol)?.peRatio ?? null,
       beta: found.get(symbol)?.beta ?? null,
+      debtToEquity: found.get(symbol)?.debtToEquity ?? null,
     }));
   }
 
