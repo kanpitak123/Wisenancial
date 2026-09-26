@@ -141,7 +141,8 @@ export const useAiStore = defineStore('ai', {
       chartType: string;
       data: unknown;
       extraContext?: Record<string, unknown>;
-      useRuleBased?: boolean;
+      /** true only for the explicit "AI analysis" click; the default is the free rule-based insight */
+      useAi?: boolean;
     }) {
       if (this.loadingInsight[payload.key]) {
         return this.insights[payload.key] ?? null;
@@ -163,7 +164,7 @@ export const useAiStore = defineStore('ai', {
           outputLanguage: this.outputLanguage(),
           ...(payload.portfolioId !== undefined ? { portfolioId: payload.portfolioId } : {}),
           ...(payload.extraContext !== undefined ? { extraContext: payload.extraContext } : {}),
-          ...(payload.useRuleBased !== undefined ? { useRuleBased: payload.useRuleBased } : {}),
+          ...(payload.useAi === true ? { useAi: true } : {}),
         };
 
         const result = await aiService.analyzeChart(request);

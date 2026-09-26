@@ -91,8 +91,9 @@ export class AiService {
     userId: number,
     dto: AnalyzeChartDto,
   ): Promise<ChartInsightResponse> {
-    // ฟรีเฉพาะเมื่อขอแบบ rule-based ตรง ๆ — ไม่มีการเลือกโมเดลแล้ว ค่าเริ่มต้นคือ AI (คิดเครดิต)
-    if (dto.useRuleBased === true) {
+    // ค่าเริ่มต้นคือ rule-based ฟรี — AI (คิดเครดิต) ทำงานเฉพาะเมื่อผู้ใช้กดปุ่ม AI เอง
+    // (useAi === true) ห้ามคิดเงินโดยไม่มีการกดชัดเจน ไม่ว่า client เก่าจะส่งอะไรมา
+    if (dto.useAi !== true) {
       return {
         insight: this.rules.analyze(dto.chartType, dto.data),
         source: 'RULE_BASED',

@@ -47,7 +47,7 @@ describe('AiService', () => {
       portfolioType: 'TRADER',
       chartType: 'equity_curve',
       data: {},
-      modelId: 'groq-llama3',
+      useAi: true,
       outputLanguage: 'en',
     });
 
@@ -76,7 +76,7 @@ describe('AiService', () => {
       portfolioType: 'TRADER',
       chartType: 'equity_curve',
       data: {},
-      modelId: 'groq-llama3',
+      useAi: true,
     });
 
     expect(executeAiRequest.mock.calls[0][0].systemPrompt).toContain(
@@ -104,7 +104,7 @@ describe('AiService', () => {
       portfolioType: 'TRADER',
       chartType: 'equity_curve',
       data: {},
-      modelId: 'groq-llama3',
+      useAi: true,
     });
 
     expect(executeAiRequest.mock.calls[0][0].systemPrompt).toContain(
@@ -137,7 +137,7 @@ describe('AiService', () => {
       portfolioType: 'TRADER',
       chartType: 'equity_curve',
       data: {},
-      modelId: 'groq-llama3',
+      useAi: true,
     });
 
     const { systemPrompt, maxOutputTokens } = executeAiRequest.mock.calls[0][0];

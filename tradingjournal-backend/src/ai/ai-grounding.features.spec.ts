@@ -163,7 +163,7 @@ describe('Chart Insight — grounded numbers', () => {
       portfolioType: 'TRADER',
       chartType: 'win_rate',
       data: { winRate: 61.5, trades: 40 },
-      modelId: 'claude-fast',
+      useAi: true,
       outputLanguage: 'en',
     });
 

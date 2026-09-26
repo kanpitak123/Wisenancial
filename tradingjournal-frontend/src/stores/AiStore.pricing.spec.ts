@@ -118,3 +118,51 @@ describe('AiStore requests carry no model', () => {
     expect(analyzeRisk.mock.calls[0]![0]).not.toHaveProperty('modelId');
   });
 });
+
+describe('chart insight: never charged without an explicit AI click', () => {
+  const base = { key: 'k', portfolioType: 'TRADER' as const, chartType: 'x', data: {} };
+
+  it('the default request carries no useAi (backend answers with the free rule-based insight)', async () => {
+    const store = useAiStore();
+    analyzeChart.mockResolvedValue({ insight: 'rule', source: 'RULE_BASED' });
+
+    await store.analyzeChart(base);
+
+    expect(analyzeChart.mock.calls[0]![0]).not.toHaveProperty('useAi');
+  });
+
+  it('useAi: false is not sent either', async () => {
+    const store = useAiStore();
+    analyzeChart.mockResolvedValue({ insight: 'rule', source: 'RULE_BASED' });
+
+    await store.analyzeChart({ ...base, useAi: false });
+
+    expect(analyzeChart.mock.calls[0]![0]).not.toHaveProperty('useAi');
+  });
+
+  it('the explicit AI click sends useAi: true and syncs the credits it cost', async () => {
+    const store = useAiStore();
+    setCredits(100);
+    analyzeChart.mockResolvedValue({
+      insight: 'ai',
+      source: 'LLM',
+      creditsCharged: 5,
+      creditsRemaining: 95,
+    });
+
+    await store.analyzeChart({ ...base, useAi: true });
+
+    expect(analyzeChart.mock.calls[0]![0]).toMatchObject({ useAi: true });
+    expect(store.credits).toBe(95);
+  });
+
+  it('a rule-based answer leaves the balance alone', async () => {
+    const store = useAiStore();
+    setCredits(100);
+    analyzeChart.mockResolvedValue({ insight: 'rule', source: 'RULE_BASED' });
+
+    await store.analyzeChart(base);
+
+    expect(store.credits).toBe(100);
+  });
+});

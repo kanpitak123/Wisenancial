@@ -18,6 +18,7 @@ import AverageCostCalculator from 'components/analytics/AverageCostCalculator.vu
 import PlExportCard from 'components/analytics/PlExportCard.vue';
 import DcaPredictorCard from 'components/analytics/DcaPredictorCard.vue';
 import type { PortfolioRiskHolding } from 'src/types/ai.types';
+import { aiCostSuffix } from 'src/utils/ai-cost';
 
 // ── AiInsightPanel (inline component) ────────────────────────────────────────
 const AiInsightPanel = defineComponent({
@@ -28,9 +29,11 @@ const AiInsightPanel = defineComponent({
     loading: { type: Boolean, default: false },
     /** flat credits of one insight (AiStore.costOf('chart_insight')); null until loaded */
     cost: { type: Number as () => number | null, default: null },
+    /** the AI button is disabled (e.g. not enough credits) */
+    aiDisabled: { type: Boolean, default: false },
     lines: { type: Array as () => string[], default: () => [] },
   },
-  emits: ['refresh'],
+  emits: ['refresh', 'ai'],
   setup(props, { emit }) {
     return () =>
       h(
@@ -52,17 +55,29 @@ const AiInsightPanel = defineComponent({
               ]),
               h('span', { class: 'text-subtitle2 text-weight-bolder ai-title' }, 'Auto Insights'),
             ]),
-            h(
-              'button',
-              {
-                class: 'ai-refresh-btn',
-                disabled: props.loading,
-                onClick: () => emit('refresh'),
-              },
-              props.loading
-                ? '...'
-                : `↻ Refresh${props.cost === null ? '' : ` · ${props.cost}`}`,
-            ),
+            h('div', { class: 'row items-center q-gutter-xs' }, [
+              // free, rule-based: the default
+              h(
+                'button',
+                {
+                  class: 'ai-refresh-btn',
+                  disabled: props.loading,
+                  onClick: () => emit('refresh'),
+                },
+                props.loading ? '...' : '↻ Refresh',
+              ),
+              // AI: charged, so it is a separate button that names its price
+              h(
+                'button',
+                {
+                  class: 'ai-refresh-btn',
+                  'data-test': 'ai-insight-run',
+                  disabled: props.loading || props.aiDisabled,
+                  onClick: () => emit('ai'),
+                },
+                `✨ AI analysis${aiCostSuffix(props.cost, false)}`,
+              ),
+            ]),
           ]),
           // แถบเตือนว่าไม่ใช่คำแนะนำการลงทุน — อยู่เหนือเนื้อผลวิเคราะห์เสมอ
           // (ตัวนี้ครอบคลุมทั้ง 4 จุดที่ใช้ AiInsightPanel ในหน้านี้)
@@ -139,7 +154,7 @@ const loadAnalysisTabs = async () => {
 };
 
 // ยิงขอ AI insight ของกราฟผ่าน AiStore (คิดเครดิตฝั่ง backend)
-const analyze = (key: string, data: unknown) => {
+const analyze = (key: string, data: unknown, useAi = false) => {
   const portfolioId = portStore.activePortfolioId;
   return aiStore.analyzeChart({
     key,
@@ -149,6 +164,8 @@ const analyze = (key: string, data: unknown) => {
     chartType: key,
     data,
     ...(portfolioId !== null ? { portfolioId } : {}),
+    // AI (5 credits) only on the explicit AI click; Refresh stays the free rule-based insight
+    ...(useAi ? { useAi: true } : {}),
   });
 };
 
@@ -814,20 +831,20 @@ const aiLines = (key: string) =>
     .filter(Boolean);
 
 // ── Refresh handlers ──────────────────────────────────────────────────────────
-const refreshGrowth = () => {
-  if (store.monthlyGrowth.length) void analyze('monthly_growth', store.monthlyGrowth);
+const refreshGrowth = (useAi = false) => {
+  if (store.monthlyGrowth.length) void analyze('monthly_growth', store.monthlyGrowth, useAi);
 };
 
-const refreshPerf = () => {
+const refreshPerf = (useAi = false) => {
   if (!store.behavioral || !perfTab.value) return;
   const validKeys = ['strategy', 'emotion', 'trend', 'entry_reason', 'time_slot'] as const;
   if (!validKeys.includes(perfTab.value)) return;
   const key = `performance_${perfTab.value}`;
   const data = store.behavioral[perfTab.value];
-  if (data?.length) void analyze(key, data);
+  if (data?.length) void analyze(key, data, useAi);
 };
 
-const refreshWinRate = () => {
+const refreshWinRate = (useAi = false) => {
   const map: Record<string, object> = {
     position: store.winRate?.by_position ?? [],
     day: store.winRate?.by_day ?? [],
@@ -836,10 +853,10 @@ const refreshWinRate = () => {
   };
   const key = `winrate_${winTab.value}`;
   const data = map[winTab.value];
-  if (data) void analyze(key, data);
+  if (data) void analyze(key, data, useAi);
 };
 
-const refreshPnl = () => {
+const refreshPnl = (useAi = false) => {
   const map: Record<string, object> = {
     time: store.winRate?.pnl_by_slot ?? [],
     day: store.winRate?.pnl_by_day ?? [],
@@ -847,7 +864,7 @@ const refreshPnl = () => {
   };
   const key = `pnl_${pnlTab.value}`;
   const data = map[pnlTab.value];
-  if (data) void analyze(key, data);
+  if (data) void analyze(key, data, useAi);
 };
 const pnlTimeSeries = computed(() => [
   {
@@ -1238,10 +1255,12 @@ const pnlMonthOpts = computed(() =>
             <AiInsightPanel
               chart-type="monthly_growth"
               :cost="aiStore.costOf('chart_insight')"
+              :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight('monthly_growth')"
               :loading="aiLoading('monthly_growth')"
               :lines="aiLines('monthly_growth')"
-              @refresh="refreshGrowth"
+              @refresh="refreshGrowth()"
+              @ai="refreshGrowth(true)"
             />
           </div>
         </div>
@@ -1356,10 +1375,12 @@ const pnlMonthOpts = computed(() =>
             <AiInsightPanel
               :chart-type="`performance_${perfTab}`"
               :cost="aiStore.costOf('chart_insight')"
+              :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight(`performance_${perfTab}`)"
               :loading="aiLoading(`performance_${perfTab}`)"
               :lines="aiLines(`performance_${perfTab}`)"
-              @refresh="refreshPerf"
+              @refresh="refreshPerf()"
+              @ai="refreshPerf(true)"
             />
           </div>
         </div>
@@ -1467,10 +1488,12 @@ const pnlMonthOpts = computed(() =>
             <AiInsightPanel
               :chart-type="`winrate_${winTab}`"
               :cost="aiStore.costOf('chart_insight')"
+              :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight(`winrate_${winTab}`)"
               :loading="aiLoading(`winrate_${winTab}`)"
               :lines="aiLines(`winrate_${winTab}`)"
-              @refresh="refreshWinRate"
+              @refresh="refreshWinRate()"
+              @ai="refreshWinRate(true)"
             />
           </div>
         </div>
@@ -1563,10 +1586,12 @@ const pnlMonthOpts = computed(() =>
             <AiInsightPanel
               :chart-type="`pnl_${pnlTab}`"
               :cost="aiStore.costOf('chart_insight')"
+              :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight(`pnl_${pnlTab}`)"
               :loading="aiLoading(`pnl_${pnlTab}`)"
               :lines="aiLines(`pnl_${pnlTab}`)"
-              @refresh="refreshPnl"
+              @refresh="refreshPnl()"
+              @ai="refreshPnl(true)"
             />
           </div>
         </div>

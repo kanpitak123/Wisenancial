@@ -83,6 +83,7 @@ describe.each<Lang>(['th', 'en'])('AI language instruction — %s', (lang) => {
       portfolioType: 'TRADER',
       chartType: 'equity_curve',
       data: {},
+      useAi: true,
       outputLanguage: lang,
     });
 

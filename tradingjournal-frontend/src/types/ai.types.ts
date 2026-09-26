@@ -40,8 +40,11 @@ export interface AnalyzeChartPayload {
   chartType: string;
   data: unknown;
   extraContext?: Record<string, unknown>;
-  /** true = free rule-based insight; otherwise the AI runs (flat credits). */
-  useRuleBased?: boolean;
+  /**
+   * true = run the AI (flat credits). Only ever set by an explicit click on the AI button;
+   * without it the backend returns the free rule-based insight.
+   */
+  useAi?: boolean;
   outputLanguage?: AiOutputLanguage;
 }
 

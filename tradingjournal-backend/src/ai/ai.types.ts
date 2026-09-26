@@ -11,7 +11,10 @@ export interface AnalyzeChartDto {
   data: unknown;
   extraContext?: Record<string, unknown>;
   modelId?: string;
+  /** Deprecated and ignored: the free rule-based insight is the default. */
   useRuleBased?: boolean;
+  /** true = run the AI (flat credits). Anything else is the free rule-based insight. */
+  useAi?: boolean;
   /** ต้องตรงกับ AnalyzeChartDto ใน dto/ai.dto.ts ที่เป็นตัว validate ของจริง */
   outputLanguage?: 'th' | 'en';
 }

@@ -44,40 +44,46 @@ function aiService(manager: unknown, portfolioType = 'INVESTOR') {
 }
 
 describe('user-paid AI calls name their feature', () => {
-  it('chart insight -> chart_insight, and AI is the default (rule-based only when asked)', async () => {
+  it('chart insight with an explicit AI click (useAi: true) -> chart_insight', async () => {
     const { manager, executeAiRequest } = fake({ insight: 'ok' });
-    const service = aiService(manager);
-    const dto = {
-      portfolioType: 'TRADER' as const,
+
+    await aiService(manager).analyzeChart(1, {
+      portfolioType: 'TRADER',
       chartType: 'x',
       data: {},
-    };
-
-    await service.analyzeChart(1, dto);
+      useAi: true,
+    });
 
     const request = requestOf(executeAiRequest);
     expect(request.feature).toBe('chart_insight');
     expect(request).not.toHaveProperty('modelId');
-
-    // a stale client still sending modelId changes nothing
-    executeAiRequest.mockClear();
-    await service.analyzeChart(1, { ...dto, modelId: 'groq-llama3' });
-    expect(requestOf(executeAiRequest).feature).toBe('chart_insight');
   });
 
-  it('useRuleBased: true is free and never reaches the manager', async () => {
-    const { manager, executeAiRequest } = fake({ insight: 'ok' });
+  it.each([
+    ['no flag at all', {}],
+    ['useAi: false', { useAi: false }],
+    ['a stale client sending modelId', { modelId: 'groq-llama3' }],
+    ['a stale client sending useRuleBased: false', { useRuleBased: false }],
+    [
+      'a stale client sending modelId and useRuleBased: false',
+      { modelId: 'claude-fast', useRuleBased: false },
+    ],
+  ])(
+    'chart insight is the free rule-based one for %s, and never reaches the manager',
+    async (_name, flags) => {
+      const { manager, executeAiRequest } = fake({ insight: 'ok' });
 
-    const result = await aiService(manager).analyzeChart(1, {
-      portfolioType: 'TRADER',
-      chartType: 'x',
-      data: {},
-      useRuleBased: true,
-    });
+      const result = await aiService(manager).analyzeChart(1, {
+        portfolioType: 'TRADER',
+        chartType: 'x',
+        data: {},
+        ...flags,
+      });
 
-    expect(result).toEqual({ insight: 'rule insight', source: 'RULE_BASED' });
-    expect(executeAiRequest).not.toHaveBeenCalled();
-  });
+      expect(result).toEqual({ insight: 'rule insight', source: 'RULE_BASED' });
+      expect(executeAiRequest).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['TRADER', 'INVESTOR'])(
     'portfolio review (%s) -> portfolio_review',

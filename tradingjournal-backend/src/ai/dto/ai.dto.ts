@@ -43,10 +43,18 @@ export class AnalyzeChartDto {
   @IsString()
   modelId?: string;
 
-  /** true = free rule-based insight; anything else runs the AI (flat credits). */
+  /** Deprecated and ignored: the free rule-based insight is the default. */
   @IsOptional()
   @IsBoolean()
   useRuleBased?: boolean;
+
+  /**
+   * The AI runs (and is charged) only when this is exactly true, i.e. the user clicked the
+   * separate "AI analysis" button. Everything else, including a missing flag, is free.
+   */
+  @IsOptional()
+  @IsBoolean()
+  useAi?: boolean;
 }
 
 export class ReviewPortfolioDto {
