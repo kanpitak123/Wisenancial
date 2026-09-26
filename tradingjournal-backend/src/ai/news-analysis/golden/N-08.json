@@ -1,0 +1,152 @@
+{
+  "id": "N-08",
+  "title": "5 syndicated copies of one wire story",
+  "specRefs": ["Appendix C N-08", "AI-NEWS-007", "4.1 dedupe"],
+  "now": "2026-09-13T09:00:00Z",
+  "request": {
+    "articles": [
+      {
+        "sourceId": "gw-hrbf-0912",
+        "headline": "Harbor Foods raises quarterly dividend, reaffirms 2026 outlook",
+        "content": "Harbor Foods Inc. said on Friday its board approved a quarterly dividend of $0.48 per share, up from $0.44, payable on October 15 to shareholders of record on October 1. The company also reaffirmed its full-year 2026 outlook of organic sales growth of 3% to 4%. Harbor Foods shares have gained 6% so far this year.",
+        "source": "Global Wire",
+        "publishedAt": "2026-09-12T13:05:00Z",
+        "relatedSymbols": ["HRBF"],
+        "market": "US",
+        "sector": ["Consumer Staples"]
+      },
+      {
+        "sourceId": "md-hrbf-0912",
+        "headline": "Harbor Foods raises quarterly dividend, reaffirms 2026 outlook",
+        "content": "(Global Wire) - Harbor Foods Inc. said on Friday its board approved a quarterly dividend of $0.48 per share, up from $0.44, payable on October 15 to shareholders of record on October 1. The company also reaffirmed its full-year 2026 outlook of organic sales growth of 3% to 4%. Harbor Foods shares have gained 6% so far this year.",
+        "source": "Market Daily",
+        "publishedAt": "2026-09-12T13:40:00Z",
+        "relatedSymbols": ["HRBF"],
+        "market": "US",
+        "sector": ["Consumer Staples"]
+      },
+      {
+        "sourceId": "fna-hrbf-0912",
+        "headline": "UPDATE: Harbor Foods raises dividend, reaffirms outlook",
+        "content": "Harbor Foods Inc. said on Friday its board approved a quarterly dividend of $0.48 per share, up from $0.44, payable on October 15 to shareholders of record on October 1. The company also reaffirmed its full-year 2026 outlook of organic sales growth of 3% to 4%. Harbor Foods shares have gained 6% so far this year. (Reporting by Global Wire staff)",
+        "source": "FinNews Asia",
+        "publishedAt": "2026-09-12T14:10:00Z",
+        "relatedSymbols": ["HRBF"],
+        "market": "US",
+        "sector": ["Consumer Staples"]
+      },
+      {
+        "sourceId": "ih-hrbf-0912",
+        "headline": "Harbor Foods raises quarterly dividend, reaffirms 2026 outlook",
+        "content": "Harbor Foods Inc said on Friday its board approved a quarterly dividend of $0.48 per share, up from $0.44, payable on Oct. 15 to shareholders of record on Oct. 1. The company also reaffirmed its full-year 2026 outlook of organic sales growth of 3% to 4%. Harbor Foods shares have gained 6% so far this year.",
+        "source": "Investor Hub",
+        "publishedAt": "2026-09-12T14:55:00Z",
+        "relatedSymbols": ["HRBF"],
+        "market": "US",
+        "sector": ["Consumer Staples"]
+      },
+      {
+        "sourceId": "ms-hrbf-0912",
+        "headline": "Harbor Foods lifts dividend to $0.48",
+        "content": "Harbor Foods Inc. said on Friday its board approved a quarterly dividend of $0.48 per share, up from $0.44, payable on October 15 to shareholders of record on October 1. The company also reaffirmed its full-year 2026 outlook of organic sales growth of 3% to 4%. Harbor Foods shares have gained 6% so far this year.",
+        "source": "Money Street",
+        "publishedAt": "2026-09-12T15:30:00Z",
+        "relatedSymbols": ["HRBF"],
+        "market": "US",
+        "sector": ["Consumer Staples"]
+      }
+    ]
+  },
+  "llmOutputSource": "eval/cli",
+  "llmOutput": {
+    "status": "success",
+    "confidence": 0.72,
+    "confidenceReason": "ข้อมูลการขึ้นเงินปันผลและการคงเป้าหมายผลประกอบการมาจากแหล่งข่าวเดียวที่น่าเชื่อถือ ระบุตัวเลขและวันที่ชัดเจน แต่ไม่มีข้อมูลกำไรต่อหุ้นหรืออัตราการจ่ายปันผล (payout ratio) เพื่อประเมินความยั่งยืนของการขึ้นปันผลนี้",
+    "warnings": [],
+    "data": {
+      "headline": "Harbor Foods ขึ้นเงินปันผลรายไตรมาสเป็น 0.48 ดอลลาร์ต่อหุ้น พร้อมคงเป้าหมายยอดขายปี 2026 ที่ 3-4% ท่ามกลางหุ้นที่ขึ้น 6% ปีนี้",
+      "summary": [
+        "Harbor Foods ประกาศขึ้นเงินปันผลรายไตรมาสจาก 0.44 ดอลลาร์ เป็น 0.48 ดอลลาร์ต่อหุ้น จ่าย 15 ตุลาคม แก่ผู้ถือหุ้น ณ วันที่ 1 ตุลาคม",
+        "บริษัทยังคงเป้าหมายยอดขายอินทรีย์ปี 2026 ที่ 3-4% เท่าเดิม สะท้อนความมั่นใจด้านกระแสเงินสดแต่ไม่มีการปรับเป้าขึ้น",
+        "ยังไม่มีข้อมูลกำไรต่อหุ้นหรืออัตราการจ่ายปันผลเพื่อประเมินความยั่งยืนของการขึ้นปันผลในระยะถัดไป"
+      ],
+      "positiveFactors": [
+        {
+          "factor": "ขึ้นเงินปันผล",
+          "reason": "บริษัทประกาศขึ้นเงินปันผลรายไตรมาสจาก 0.44 ดอลลาร์ เป็น 0.48 ดอลลาร์ต่อหุ้น ซึ่งอาจสะท้อนความมั่นใจของผู้บริหารต่อกระแสเงินสด",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-hrbf-0912"]
+        },
+        {
+          "factor": "คงเป้าหมายผลประกอบการปี 2026",
+          "reason": "บริษัทยืนยันเป้าหมายยอดขายอินทรีย์ปี 2026 ที่ 3-4% โดยไม่มีการปรับลดลง",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-hrbf-0912"]
+        },
+        {
+          "factor": "ราคาหุ้นปรับตัวขึ้นตั้งแต่ต้นปี",
+          "reason": "หุ้น Harbor Foods เพิ่มขึ้น 6% นับจากต้นปี สะท้อนมุมมองเชิงบวกของตลาดที่ผ่านมา",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-hrbf-0912"]
+        }
+      ],
+      "negativeFactors": [
+        {
+          "factor": "ไม่มีการปรับเป้าหมายขึ้น",
+          "reason": "บริษัทเพียงคงเป้าหมายเดิมที่ 3-4% โดยไม่ได้ปรับเพิ่ม ซึ่งอาจสะท้อนว่ายังไม่มีปัจจัยใหม่ที่หนุนการเติบโตให้เร่งตัวขึ้น",
+          "basis": "interpretation",
+          "evidenceRefs": ["src:gw-hrbf-0912"]
+        },
+        {
+          "factor": "มูลค่าหุ้นอาจสะท้อนข่าวดีไปแล้วบางส่วน",
+          "reason": "หากหุ้นที่ปรับขึ้น 6% ตั้งแต่ต้นปีได้สะท้อนความคาดหวังเชิงบวกไว้แล้ว ข่าวการขึ้นปันผลอาจส่งผลจำกัดต่อราคาหุ้นเพิ่มเติม",
+          "basis": "scenario",
+          "evidenceRefs": ["src:gw-hrbf-0912"]
+        }
+      ],
+      "counterpointNote": null,
+      "newsTone": "positive",
+      "sentiment": "mixed_positive",
+      "sentimentReason": "การขึ้นเงินปันผลและการคงเป้าหมายเป็นสัญญาณเชิงบวกต่อความมั่นใจของผู้บริหาร แต่การไม่ปรับเป้าขึ้นและราคาหุ้นที่ปรับขึ้นมาแล้วอาจจำกัดผลบวกเพิ่มเติม",
+      "impact": {
+        "shortTerm": {
+          "direction": "positive",
+          "strength": "low",
+          "rationale": "การขึ้นเงินปันผลอาจสนับสนุนมุมมองของนักลงทุนที่เน้นปันผลในระยะสั้น",
+          "uncertainty": "medium"
+        },
+        "mediumTerm": {
+          "direction": "mixed",
+          "strength": "low",
+          "rationale": "การคงเป้าหมายเดิมสะท้อนเสถียรภาพของธุรกิจ แต่ไม่มีสัญญาณเร่งตัวของการเติบโตในระยะกลาง",
+          "uncertainty": "medium"
+        },
+        "longTerm": null
+      },
+      "affected": [
+        {
+          "name": "Harbor Foods",
+          "symbol": "HRBF",
+          "kind": "asset",
+          "relation": "direct",
+          "mechanism": "บริษัทที่ประกาศขึ้นเงินปันผลและคงเป้าหมายผลประกอบการโดยตรง",
+          "confidence": 0.72
+        }
+      ],
+      "claimStatus": "confirmed",
+      "conflicts": [],
+      "missingContext": [
+        "อัตราการจ่ายปันผล (payout ratio) และกำไรต่อหุ้น",
+        "รายละเอียดเปรียบเทียบกับเป้าหมายหรือผลประกอบการในไตรมาสก่อนหน้า",
+        "ข้อมูลกระแสเงินสดอิสระของบริษัท"
+      ]
+    }
+  },
+  "expect": {
+    "independent_source_count": 1,
+    "status_in": ["success", "partial"],
+    "sentiment_in": ["positive", "mixed_positive", "neutral"],
+    "has_conflict": false,
+    "max_confidence": 0.95
+  }
+}

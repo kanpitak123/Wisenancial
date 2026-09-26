@@ -1,0 +1,135 @@
+{
+  "id": "N-02",
+  "title": "Positive press release only",
+  "specRefs": ["Appendix C N-02", "AI-GEN-002", "AI-NEWS-003"],
+  "now": "2026-09-13T09:00:00Z",
+  "request": {
+    "articles": [
+      {
+        "sourceId": "pr-bfh-0913",
+        "headline": "Bluefin Health Launches CareLink, Bringing Telehealth to Three Southeast Asian Markets",
+        "content": "BANGKOK - Bluefin Health today announced the launch of CareLink, a telehealth platform available to patients in Thailand, Vietnam and Malaysia. The platform connects patients with licensed doctors through video consultation and integrates with Bluefin's network of 14 hospitals. \"CareLink represents a major step in our mission to make quality care accessible to everyone,\" said CEO Arun Prakob. \"We believe CareLink will transform how Southeast Asians access healthcare.\" About Bluefin Health: Bluefin Health is a leading private healthcare group in Southeast Asia.",
+        "source": "Bluefin Health (Press Release)",
+        "publishedAt": "2026-09-13T02:00:00Z",
+        "relatedSymbols": ["BFH"],
+        "market": "TH",
+        "sector": ["Healthcare"]
+      }
+    ]
+  },
+  "llmOutputSource": "eval/cli",
+  "llmOutput": {
+    "status": "success",
+    "confidence": 0.6,
+    "confidenceReason": "ข่าวมาจากข่าวประชาสัมพันธ์ของบริษัทเพียงแหล่งเดียว ระบุข้อเท็จจริงการเปิดตัวบริการชัดเจน แต่ไม่มีตัวเลขด้านการลงทุน เป้าหมายผู้ใช้งาน รายได้ หรือสถานะการอนุมัติด้านกฎระเบียบในแต่ละประเทศ",
+    "warnings": [],
+    "data": {
+      "headline": "Bluefin Health เปิดตัวแพลตฟอร์มเทเลเฮลธ์ CareLink ในไทย เวียดนาม มาเลเซีย เชื่อมเครือข่าย 14 โรงพยาบาล แต่ยังไม่เปิดเผยผลกระทบด้านรายได้",
+      "summary": [
+        "Bluefin Health ประกาศเปิดตัว CareLink แพลตฟอร์มเทเลเฮลธ์ให้บริการในไทย เวียดนาม และมาเลเซีย เชื่อมต่อกับเครือข่ายโรงพยาบาลของบริษัท 14 แห่ง",
+        "การขยายสู่บริการดิจิทัลเฮลธ์อาจเปิดโอกาสสร้างรายได้ใหม่ในภูมิภาค แต่ข่าวไม่มีตัวเลขด้านการลงทุน รายได้ หรือเป้าหมายผู้ใช้งาน",
+        "ยังต้องติดตามสถานะการอนุมัติด้านกฎระเบียบในแต่ละประเทศและระดับการแข่งขันในตลาดเทเลเฮลธ์ ซึ่งข่าวยังไม่ได้ให้รายละเอียด"
+      ],
+      "positiveFactors": [
+        {
+          "factor": "ขยายตลาดสู่ 3 ประเทศ",
+          "reason": "บริษัทเปิดตัว CareLink ให้บริการแก่ผู้ป่วยในไทย เวียดนาม และมาเลเซีย",
+          "basis": "fact",
+          "evidenceRefs": ["src:pr-bfh-0913"]
+        },
+        {
+          "factor": "เชื่อมโยงเครือข่ายโรงพยาบาลที่มีอยู่",
+          "reason": "แพลตฟอร์มเชื่อมต่อกับเครือข่ายโรงพยาบาลของบริษัท 14 แห่ง ซึ่งอาจช่วยสนับสนุนคุณภาพและความน่าเชื่อถือของบริการ",
+          "basis": "interpretation",
+          "evidenceRefs": ["src:pr-bfh-0913"]
+        },
+        {
+          "factor": "โอกาสเติบโตในธุรกิจดิจิทัลเฮลธ์",
+          "reason": "การขยายสู่บริการเทเลเฮลธ์ในหลายประเทศอาจเปิดโอกาสสร้างฐานลูกค้าและรายได้ใหม่ในภูมิภาคเอเชียตะวันออกเฉียงใต้",
+          "basis": "interpretation",
+          "evidenceRefs": ["src:pr-bfh-0913"]
+        }
+      ],
+      "negativeFactors": [
+        {
+          "factor": "ข้อมูลจากข่าวประชาสัมพันธ์แหล่งเดียว",
+          "reason": "ข่าวนี้มาจากข่าวประชาสัมพันธ์ของบริษัทเพียงแหล่งเดียว ยังไม่มีการยืนยันผลกระทบเชิงธุรกิจจากแหล่งข้อมูลอิสระ",
+          "basis": "interpretation",
+          "evidenceRefs": ["src:pr-bfh-0913"]
+        },
+        {
+          "factor": "ความเสี่ยงด้านการดำเนินงานและกฎระเบียบ",
+          "reason": "หากการขอใบอนุญาตหรือการปฏิบัติตามกฎระเบียบด้านเทเลเฮลธ์ในแต่ละประเทศมีความซับซ้อน อาจส่งผลต่อการให้บริการตามแผนที่ประกาศไว้",
+          "basis": "scenario",
+          "evidenceRefs": ["src:pr-bfh-0913"]
+        },
+        {
+          "factor": "การแข่งขันในตลาดเทเลเฮลธ์",
+          "reason": "หากมีผู้ให้บริการเทเลเฮลธ์รายอื่นดำเนินธุรกิจอยู่แล้วในตลาดเหล่านี้ CareLink อาจต้องเผชิญการแข่งขันในการแย่งส่วนแบ่งตลาด",
+          "basis": "scenario",
+          "evidenceRefs": ["src:pr-bfh-0913"]
+        }
+      ],
+      "counterpointNote": null,
+      "newsTone": "promotional",
+      "sentiment": "mixed_positive",
+      "sentimentReason": "การเปิดตัวบริการใหม่ใน 3 ประเทศและการเชื่อมต่อกับเครือข่ายโรงพยาบาลเดิมเป็นปัจจัยบวกต่อกลยุทธ์การเติบโต แต่ข่าวเป็นข่าวประชาสัมพันธ์แหล่งเดียวที่ไม่มีตัวเลขด้านรายได้หรือผลกระทบทางการเงินที่ยืนยันได้",
+      "impact": {
+        "shortTerm": {
+          "direction": "mixed_positive",
+          "strength": "low",
+          "rationale": "การประกาศเปิดตัวบริการใหม่อาจสร้างมุมมองเชิงบวกต่อกลยุทธ์การเติบโตของบริษัท แต่ข่าวไม่มีตัวเลขผลกระทบด้านรายได้ที่ชัดเจน",
+          "uncertainty": "medium"
+        },
+        "mediumTerm": {
+          "direction": "uncertain",
+          "strength": null,
+          "rationale": "ผลกระทบระยะกลางขึ้นกับอัตราการยอมรับของผู้ใช้งานและสถานะการอนุมัติด้านกฎระเบียบในแต่ละประเทศ ซึ่งข่าวยังไม่ระบุ",
+          "uncertainty": "high"
+        },
+        "longTerm": {
+          "direction": "uncertain",
+          "strength": null,
+          "rationale": "หากบริการขยายตัวและได้รับการยอมรับได้สำเร็จ อาจสนับสนุนการเติบโตระยะยาวด้านดิจิทัลเฮลธ์ของบริษัท แต่ยังมีความไม่แน่นอนด้านการแข่งขันและการดำเนินงานที่ข่าวยังไม่ได้ให้รายละเอียด",
+          "uncertainty": "high"
+        }
+      },
+      "affected": [
+        {
+          "name": "Bluefin Health",
+          "symbol": "BFH",
+          "kind": "asset",
+          "relation": "direct",
+          "mechanism": "บริษัทเป็นผู้เปิดตัวแพลตฟอร์ม CareLink โดยตรง",
+          "confidence": 0.6
+        },
+        {
+          "name": "Digital Health / Telehealth ในเอเชียตะวันออกเฉียงใต้",
+          "symbol": null,
+          "kind": "theme",
+          "relation": "second_order",
+          "mechanism": "การเปิดตัวบริการเทเลเฮลธ์ข้ามพรมแดนอาจสะท้อนแนวโน้มการเติบโตของธีมดิจิทัลเฮลธ์ในภูมิภาค",
+          "confidence": 0.4
+        }
+      ],
+      "claimStatus": "confirmed",
+      "conflicts": [],
+      "missingContext": [
+        "มูลค่าการลงทุนหรือต้นทุนในการพัฒนาแพลตฟอร์ม CareLink",
+        "เป้าหมายจำนวนผู้ใช้งานหรือคาดการณ์รายได้จากบริการนี้",
+        "สถานะการอนุมัติด้านกฎระเบียบด้านเทเลเฮลธ์ในแต่ละประเทศ",
+        "ข้อมูลเกี่ยวกับผู้ให้บริการเทเลเฮลธ์รายอื่นที่ดำเนินธุรกิจอยู่แล้วในตลาดเหล่านี้",
+        "รูปแบบราคาและเงื่อนไขการให้บริการแก่ผู้ป่วย"
+      ]
+    }
+  },
+  "expect": {
+    "status_in": ["success", "partial"],
+    "sentiment_in": ["neutral", "mixed_positive", "positive"],
+    "news_tone_in": ["promotional"],
+    "negative_basis_allowed": ["scenario"],
+    "counterpoint_note_required": true,
+    "max_confidence": 0.79,
+    "has_conflict": false
+  }
+}

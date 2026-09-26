@@ -1,0 +1,133 @@
+{
+  "id": "G-02",
+  "title": "CPI above forecast but trend slowing",
+  "specRefs": ["AI-MKT-002", "AI-NEWS-006", "section 13 unsupported causality"],
+  "now": "2026-09-13T09:00:00Z",
+  "request": {
+    "articles": [
+      {
+        "sourceId": "gw-uscpi-0911",
+        "headline": "CPI สหรัฐเดือน ส.ค. สูงกว่าคาด",
+        "content": "กระทรวงแรงงานสหรัฐรายงานดัชนีราคาผู้บริโภค (CPI) เดือนสิงหาคม 2026 เพิ่มขึ้น 2.9% YoY สูงกว่าที่ตลาดคาดไว้ที่ 2.7% แต่ชะลอลงจาก 3.1% ในเดือนก่อนหน้า ขณะที่ Core CPI อยู่ที่ 3.0% YoY เทียบกับคาดการณ์ 2.9% และเท่ากับเดือนก่อนหน้า ตัวเลขเดือนกรกฎาคมไม่มีการปรับแก้ ค่าที่อยู่อาศัยยังเป็นองค์ประกอบหลักที่ทำให้เงินเฟ้ออยู่ในระดับสูง",
+        "source": "Global Wire",
+        "publishedAt": "2026-09-11T12:30:00Z",
+        "relatedSymbols": [],
+        "market": "US",
+        "sector": ["Macro"]
+      }
+    ]
+  },
+  "llmOutputSource": "eval/cli",
+  "llmOutput": {
+    "status": "success",
+    "confidence": 0.85,
+    "confidenceReason": "ข้อมูลมาจากกระทรวงแรงงานสหรัฐโดยตรง ตัวเลขครบทั้ง headline และ core CPI พร้อมเทียบคาดการณ์และเดือนก่อนหน้า ไม่มีความขัดแย้งของแหล่งข้อมูล แต่ยังไม่มีปฏิกิริยาจาก Fed หรือรายละเอียดองค์ประกอบย่อยอื่น",
+    "warnings": [],
+    "data": {
+      "headline": "CPI สหรัฐเดือน ส.ค. เพิ่ม 2.9% สูงกว่าคาดที่ 2.7% แม้ชะลอจากเดือนก่อน ขณะที่ Core CPI ทรงตัวที่ 3.0% กดดันมุมมองลดดอกเบี้ย",
+      "summary": [
+        "CPI สหรัฐเดือนสิงหาคม 2026 เพิ่มขึ้น 2.9% YoY สูงกว่าคาดที่ 2.7% แต่ชะลอลงจาก 3.1% ในเดือนก่อน ขณะที่ Core CPI อยู่ที่ 3.0% สูงกว่าคาดและเท่ากับเดือนก่อนหน้า",
+        "ตัวเลขเงินเฟ้อที่สูงกว่าคาด โดยเฉพาะ Core CPI ที่ทรงตัวและค่าที่อยู่อาศัยที่ยังกดดัน อาจลดความคาดหวังต่อการลดดอกเบี้ยของ Fed ในระยะใกล้",
+        "ควรติดตามท่าทีของ Fed และข้อมูลตลาดแรงงานเพิ่มเติมเพื่อประเมินทิศทางดอกเบี้ยและเงินเฟ้อถัดไป"
+      ],
+      "positiveFactors": [
+        {
+          "factor": "อัตราเงินเฟ้อชะลอลงจากเดือนก่อน",
+          "reason": "CPI YoY ชะลอลงจาก 3.1% ในเดือนก่อนหน้าเป็น 2.9% ในเดือนสิงหาคม",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-uscpi-0911"]
+        }
+      ],
+      "negativeFactors": [
+        {
+          "factor": "CPI สูงกว่าคาดการณ์",
+          "reason": "CPI เพิ่มขึ้น 2.9% YoY สูงกว่าที่ตลาดคาดไว้ที่ 2.7%",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-uscpi-0911"]
+        },
+        {
+          "factor": "Core CPI สูงกว่าคาดและทรงตัว",
+          "reason": "Core CPI อยู่ที่ 3.0% YoY สูงกว่าคาดการณ์ 2.9% และเท่ากับเดือนก่อนหน้า สะท้อนเงินเฟ้อพื้นฐานที่ยังเหนียวแน่น",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-uscpi-0911"]
+        },
+        {
+          "factor": "ค่าที่อยู่อาศัยยังกดดันเงินเฟ้อ",
+          "reason": "ข่าวระบุว่าค่าที่อยู่อาศัยยังเป็นองค์ประกอบหลักที่ทำให้เงินเฟ้ออยู่ในระดับสูง",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-uscpi-0911"]
+        },
+        {
+          "factor": "อาจลดความคาดหวังการลดดอกเบี้ยของ Fed",
+          "reason": "เงินเฟ้อทั้ง headline และ core ที่สูงกว่าคาดอาจทำให้ Fed ระมัดระวังมากขึ้นในการลดดอกเบี้ยระยะใกล้",
+          "basis": "interpretation",
+          "evidenceRefs": ["src:gw-uscpi-0911"]
+        }
+      ],
+      "counterpointNote": null,
+      "newsTone": "neutral",
+      "sentiment": "mixed_negative",
+      "sentimentReason": "แม้ CPI YoY จะชะลอลงจากเดือนก่อน แต่ทั้งตัวเลข headline และ core CPI สูงกว่าคาดการณ์ตลาด และ core CPI ยังทรงตัวในระดับสูง สะท้อนเงินเฟ้อที่เหนียวแน่นกว่าที่คาด",
+      "impact": {
+        "shortTerm": {
+          "direction": "negative",
+          "strength": "medium",
+          "rationale": "ตัวเลขเงินเฟ้อที่สูงกว่าคาดอาจลดความคาดหวังต่อการลดดอกเบี้ยของ Fed ในระยะใกล้ ซึ่งอาจกดดัน bond yield ให้สูงขึ้นและสร้างแรงกดดันต่อสินทรัพย์เสี่ยง",
+          "uncertainty": "medium"
+        },
+        "mediumTerm": {
+          "direction": "uncertain",
+          "strength": null,
+          "rationale": "ทิศทางดอกเบี้ยในระยะกลางยังขึ้นกับข้อมูลเงินเฟ้อและตลาดแรงงานในเดือนถัดไป รวมถึงท่าทีของ Fed ซึ่งข่าวนี้ยังไม่ระบุ",
+          "uncertainty": "high"
+        },
+        "longTerm": null
+      },
+      "affected": [
+        {
+          "name": "US equities",
+          "symbol": null,
+          "kind": "asset_class",
+          "relation": "second_order",
+          "mechanism": "เงินเฟ้อที่สูงกว่าคาดอาจลดโอกาสการลดดอกเบี้ย ซึ่งอาจกดดัน valuation ของหุ้น",
+          "confidence": 0.5
+        },
+        {
+          "name": "US Treasuries",
+          "symbol": null,
+          "kind": "asset_class",
+          "relation": "second_order",
+          "mechanism": "เงินเฟ้อที่เหนียวแน่นกว่าคาดอาจทำให้ yield พันธบัตรปรับตัวสูงขึ้นจากการคาดการณ์ดอกเบี้ยที่เปลี่ยนไป",
+          "confidence": 0.55
+        },
+        {
+          "name": "US dollar",
+          "symbol": null,
+          "kind": "asset_class",
+          "relation": "second_order",
+          "mechanism": "หากตลาดลดคาดการณ์การลดดอกเบี้ยของ Fed อาจสนับสนุนค่าเงินดอลลาร์",
+          "confidence": 0.45
+        }
+      ],
+      "claimStatus": "confirmed",
+      "conflicts": [],
+      "missingContext": [
+        "ปฏิกิริยาหรือท่าทีของ Fed ต่อตัวเลขนี้",
+        "รายละเอียดองค์ประกอบย่อยอื่นของ CPI นอกเหนือจากที่อยู่อาศัย",
+        "ข้อมูลตลาดแรงงานล่าสุดที่ Fed ใช้ประกอบการตัดสินใจ",
+        "การเปลี่ยนแปลงของความน่าจะเป็นในการลดดอกเบี้ยตามที่ตลาดคาดการณ์ (เช่น Fed funds futures)"
+      ]
+    }
+  },
+  "expect": {
+    "status_in": ["success", "partial"],
+    "sentiment_in": ["mixed", "mixed_negative"],
+    "min_positive_factors": 1,
+    "min_negative_factors": 1,
+    "factor_keywords": {
+      "positive_factors": ["ชะลอ", "ก่อนหน้า", "3.1"],
+      "negative_factors": ["คาด", "Core", "ที่อยู่อาศัย"]
+    },
+    "affected_symbols_subset_of": []
+  }
+}

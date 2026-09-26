@@ -1,0 +1,29 @@
+{
+  "id": "N-04",
+  "title": "Missing article content",
+  "specRefs": ["Appendix C N-04", "AI-GEN-003"],
+  "now": "2026-09-13T09:00:00Z",
+  "request": {
+    "articles": [
+      {
+        "sourceId": "saf-snrg-0913",
+        "headline": "ด่วน! SNRG ประกาศข่าวสำคัญ",
+        "content": "",
+        "source": "Stock Alert Feed",
+        "publishedAt": "2026-09-13T08:40:00Z",
+        "relatedSymbols": ["SNRG"],
+        "market": "TH",
+        "sector": ["Energy"]
+      }
+    ]
+  },
+  "llmOutputSource": "short-circuit (no model call)",
+  "llmOutput": null,
+  "expect": {
+    "shortCircuit": true,
+    "statusIn": ["insufficient_data"],
+    "sentimentIn": [null],
+    "warningCodesInclude": ["AI_INSUFFICIENT_DATA"],
+    "maxConfidence": 0.4
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wisenancial/news-analysis/envelope.schema.json",
+  "title": "News analysis response envelope (spec 12.1)",
+  "description": "Top-level shape returned by toSpecEnvelope(). Reconstructed from the SpecEnvelope interface in news-analysis.service.ts because the upstream schemas/envelope.schema.json was not shipped with the handover package. The nested `data` payload is validated by validate.ts, not here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "feature",
+    "status",
+    "data",
+    "error",
+    "confidence",
+    "confidence_reason",
+    "warnings",
+    "sources",
+    "data_as_of",
+    "model_version",
+    "schema_version"
+  ],
+  "properties": {
+    "request_id": { "type": "string" },
+    "feature": { "const": "news_analysis" },
+    "status": { "enum": ["success", "partial", "insufficient_data", "error"] },
+    "data": { "type": ["object", "null"] },
+    "error": {
+      "type": ["object", "null"],
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "confidence": { "type": ["number", "null"] },
+    "confidence_reason": { "type": ["string", "null"] },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "sources": { "type": "array", "items": { "type": "object" } },
+    "data_as_of": { "type": ["string", "null"] },
+    "model_version": { "type": "string" },
+    "schema_version": { "type": "string" }
+  }
+}

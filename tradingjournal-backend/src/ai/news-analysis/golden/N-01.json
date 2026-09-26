@@ -1,0 +1,155 @@
+{
+  "id": "N-01",
+  "title": "Earnings beat + weak guidance",
+  "specRefs": ["Appendix C N-01", "AI-NEWS-004", "14.1"],
+  "now": "2026-09-13T09:00:00Z",
+  "request": {
+    "articles": [
+      {
+        "sourceId": "gw-kstl-0912",
+        "headline": "Kestrel Microdevices tops Q2 estimates but third-quarter forecast disappoints",
+        "content": "Kestrel Microdevices reported second-quarter 2026 revenue of $4.2 billion, above the analyst consensus of $3.9 billion, and adjusted EPS of $1.12 versus the $1.05 expected. Gross margin was 51.3%. However, the company guided third-quarter revenue to $4.0-4.1 billion, below the $4.5 billion analysts had expected, citing inventory adjustments at several large customers. CFO Dana Morel said the company expects demand to normalize over the next two to three quarters but gave no full-year outlook.",
+        "source": "Global Wire",
+        "publishedAt": "2026-09-12T20:15:00Z",
+        "relatedSymbols": ["KSTL"],
+        "market": "US",
+        "sector": ["Semiconductor"]
+      }
+    ]
+  },
+  "llmOutputSource": "eval/cli",
+  "llmOutput": {
+    "status": "success",
+    "confidence": 0.76,
+    "confidenceReason": "ตัวเลขผลประกอบการไตรมาส 2 และแนวโน้มไตรมาส 3 มาจากคำแถลงของบริษัทและมี CFO ให้ความเห็นประกอบ ทำให้ข้อเท็จจริงหลักชัดเจน แต่มาจากแหล่งข่าวเดียว และไม่มีตัวเลขแนวโน้มรายได้เต็มปีหรือชื่อลูกค้าที่ปรับสต็อก",
+    "warnings": [],
+    "data": {
+      "headline": "Kestrel Microdevices กำไรไตรมาส 2/2026 เหนือคาด แต่แนวโน้มไตรมาส 3 ต่ำกว่าคาดจากการปรับสต็อกของลูกค้ารายใหญ่",
+      "summary": [
+        "Kestrel Microdevices รายงานรายได้ไตรมาส 2/2026 ที่ 4.2 พันล้านดอลลาร์ และ EPS ปรับปรุงที่ 1.12 ดอลลาร์ สูงกว่าคาดการณ์ของนักวิเคราะห์",
+        "แต่บริษัทให้แนวโน้มรายได้ไตรมาส 3 ที่ 4.0-4.1 พันล้านดอลลาร์ ต่ำกว่าคาดการณ์ที่ 4.5 พันล้านดอลลาร์ โดยระบุสาเหตุจากการปรับสต็อกสินค้าของลูกค้ารายใหญ่บางราย",
+        "CFO คาดว่าอุปสงค์จะกลับสู่ภาวะปกติในอีก 2-3 ไตรมาสข้างหน้า แต่บริษัทยังไม่ให้แนวโน้มรายได้เต็มปี ทำให้ยังมีความไม่แน่นอนต่อเนื่อง"
+      ],
+      "positiveFactors": [
+        {
+          "factor": "รายได้ไตรมาส 2 เหนือคาด",
+          "reason": "บริษัทรายงานรายได้ไตรมาส 2 ที่ 4.2 พันล้านดอลลาร์ สูงกว่าคาดการณ์ของนักวิเคราะห์ที่ 3.9 พันล้านดอลลาร์",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        },
+        {
+          "factor": "EPS ปรับปรุงเหนือคาด",
+          "reason": "กำไรต่อหุ้นปรับปรุงอยู่ที่ 1.12 ดอลลาร์ เทียบกับที่คาดไว้ที่ 1.05 ดอลลาร์",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        },
+        {
+          "factor": "บริษัทคาดอุปสงค์จะกลับสู่ภาวะปกติ",
+          "reason": "CFO ระบุว่าคาดว่าอุปสงค์จะกลับสู่ภาวะปกติในอีก 2-3 ไตรมาสข้างหน้า",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        }
+      ],
+      "negativeFactors": [
+        {
+          "factor": "แนวโน้มไตรมาส 3 ต่ำกว่าคาดอย่างมีนัยสำคัญ",
+          "reason": "บริษัทให้แนวโน้มรายได้ไตรมาส 3 ที่ 4.0-4.1 พันล้านดอลลาร์ ต่ำกว่าที่นักวิเคราะห์คาดไว้ที่ 4.5 พันล้านดอลลาร์",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        },
+        {
+          "factor": "การปรับสต็อกของลูกค้ารายใหญ่",
+          "reason": "บริษัทระบุว่าแนวโน้มที่ลดลงมาจากการปรับสต็อกสินค้าที่ลูกค้ารายใหญ่หลายราย ซึ่งสะท้อนอุปสงค์ที่ชะลอตัวในระยะสั้น",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        },
+        {
+          "factor": "ไม่มีแนวโน้มรายได้เต็มปี",
+          "reason": "บริษัทไม่ได้ให้แนวโน้มรายได้เต็มปี ทำให้ประเมินทิศทางระยะยาวได้ยาก",
+          "basis": "fact",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        },
+        {
+          "factor": "ความเสี่ยงหากการปรับสต็อกยืดเยื้อ",
+          "reason": "หากการปรับสต็อกของลูกค้าใช้เวลานานกว่าที่ CFO คาดไว้ อาจกดดันรายได้ต่อเนื่องในหลายไตรมาสถัดไป",
+          "basis": "scenario",
+          "evidenceRefs": ["src:gw-kstl-0912"]
+        }
+      ],
+      "counterpointNote": null,
+      "newsTone": "mixed",
+      "sentiment": "mixed_negative",
+      "sentimentReason": "ผลประกอบการไตรมาส 2 เหนือคาดทั้งรายได้และกำไร แต่แนวโน้มไตรมาส 3 ต่ำกว่าคาดในสัดส่วนที่มากกว่าการเหนือคาดของไตรมาสก่อน และเกิดจากปัจจัยด้านอุปสงค์ของลูกค้าที่ยังไม่ยืนยันระยะเวลาแก้ไข ทำให้น้ำหนักโดยรวมเอนไปทางลบมากกว่าบวก",
+      "impact": {
+        "shortTerm": {
+          "direction": "negative",
+          "strength": "medium",
+          "rationale": "แนวโน้มไตรมาส 3 ที่ต่ำกว่าคาดอย่างมีนัยสำคัญอาจมีน้ำหนักต่อมุมมองตลาดมากกว่าผลประกอบการไตรมาส 2 ที่เหนือคาด",
+          "uncertainty": "medium"
+        },
+        "mediumTerm": {
+          "direction": "mixed",
+          "strength": "low",
+          "rationale": "หากอุปสงค์กลับสู่ภาวะปกติตามที่ CFO คาดไว้ในอีก 2-3 ไตรมาส สถานการณ์อาจปรับตัวดีขึ้น แต่ยังไม่มีการยืนยันที่ชัดเจน",
+          "uncertainty": "high"
+        },
+        "longTerm": {
+          "direction": "uncertain",
+          "strength": null,
+          "rationale": "บริษัทยังไม่ให้แนวโน้มรายได้เต็มปี ทำให้ยังไม่มีพื้นฐานเพียงพอสำหรับประเมินทิศทางระยะยาว",
+          "uncertainty": "high"
+        }
+      },
+      "affected": [
+        {
+          "name": "Kestrel Microdevices",
+          "symbol": "KSTL",
+          "kind": "asset",
+          "relation": "direct",
+          "mechanism": "ผลประกอบการไตรมาส 2 และแนวโน้มไตรมาส 3 ของบริษัทโดยตรง",
+          "confidence": 0.78
+        },
+        {
+          "name": "Semiconductor",
+          "symbol": null,
+          "kind": "sector",
+          "relation": "second_order",
+          "mechanism": "การปรับสต็อกสินค้าของลูกค้ารายใหญ่ที่บริษัทระบุอาจสะท้อนวัฏจักรอุปสงค์ที่ชะลอตัวในห่วงโซ่อุปทานเซมิคอนดักเตอร์วงกว้างขึ้น",
+          "confidence": 0.4
+        }
+      ],
+      "claimStatus": "confirmed",
+      "conflicts": [],
+      "missingContext": [
+        "แนวโน้มรายได้เต็มปี 2026",
+        "ชื่อและสัดส่วนของลูกค้ารายใหญ่ที่ปรับสต็อก",
+        "ระยะเวลาและขนาดของการปรับสต็อกที่คาดว่าจะส่งผลต่อรายได้",
+        "ที่มาของตัวเลขคาดการณ์นักวิเคราะห์ (consensus)"
+      ]
+    }
+  },
+  "expect": {
+    "status_in": ["success", "partial"],
+    "sentiment_in": ["mixed", "mixed_negative"],
+    "claim_status_in": ["confirmed"],
+    "min_positive_factors": 1,
+    "min_negative_factors": 1,
+    "factor_keywords": {
+      "positive_factors": [
+        "รายได้",
+        "revenue",
+        "EPS",
+        "เหนือคาด",
+        "สูงกว่าคาด"
+      ],
+      "negative_factors": [
+        "guidance",
+        "คาดการณ์",
+        "ประมาณการ",
+        "ไตรมาส 3",
+        "Q3"
+      ]
+    },
+    "has_conflict": false
+  }
+}
