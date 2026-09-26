@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common'; // 👈 เพิ่ม Import ตัวนี้เข้ามา
@@ -8,6 +9,10 @@ import { join } from 'path';
 import { assertCorsOriginsValid } from './config/cors-origins.util';
 import { assertProductionEnv } from './config/env.validation';
 import { resolveTrustProxy } from './config/trust-proxy.util';
+import {
+  buildHelmetOptions,
+  isSwaggerEnabled,
+} from './config/http-security.util';
 import {
   MT5_INGEST_ROUTE_PATH,
   createMt5IngestBodyParser,
@@ -26,6 +31,14 @@ async function bootstrap() {
   // proxy ตัวเดียวสำหรับทุกคน แล้ว rate limit (แบบ IP) จะนับรวมผู้ใช้ทั้งระบบเป็นคนเดียว
   // ดู trust-proxy.util.ts (TRUST_PROXY: ไม่ตั้ง = 1 บน production, ปิดตอน dev)
   app.set('trust proxy', resolveTrustProxy());
+
+  // ตอน deploy ใหม่ โฮสต์ส่ง SIGTERM มา — เปิด shutdown hooks เพื่อให้ Nest รอ request ที่กำลังทำอยู่
+  // แล้วเรียก onModuleDestroy (ปิดการเชื่อมต่อ Prisma) แทนที่จะโดนตัดกลางคัน
+  app.enableShutdownHooks();
+
+  // security headers (HSTS, nosniff, frame options, ...) — ดู http-security.util.ts
+  const swaggerEnabled = isSwaggerEnabled();
+  app.use(helmet(buildHelmetOptions(swaggerEnabled)));
 
   // ต้องแขวนก่อน Nest's own global body-parser (ซึ่งถูก register ตอน app.listen()/init()
   // ทีหลังเสมอ) — express middleware ทำงานตามลำดับที่ .use() ถูกเรียก ตัวนี้ยิงก่อนจึง
@@ -61,13 +74,15 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Trading Journal API')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  // Swagger — ไม่มี auth และเปิดเผยทุก route/DTO จึงปิดบน production เว้นแต่ SWAGGER_ENABLED=true
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('Trading Journal API')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document);
+  }
 
   // พอร์ตต้องมาจาก env — ผู้ให้บริการโฮสต์ส่วนใหญ่กำหนด PORT มาให้เองและ
   // จะฆ่าโปรเซสที่ไป bind พอร์ตอื่น
