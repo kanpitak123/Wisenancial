@@ -135,6 +135,20 @@ describe('NewsPage — โครง 2 คอลัมน์', () => {
     expect(railText).toContain('AAPL'); // earnings calendar
   });
 
+  it('คอลัมน์ฟีดมีคำปฏิเสธ AI เหนือการ์ดข่าว (สรุป AI ในการ์ดเป็นเนื้อหาที่ AI สร้าง)', async () => {
+    const wrapper = await mountPage();
+
+    const disclaimer = wrapper.find('.news-main [data-test="ai-disclaimer"]');
+    const firstCard = wrapper.find('.news-main .news-card');
+
+    expect(disclaimer.exists()).toBe(true);
+    expect(disclaimer.text()).toContain('ไม่ใช่คำแนะนำทางการเงิน');
+    // อยู่ก่อนการ์ดข่าวใบแรกในลำดับเอกสาร
+    expect(
+      disclaimer.element.compareDocumentPosition(firstCard.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('ฟีดข่าวยัง render อยู่ในคอลัมน์ขวา', async () => {
     const wrapper = await mountPage();
 

@@ -18,6 +18,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('pages/public/LandingPage.vue'),
     meta: { publicLanding: true },
   },
+  // ---------- หน้ากฎหมายสาธารณะ (ฉบับร่าง — ยังไม่ผ่านทนายความ) ----------
+  // ไม่ต้องล็อกอิน เปิดได้จากฟุตเตอร์ทุกหน้าและจากลิงก์ข้างเนื้อหา AI
+  {
+    path: '/terms',
+    component: () => import('pages/public/LegalPage.vue'),
+    props: { doc: 'terms' },
+  },
+  {
+    path: '/privacy',
+    component: () => import('pages/public/LegalPage.vue'),
+    props: { doc: 'privacy' },
+  },
   {
     path: '/',
     component: () => import('layouts/AuthLayout.vue'),

@@ -23,6 +23,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLanguageStore } from 'stores/LanguageStore';
+import { WsAiDisclaimer } from 'src/components/ui';
 import { useNews } from 'src/composables/useNews';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import { marketService } from 'src/services/market.service';
@@ -401,6 +402,9 @@ onMounted(() => {
             <q-tooltip>{{ languageStore.isThai ? 'รีเฟรช' : 'Refresh' }}</q-tooltip>
           </q-btn>
         </header>
+
+        <!-- สรุป AI ในการ์ดข่าว (aiSummary / แนวโน้ม) คือเนื้อหาที่ AI สร้าง — ต้องมีคำปฏิเสธเหมือนหน้าอื่น -->
+        <WsAiDisclaimer dense />
 
         <div class="filter-row">
           <q-input

@@ -12,8 +12,15 @@
  *
  * ภาษาเดินตาม LanguageStore เหมือน component อื่นทั้งโปรเจกต์ (โปรเจกต์นี้ไม่ได้ใช้
  * vue-i18n จริง — มีแต่ scaffold ที่ไม่มีใครเรียก)
+ *
+ * แสดงเป็น "บรรทัดสั้น + ลิงก์" ไปคำปฏิเสธฉบับเต็มในหน้า Terms (#ai-disclaimer)
+ * ลิงก์เปิดแท็บใหม่ — ไม่ให้ผู้ใช้เสียผลวิเคราะห์ที่เพิ่งกดสร้าง (และเสียเครดิต) ไปกับการเปลี่ยนหน้า
+ * ทุกจุดที่แสดงเนื้อหาที่ AI สร้างต้องใช้ component นี้ (ตอนนี้: AI Picks, AI Insights,
+ * Portfolio Advisor, Risk Analysis และสรุป AI ในหน้า News)
  */
 import { computed } from 'vue';
+import { AI_DISCLAIMER_FULL } from 'src/constants/legal.content';
+import { AI_DISCLAIMER_ROUTE } from 'src/constants/legal.constants';
 import { useLanguageStore } from 'stores/LanguageStore';
 
 interface Props {
@@ -33,11 +40,15 @@ const props = withDefaults(defineProps<Props>(), { dense: false, note: '' });
 
 const languageStore = useLanguageStore();
 
+const lead = computed(() => AI_DISCLAIMER_FULL[languageStore.isThai ? 'th' : 'en'].lead);
+
 const text = computed(() =>
   languageStore.isThai
-    ? 'ผลวิเคราะห์นี้สร้างจาก AI เพื่อการศึกษาเท่านั้น ไม่ใช่คำแนะนำการลงทุน โปรดใช้วิจารณญาณและศึกษาข้อมูลเพิ่มเติมก่อนตัดสินใจ'
-    : 'This analysis is AI-generated for educational purposes only. It is not investment advice — use your own judgement and do further research before deciding.',
+    ? 'สร้างโดย AI อาจไม่ถูกต้อง มีไว้เพื่อให้ข้อมูลเท่านั้น ไม่ใช่คำแนะนำให้ซื้อ ขาย หรือถือครองสินทรัพย์'
+    : 'AI-generated and may be inaccurate. For information only — not a recommendation to buy, sell or hold any asset.',
 );
+
+const linkLabel = computed(() => (languageStore.isThai ? 'อ่านฉบับเต็ม' : 'Read the full disclaimer'));
 </script>
 
 <template>
@@ -49,7 +60,17 @@ const text = computed(() =>
   >
     <q-icon name="info" :size="props.dense ? '16px' : '18px'" class="ai-disclaimer__icon" />
     <span class="ai-disclaimer__text">
+      <strong data-test="ai-disclaimer-lead">{{ lead }}</strong>
       {{ text }}
+      <router-link
+        :to="AI_DISCLAIMER_ROUTE"
+        target="_blank"
+        rel="noopener"
+        class="ai-disclaimer__link"
+        data-test="ai-disclaimer-link"
+      >
+        {{ linkLabel }}
+      </router-link>
       <span v-if="props.note" class="ai-disclaimer__note" data-test="ai-disclaimer-note">
         {{ props.note }}
       </span>
@@ -89,6 +110,14 @@ const text = computed(() =>
 
 .ai-disclaimer--dense .ai-disclaimer__text {
   font-size: 11.5px;
+}
+
+.ai-disclaimer__link {
+  margin-left: 4px;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
 }
 
 /* บรรทัดที่สองในกล่องเดิม — จางลงหน่อยเพราะเป็นที่มาของข้อมูล ไม่ใช่คำเตือน */

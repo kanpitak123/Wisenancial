@@ -233,8 +233,12 @@
         </div>
         <div class="landing-footer__links">
           <span>เกี่ยวกับเรา</span>
-          <span>ความเป็นส่วนตัว</span>
-          <span>ข้อกำหนด</span>
+          <router-link :to="PRIVACY_ROUTE" class="landing-footer__link" data-test="landing-footer-privacy">
+            ความเป็นส่วนตัว
+          </router-link>
+          <router-link :to="TERMS_ROUTE" class="landing-footer__link" data-test="landing-footer-terms">
+            ข้อกำหนด
+          </router-link>
           <span>ติดต่อ</span>
         </div>
       </footer>
@@ -247,6 +251,7 @@ import { computed } from 'vue';
 import { useQuasar } from 'quasar';
 
 import { useLanguageStore } from 'stores/LanguageStore';
+import { PRIVACY_ROUTE, TERMS_ROUTE } from 'src/constants/legal.constants';
 import { LOGIN_ROUTE } from 'src/constants/workspace.constants';
 import {
   FREE_TIER_MAX_PORTFOLIOS,
@@ -931,6 +936,16 @@ body.body--dark .landing-price__list .q-icon {
   font-size: 12.5px;
   color: var(--text-secondary);
   flex-wrap: wrap;
+}
+
+.landing-footer__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.landing-footer__link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
 }
 
 /* ---------- จอแคบ ---------- */

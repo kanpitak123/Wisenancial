@@ -70,6 +70,13 @@ describe('LandingPage', () => {
     expect(routeTarget(wrapper, 'landing-login')).toBe(LOGIN_ROUTE);
   });
 
+  it('ฟุตเตอร์ลิงก์ไปหน้า Terms และ Privacy จริง (ไม่ใช่ข้อความเปล่า)', () => {
+    const wrapper = mountPage();
+
+    expect(routeTarget(wrapper, 'landing-footer-terms')).toBe('/terms');
+    expect(routeTarget(wrapper, 'landing-footer-privacy')).toBe('/privacy');
+  });
+
   it('ปุ่ม TH/EN เปลี่ยนภาษาผ่าน LanguageStore ตัวเดียวกับที่ MainLayout ใช้', async () => {
     const wrapper = mountPage();
     const language = useLanguageStore();

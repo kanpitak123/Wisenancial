@@ -104,6 +104,7 @@
     <q-page-container class="page-container">
       <EmailVerificationBanner />
       <router-view />
+      <LegalFooter class="main-legal-footer" />
     </q-page-container>
 
     <BottomNavBar
@@ -206,6 +207,7 @@ import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
 import BottomNavBar from 'components/BottomNavBar.vue';
 import AiQuotaBadge from 'components/AiQuotaBadge.vue';
 import EmailVerificationBanner from 'components/EmailVerificationBanner.vue';
+import LegalFooter from 'components/legal/LegalFooter.vue';
 import WorkspaceSwitcher from 'components/WorkspaceSwitcher.vue';
 import MockModeToggle from 'components/MockModeToggle.vue';
 import { useWorkspace } from 'src/composables/useWorkspace';
@@ -429,6 +431,16 @@ onMounted(() => {
 @media (max-width: 599px) {
   .page-container > .q-page,
   .page-container > * > .q-page {
+    padding-bottom: 84px;
+  }
+}
+
+/* ลิงก์ Terms/Privacy ท้ายเนื้อหา — เว้นล่างเท่า dock ที่ลอยอยู่ ไม่งั้นโดนทับตอนเลื่อนสุด */
+.main-legal-footer {
+  padding-bottom: 92px;
+}
+@media (max-width: 599px) {
+  .main-legal-footer {
     padding-bottom: 84px;
   }
 }
