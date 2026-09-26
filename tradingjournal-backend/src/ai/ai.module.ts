@@ -11,7 +11,7 @@ import { AiRuleEngineService } from './ai-rule-engine.service';
 import { AiRecommendationService } from './ai-recommendation.service';
 import { AiRiskService } from './ai-risk.service';
 import { AiEducationService } from './ai-education.service';
-import { GeminiNewsClassifierService } from './gemini-news-classifier.service';
+import { NewsClassifierService } from './news-classifier.service';
 import { AnthropicProvider } from './providers/anthropic.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { GroqProvider } from './providers/groq.provider';
@@ -27,7 +27,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     AiRecommendationService,
     AiRiskService,
     AiEducationService,
-    GeminiNewsClassifierService,
+    NewsClassifierService,
     GroqProvider,
     GeminiProvider,
     OpenAiProvider,
@@ -40,7 +40,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     AiRecommendationService,
     AiRiskService,
     AiEducationService,
-    GeminiNewsClassifierService,
+    NewsClassifierService,
   ],
 })
 export class AiModule {}

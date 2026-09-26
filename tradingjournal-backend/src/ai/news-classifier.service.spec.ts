@@ -1,10 +1,10 @@
 import {
-  GeminiClassificationValidationError,
-  GeminiNewsClassifierService,
-} from './gemini-news-classifier.service';
+  NewsClassificationValidationError,
+  NewsClassifierService,
+} from './news-classifier.service';
 
 function makeService(executeSystemAiRequest: jest.Mock) {
-  return new GeminiNewsClassifierService({
+  return new NewsClassifierService({
     executeSystemAiRequest,
   } as never);
 }
@@ -22,11 +22,11 @@ const VALID_RAW = {
   confidence: 0.91,
 };
 
-describe('GeminiNewsClassifierService', () => {
-  it('classifies successfully through AiManagerService with a single preferred-only Gemini attempt', async () => {
+describe('NewsClassifierService', () => {
+  it('classifies successfully through AiManagerService with a single preferred-only Claude FAST attempt', async () => {
     const executeSystemAiRequest = jest.fn().mockResolvedValue({
       data: VALID_RAW,
-      model: 'gemini-2.5-flash',
+      model: 'claude-fast',
       usage: { inputTokens: 100, outputTokens: 50 },
     });
     const service = makeService(executeSystemAiRequest);
@@ -47,7 +47,7 @@ describe('GeminiNewsClassifierService', () => {
     const [request] = executeSystemAiRequest.mock.calls[0] as [
       { modelId?: string; preferredOnly?: boolean; temperature?: number },
     ];
-    expect(request.modelId).toBe('gemini-2.5-flash');
+    expect(request.modelId).toBe('claude-fast');
     // temperature 0 must reach the provider as 0, not be dropped for a default.
     expect(request.temperature).toBe(0);
     expect(request.preferredOnly).toBe(true);
@@ -56,7 +56,7 @@ describe('GeminiNewsClassifierService', () => {
   it('clamps out-of-range confidence and impact probability into their valid ranges', async () => {
     const executeSystemAiRequest = jest.fn().mockResolvedValue({
       data: { ...VALID_RAW, confidence: 1.5, aiImpactProbability: 140 },
-      model: 'gemini-2.5-flash',
+      model: 'claude-fast',
       usage: { inputTokens: 1, outputTokens: 1 },
     });
     const service = makeService(executeSystemAiRequest);
@@ -72,10 +72,10 @@ describe('GeminiNewsClassifierService', () => {
     expect(result.aiImpactProbability).toBe(100);
   });
 
-  it('rejects with GeminiClassificationValidationError when importance is outside the enum (malformed output)', async () => {
+  it('rejects with NewsClassificationValidationError when importance is outside the enum (malformed output)', async () => {
     const executeSystemAiRequest = jest.fn().mockResolvedValue({
       data: { ...VALID_RAW, importance: 'CRITICAL' },
-      model: 'gemini-2.5-flash',
+      model: 'claude-fast',
       usage: { inputTokens: 1, outputTokens: 1 },
     });
     const service = makeService(executeSystemAiRequest);
@@ -87,14 +87,14 @@ describe('GeminiNewsClassifierService', () => {
         content: 'x',
         language: 'en',
       }),
-    ).rejects.toBeInstanceOf(GeminiClassificationValidationError);
+    ).rejects.toBeInstanceOf(NewsClassificationValidationError);
   });
 
-  it('rejects with GeminiClassificationValidationError when a required field is missing (malformed output)', async () => {
+  it('rejects with NewsClassificationValidationError when a required field is missing (malformed output)', async () => {
     const { aiSummary: _unused, ...withoutSummary } = VALID_RAW;
     const executeSystemAiRequest = jest.fn().mockResolvedValue({
       data: withoutSummary,
-      model: 'gemini-2.5-flash',
+      model: 'claude-fast',
       usage: { inputTokens: 1, outputTokens: 1 },
     });
     const service = makeService(executeSystemAiRequest);
@@ -106,7 +106,7 @@ describe('GeminiNewsClassifierService', () => {
         content: 'x',
         language: 'en',
       }),
-    ).rejects.toBeInstanceOf(GeminiClassificationValidationError);
+    ).rejects.toBeInstanceOf(NewsClassificationValidationError);
   });
 
   it('rejects when the response contains forbidden advisory language despite the neutrality mandate', async () => {
@@ -115,7 +115,7 @@ describe('GeminiNewsClassifierService', () => {
         ...VALID_RAW,
         stockImpactAnalysis: 'Investors should buy this stock immediately.',
       },
-      model: 'gemini-2.5-flash',
+      model: 'claude-fast',
       usage: { inputTokens: 1, outputTokens: 1 },
     });
     const service = makeService(executeSystemAiRequest);
@@ -127,13 +127,15 @@ describe('GeminiNewsClassifierService', () => {
         content: 'x',
         language: 'en',
       }),
-    ).rejects.toBeInstanceOf(GeminiClassificationValidationError);
+    ).rejects.toBeInstanceOf(NewsClassificationValidationError);
   });
 
   it('propagates a provider/network failure from AiManagerService unchanged', async () => {
     const executeSystemAiRequest = jest
       .fn()
-      .mockRejectedValue(new Error('Gemini request failed: network timeout'));
+      .mockRejectedValue(
+        new Error('Anthropic request failed: network timeout'),
+      );
     const service = makeService(executeSystemAiRequest);
 
     await expect(
@@ -143,6 +145,6 @@ describe('GeminiNewsClassifierService', () => {
         content: 'x',
         language: 'en',
       }),
-    ).rejects.toThrow('Gemini request failed: network timeout');
+    ).rejects.toThrow('Anthropic request failed: network timeout');
   });
 });

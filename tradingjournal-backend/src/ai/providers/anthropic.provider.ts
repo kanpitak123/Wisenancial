@@ -30,8 +30,17 @@ export class AnthropicProvider implements IAiProvider {
     );
     // timeout เดียวกับอีก 3 เจ้า — SDK ของ Anthropic ตั้ง default ไว้ 10 นาที
     // ซึ่งนานเกินกว่าที่ ai-manager จะรอไหวตอน fallback ข้าม provider
+    // key ที่ไม่ผูกกับ workspace ถูก API ปฏิเสธด้วย 400 จนกว่าจะส่ง header นี้
+    // (id ของ workspace ไม่ใช่ความลับ จึงแยกเป็น env ต่างหาก)
+    const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
     this.client = apiKey
-      ? new Anthropic({ apiKey, timeout: AI_REQUEST_TIMEOUT_MS })
+      ? new Anthropic({
+          apiKey,
+          timeout: AI_REQUEST_TIMEOUT_MS,
+          ...(workspaceId
+            ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } }
+            : {}),
+        })
       : null;
   }
 

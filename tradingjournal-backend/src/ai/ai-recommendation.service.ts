@@ -21,8 +21,12 @@ import type { StockRecommendation } from './ai-feature.types';
  * ผู้ใช้เลือกโมเดลเองไม่ได้บนหน้านี้ (GET /ai/recommendations/growth ไม่รับ modelId)
  * ฝั่งเซิร์ฟเวอร์จึงต้องเลือกให้ และต้องมีตัวสำรองด้วย ไม่งั้นตัวแรกล่มทีเดียว
  * ทั้งฟีเจอร์ตายทันทีโดยผู้ใช้ทำอะไรไม่ได้เลย
+ *
+ * ตอนนี้ Claude เป็น provider เดียว ลิสต์จึงมีแค่ tier fast — ตัวสำรองที่ "ถูกกว่าหรือเท่าเดิม"
+ * ไม่มีเหลือ ถ้า Claude ล่มก็ตอบ error ชัด ๆ (ไม่คิดเครดิต) แทนการถอยขึ้นไป smart
+ * ที่แพงกว่า 3 เท่า
  */
-const GROWTH_MODEL_PREFERENCE = ['gemini-2.5-flash', 'groq-llama3'] as const;
+const GROWTH_MODEL_PREFERENCE = ['claude-fast'] as const;
 
 /**
  * ต้องมี candidate อย่างน้อยเท่านี้ถึงจะเรียกว่า "คัดเลือก" ได้
@@ -95,8 +99,8 @@ export class AiRecommendationService {
            * สูงสุดในระบบเพราะ output ก้อนใหญ่สุด: 5 หุ้น × (reasoning 4 ช่อง +
            * aiSummary) = 25 ฟิลด์ข้อความในคำตอบเดียว
            *
-           * แถมโมเดลตัวแรกคือ gemini ซึ่งหัก thinking token จากเพดานเดียวกันนี้
-           * (ดู gemini.provider.ts) เพดานที่พอดีเป๊ะจึงกลายเป็นไม่พอเงียบ ๆ
+           * เพดานนี้ยังเผื่อไว้สำหรับ provider ที่หัก thinking token จากเพดานเดียวกัน
+           * (ดู gemini.provider.ts — ตอนนี้ปิดไว้) เผื่อเปิดกลับมาโดยไม่ต้องมาแก้ตรงนี้อีก
            */
           maxOutputTokens: 2400,
         });

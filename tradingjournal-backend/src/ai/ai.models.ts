@@ -11,10 +11,21 @@
  * a matching IAiProvider makes executeAiRequest throw at runtime.
  */
 
+import { resolveTierModel } from './ai.config';
+
 export type AiProviderId = 'groq' | 'gemini' | 'openai' | 'anthropic';
 
+/**
+ * `claude-fast` / `claude-smart` are tiers, not vendor model names: the upstream id
+ * behind each comes from AI_MODEL_FAST / AI_MODEL_SMART (see ai.config.ts). The other
+ * three belong to parked providers and only resolve when AI_PROVIDERS lists them.
+ */
 export type AiModelId =
-  'groq-llama3' | 'gemini-2.5-flash' | 'gpt-4o' | 'claude-sonnet-5';
+  | 'groq-llama3'
+  | 'gemini-2.5-flash'
+  | 'gpt-4o'
+  | 'claude-fast'
+  | 'claude-smart';
 
 export interface AiModelPricing {
   /** Public id: what the frontend sends and what we write to ai_usage_logs.model_used. */
@@ -22,7 +33,10 @@ export interface AiModelPricing {
   readonly provider: AiProviderId;
   /** Human-facing name for the model picker. */
   readonly label: string;
-  /** The string sent to the upstream API. Decoupled so we can bump versions without breaking clients. */
+  /**
+   * The string sent to the upstream API. Decoupled so we can bump versions without
+   * breaking clients. Read it at call time: for the Claude tiers it is a getter over env.
+   */
   readonly upstreamModel: string;
   readonly creditsPer1kInput: number;
   readonly creditsPer1kOutput: number;
@@ -59,11 +73,26 @@ export const AI_MODEL_REGISTRY: Readonly<Record<AiModelId, AiModelPricing>> = {
     creditsPer1kInput: 50,
     creditsPer1kOutput: 150,
   },
-  'claude-sonnet-5': {
-    id: 'claude-sonnet-5',
+  // ราคาเครดิตตั้งที่ "เท่าทุน" ตาม list price ที่สมมติไว้ (1 เครดิต ≈ $0.00005):
+  // fast $1/$5 ต่อ 1M token, smart $3/$15 — ยังไม่มี margin ดูตารางใน
+  // docs/internal/ai-services-integration-plan.md §8 ก่อนตัดสินใจเรื่องราคา
+  'claude-fast': {
+    id: 'claude-fast',
     provider: 'anthropic',
-    label: 'Claude Sonnet 5 (Expert)',
-    upstreamModel: 'claude-sonnet-5',
+    label: 'Claude Fast',
+    get upstreamModel() {
+      return resolveTierModel('fast');
+    },
+    creditsPer1kInput: 20,
+    creditsPer1kOutput: 100,
+  },
+  'claude-smart': {
+    id: 'claude-smart',
+    provider: 'anthropic',
+    label: 'Claude Smart (Expert)',
+    get upstreamModel() {
+      return resolveTierModel('smart');
+    },
     creditsPer1kInput: 60,
     creditsPer1kOutput: 300,
   },
@@ -75,6 +104,11 @@ export const AI_MODEL_REGISTRY: Readonly<Record<AiModelId, AiModelPricing>> = {
  * เรียงจากถูกไปแพง — Groq free tier มี TPM แค่ 6000 ชนเพดานบ่อย พอ 429 แล้ว
  * ของเดิมล้มทั้งงานเลย ทั้งที่มี key ของอีก 3 เจ้าพร้อมใช้อยู่ใน .env
  *
+ * ลำดับนี้ถูกกรองด้วย AI_PROVIDERS อีกชั้น (ดู AiManagerService) — ตอนนี้เปิดแค่ anthropic
+ * งานเบื้องหลังจึงใช้ claude-fast เท่านั้น และตั้งใจ "ไม่" มี claude-smart ต่อท้าย:
+ * fast ล้มแล้วไปเรียก smart จะเผาเงินแพงกว่า 3 เท่าแบบเงียบ ๆ บนงานที่ผู้ใช้ไม่ได้เห็น
+ * (smart ถูกเรียกเมื่อสั่งระบุ modelId เท่านั้น เช่น guardrails second pass)
+ *
  * ใช้กับ executeSystemAiRequest เท่านั้น — ฝั่งผู้ใช้ (executeAiRequest) ห้าม fallback
  * ข้าม provider เพราะเรตเครดิตต่อ model ต่างกันถึง 300 เท่า ผู้ใช้ต้องเป็นคนเลือกเอง
  */
@@ -82,7 +116,7 @@ export const AI_SYSTEM_FALLBACK_ORDER: readonly AiModelId[] = [
   'groq-llama3',
   'gemini-2.5-flash',
   'gpt-4o',
-  'claude-sonnet-5',
+  'claude-fast',
 ];
 
 /**

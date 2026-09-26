@@ -85,9 +85,7 @@ export class AiEducationService {
   private defaultModel(): string {
     const models = this.manager.listAvailableModels();
     const selected =
-      models.find((model) => model.id === 'gemini-2.5-flash') ??
-      models.find((model) => model.id === 'groq-llama3') ??
-      models[0];
+      models.find((model) => model.id === 'claude-fast') ?? models[0];
 
     if (!selected) {
       throw new ServiceUnavailableException(

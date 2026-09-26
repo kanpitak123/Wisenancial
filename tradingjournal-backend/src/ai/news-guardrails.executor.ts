@@ -3,11 +3,13 @@ import type { AiManagerService } from './ai-manager.service';
 import type { AiTokenUsage } from './providers/ai-provider.interface';
 
 /**
- * The news-analysis guardrails prompt was validated against Claude only, so the shadow
- * second pass must never be answered by whichever provider happens to be next in
- * AI_SYSTEM_FALLBACK_ORDER (groq first).
+ * The news-analysis guardrails prompt was validated against a Sonnet-class model, so the
+ * shadow second pass runs on the SMART tier (AI_MODEL_SMART) and must never be answered
+ * by whichever model happens to be next in AI_SYSTEM_FALLBACK_ORDER. It is the quality
+ * pass over the few items the FAST classifier was unsure about, so it is the one system
+ * job that does not use the cheap tier.
  */
-export const GUARDRAILS_MODEL_ID = 'claude-sonnet-5';
+export const GUARDRAILS_MODEL_ID = 'claude-smart';
 
 export interface GuardrailsCallRecord {
   model: string;

@@ -24,12 +24,12 @@ export interface NewsEnrichmentResult {
 }
 
 /**
- * NewsEnrichmentResult plus which path actually served the item (Chunk A — Gemini
- * first-pass enrichment) and, when Gemini served it, its self-reported confidence.
+ * NewsEnrichmentResult plus which path actually served the item (Chunk A — first-pass
+ * classifier) and, when the classifier served it, its self-reported confidence.
  * `confidence` is null for anything that went through the pre-existing enrichment
  * chain, which has no concept of a confidence score.
  */
 export interface NewsEnrichmentOutcome extends NewsEnrichmentResult {
   confidence: number | null;
-  servedBy: 'gemini' | 'legacy-chain' | 'fallback-chain';
+  servedBy: 'classifier' | 'legacy-chain' | 'fallback-chain';
 }

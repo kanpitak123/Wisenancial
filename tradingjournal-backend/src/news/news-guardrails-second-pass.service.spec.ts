@@ -125,7 +125,7 @@ function makeHarness(
       const id = /mn-\d+/.exec(prompt)?.[0] ?? 'mn-7';
       return Promise.resolve({
         data: llmOutput(id),
-        model: 'claude-sonnet-5',
+        model: 'claude-smart',
         usage: { inputTokens: 2000, outputTokens: 5700 },
       });
     });
@@ -263,7 +263,7 @@ describe('NewsGuardrailsSecondPassService', () => {
       Record<string, unknown>,
     ][]) {
       expect(request.modelId).toBe(GUARDRAILS_MODEL_ID);
-      expect(request.modelId).toBe('claude-sonnet-5');
+      expect(request.modelId).toBe('claude-smart');
       expect(request.preferredOnly).toBe(true);
       expect(request).not.toHaveProperty('userId');
     }
@@ -333,7 +333,7 @@ describe('NewsGuardrailsSecondPassService', () => {
     process.env.NEWS_GUARDRAILS_ENABLED = 'true';
     const managerImpl = jest.fn().mockResolvedValue({
       data: { nonsense: true },
-      model: 'claude-sonnet-5',
+      model: 'claude-smart',
       usage: { inputTokens: 100, outputTokens: 20 },
     });
     const h = makeHarness({ managerImpl });
@@ -360,7 +360,7 @@ describe('NewsGuardrailsSecondPassService', () => {
       await gate;
       return {
         data: llmOutput('mn-7'),
-        model: 'claude-sonnet-5',
+        model: 'claude-smart',
         usage: { inputTokens: 1, outputTokens: 1 },
       };
     });

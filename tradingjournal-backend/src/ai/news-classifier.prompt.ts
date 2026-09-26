@@ -14,18 +14,18 @@
  * Few-shot examples: the original fewshot_examples_v5.json is ~25KB (~6-6.5k tokens)
  * re-sent on every single call with no caching — flagged as wasteful in the discovery
  * report. Trimmed to 2 examples here (re-shaped to the existing contract) to keep this
- * first integration's per-call cost sane; revisit with Gemini context/prompt caching
+ * first integration's per-call cost sane; revisit with prompt caching
  * if the team wants the full 8-example set back.
  */
 
-export interface GeminiClassificationInput {
+export interface NewsClassificationInput {
   headline: string;
   summary: string;
   content: string;
   language: 'en' | 'th';
 }
 
-export interface RawGeminiClassification {
+export interface RawNewsClassification {
   aiSummary: string;
   aiTrend: string;
   aiImpactProbability: number;
@@ -81,7 +81,7 @@ export function scanForbiddenAdvisoryLanguage(text: string): string[] {
 const FEW_SHOT_EXAMPLES: Array<{
   headline: string;
   summary: string;
-  label: RawGeminiClassification;
+  label: RawNewsClassification;
 }> = [
   {
     headline:
@@ -124,10 +124,10 @@ const FEW_SHOT_EXAMPLES: Array<{
 /**
  * Ported from buildPromptV5's "STRICT REGULATORY & NEUTRALITY MANDATE" — the same
  * non-advisory / balanced-symmetry / grounded-in-facts / probabilistic-framing rules,
- * combined with this repo's own investmentGuardrail()/concisenessRule() so Gemini's
+ * combined with this repo's own investmentGuardrail()/concisenessRule() so the
  * output style matches every other AI-layer prompt, not just this one.
  */
-export const GEMINI_NEWS_CLASSIFICATION_SYSTEM_PROMPT = [
+export const NEWS_CLASSIFICATION_SYSTEM_PROMPT = [
   'You are an objective financial news analyst summarizing news for retail investors.',
   'Base your analysis strictly on the headline/summary/content provided — do not use outside knowledge about the company beyond this article.',
   'NON-ADVISORY: never tell the reader to buy, sell, accumulate, short, or hold any asset, and never give a price target. Frame every statement as an observation, not an instruction.',
@@ -156,8 +156,8 @@ export const GEMINI_NEWS_CLASSIFICATION_SYSTEM_PROMPT = [
   JSON.stringify(FEW_SHOT_EXAMPLES),
 ].join('\n');
 
-export function buildGeminiNewsClassificationPrompt(
-  input: GeminiClassificationInput,
+export function buildNewsClassificationPrompt(
+  input: NewsClassificationInput,
 ): string {
   return JSON.stringify({
     language: input.language,

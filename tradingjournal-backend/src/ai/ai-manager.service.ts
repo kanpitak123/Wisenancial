@@ -22,6 +22,7 @@ import {
   type AiModelPricing,
   type AiProviderId,
 } from './ai.models';
+import { loadEnabledAiProviders } from './ai.config';
 import { classifyAiFailure, type AiFailureKind } from './ai-retry';
 import type {
   AiTokenUsage,
@@ -60,6 +61,13 @@ export interface AiModelOption {
 export class AiManagerService {
   private readonly logger = new Logger(AiManagerService.name);
   private readonly providers: ReadonlyMap<AiProviderId, IAiProvider>;
+  /**
+   * AI_PROVIDERS allow-list (default: anthropic only). A provider outside it is
+   * invisible to every path below even when its API key is set, so a parked provider
+   * can neither answer nor bill; there is no silent fallback onto it.
+   */
+  private readonly enabledProviders: ReadonlySet<AiProviderId> =
+    loadEnabledAiProviders();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -78,9 +86,7 @@ export class AiManagerService {
 
   listAvailableModels(): AiModelOption[] {
     return listAiModels()
-      .filter(
-        (model) => this.providers.get(model.provider)?.isConfigured() === true,
-      )
+      .filter((model) => this.isProviderUsable(model.provider))
       .map(({ id, label, creditsPer1kInput, creditsPer1kOutput }) => ({
         id,
         label,
@@ -211,7 +217,7 @@ export class AiManagerService {
     for (const [index, pricing] of chain.entries()) {
       const provider = this.providers.get(pricing.provider);
 
-      // buildSystemChain กรอง isConfigured() ไว้แล้ว แต่กันไว้ให้ type แคบลง
+      // buildSystemChain กรอง isProviderUsable() ไว้แล้ว แต่กันไว้ให้ type แคบลง
       if (!provider) {
         continue;
       }
@@ -302,7 +308,7 @@ export class AiManagerService {
       .map((modelId) => getModelPricing(modelId))
       .filter(
         (pricing) =>
-          this.providers.get(pricing.provider)?.isConfigured() === true &&
+          this.isProviderUsable(pricing.provider) &&
           !excludeProviders?.includes(pricing.provider),
       );
   }
@@ -476,12 +482,31 @@ export class AiManagerService {
   private resolveProvider(pricing: AiModelPricing): IAiProvider {
     const provider = this.providers.get(pricing.provider);
 
-    if (!provider?.isConfigured()) {
+    if (!this.enabledProviders.has(pricing.provider) || !provider) {
+      // เช่น client ที่จำ id ของ provider ที่ปิดไว้ (groq/gemini/gpt-4o) ไว้ใน localStorage —
+      // บอกตรง ๆ พร้อมรุ่นที่ใช้ได้ ไม่สลับไปรุ่นอื่นให้เอง เพราะเรตเครดิตต่างกัน
+      const available = this.listAvailableModels().map((model) => model.id);
+      throw new ServiceUnavailableException(
+        `Model "${pricing.id}" is not enabled on this server.${
+          available.length > 0 ? ` Available: ${available.join(', ')}.` : ''
+        }`,
+      );
+    }
+
+    if (!provider.isConfigured()) {
       throw new ServiceUnavailableException(
         `Model "${pricing.id}" is not available: ${pricing.provider} is not configured.`,
       );
     }
 
     return provider;
+  }
+
+  /** In AI_PROVIDERS and holding a usable API key. */
+  private isProviderUsable(providerId: AiProviderId): boolean {
+    return (
+      this.enabledProviders.has(providerId) &&
+      this.providers.get(providerId)?.isConfigured() === true
+    );
   }
 }

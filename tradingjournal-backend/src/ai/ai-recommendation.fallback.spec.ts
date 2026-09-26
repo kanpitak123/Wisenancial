@@ -5,30 +5,23 @@ import type { GrowthCandidate, StocksService } from '../stocks/stocks.service';
 
 /**
  * AI Picks (GET /ai/recommendations/growth) ไม่รับ modelId — เซิร์ฟเวอร์เลือกให้
- * ของเดิมเลือก gemini-2.5-flash แล้วจบตรงนั้น พอ gemini ชน rate limit ทั้งฟีเจอร์
- * ตายทันที และข้อความ error บอกให้ "ลองโมเดลอื่น" ทั้งที่หน้านั้นเลือกโมเดลไม่ได้เลย
+ * ตอนนี้ Claude เป็น provider เดียว ฟีเจอร์นี้ใช้ tier fast เสมอ
  *
  * ชุดนี้คุมว่า:
- *   - ถอยไปตัวสำรองได้เมื่อโมเดลแรกให้บริการไม่ได้
- *   - ถอยได้เฉพาะตัวที่ไม่แพงกว่า (กฎของ ai-manager.service.ts:191 เรื่องคิดเงินเกิน)
+ *   - ใช้ claude-fast ไม่ใช่ claude-smart ที่แพงกว่า 3 เท่า
+ *   - fast ล้ม -> โยน error ชัด ๆ ออกไป ไม่ถอย "ขึ้น" ไป smart (ไม่ให้คิดเงินเกิน)
  *   - ไม่ถอยเมื่อ error ไม่ใช่เรื่องของโมเดล (เครดิตไม่พอ ลองตัวอื่นก็ตายเหมือนกัน)
  */
 
-const GEMINI = {
-  id: 'gemini-2.5-flash',
-  label: 'Gemini',
-  creditsPer1kInput: 5,
-  creditsPer1kOutput: 15,
+const FAST = {
+  id: 'claude-fast',
+  label: 'Claude Fast',
+  creditsPer1kInput: 20,
+  creditsPer1kOutput: 100,
 };
-const GROQ = {
-  id: 'groq-llama3',
-  label: 'Groq',
-  creditsPer1kInput: 1,
-  creditsPer1kOutput: 1,
-};
-const CLAUDE = {
-  id: 'claude-sonnet-5',
-  label: 'Claude',
+const SMART = {
+  id: 'claude-smart',
+  label: 'Claude Smart',
   creditsPer1kInput: 60,
   creditsPer1kOutput: 300,
 };
@@ -85,7 +78,7 @@ const insufficientCredits = () =>
 
 /** manager ปลอมที่บันทึกลำดับโมเดลที่ถูกเรียกไว้ใน calls */
 function makeService(
-  models: Array<typeof GEMINI>,
+  models: Array<typeof FAST>,
   behaviour: Record<string, Error> = {},
   candidates: GrowthCandidate[] = CANDIDATES,
 ) {
@@ -127,67 +120,48 @@ function makeService(
   };
 }
 
-describe('AiRecommendationService — เลือกและถอยโมเดล', () => {
-  it('โมเดลแรกใช้ได้ -> ไม่ถอย และบอกว่าไม่ได้ถูกสลับ', async () => {
-    const { service, calls } = makeService([GEMINI, GROQ]);
+describe('AiRecommendationService — เลือกโมเดล', () => {
+  it('ใช้ claude-fast แม้ smart ก็พร้อมใช้ และไม่ถูกสลับ', async () => {
+    const { service, calls } = makeService([SMART, FAST]);
 
     const result = await service.getGrowthRecommendations(1);
 
-    expect(calls).toEqual(['gemini-2.5-flash']);
-    expect(result.model).toBe('gemini-2.5-flash');
+    expect(calls).toEqual(['claude-fast']);
+    expect(result.model).toBe('claude-fast');
     expect(result.fallbackFrom).toBeNull();
     expect(result.data).toHaveLength(1);
   });
 
-  it('โมเดลแรกชน rate limit -> ถอยไปตัวที่ถูกกว่าแล้วไปต่อได้', async () => {
-    const { service, calls } = makeService([GEMINI, GROQ], {
-      'gemini-2.5-flash': providerUnavailable('gemini-2.5-flash'),
+  it('fast ชน rate limit -> ไม่ถอยขึ้นไป smart (แพงกว่า) แต่โยน error ชัด ๆ', async () => {
+    const { service, calls } = makeService([FAST, SMART], {
+      'claude-fast': providerUnavailable('claude-fast'),
     });
 
-    const result = await service.getGrowthRecommendations(1);
+    await expect(service.getGrowthRecommendations(1)).rejects.toMatchObject({
+      response: { model: 'claude-fast' },
+    });
 
-    expect(calls).toEqual(['gemini-2.5-flash', 'groq-llama3']);
-    expect(result.model).toBe('groq-llama3');
-    // ผู้ใช้ควรมีทางรู้ว่าคำตอบไม่ได้มาจากโมเดลที่ตั้งใจไว้
-    expect(result.fallbackFrom).toBe('gemini-2.5-flash');
+    expect(calls).toEqual(['claude-fast']);
   });
 
   it('เครดิตไม่พอ -> ไม่ถอยไปตัวอื่น เพราะลองกี่ตัวก็ตายเหมือนกัน', async () => {
-    const { service, calls } = makeService([GEMINI, GROQ], {
-      'gemini-2.5-flash': insufficientCredits(),
+    const { service, calls } = makeService([FAST, SMART], {
+      'claude-fast': insufficientCredits(),
     });
 
     await expect(service.getGrowthRecommendations(1)).rejects.toBeInstanceOf(
       HttpException,
     );
 
-    expect(calls).toEqual(['gemini-2.5-flash']);
+    expect(calls).toEqual(['claude-fast']);
   });
 
-  it('ตัวสำรองแพงกว่าตัวแรก -> ไม่ถอยไปหา จะได้ไม่คิดเงินผู้ใช้เกิน', async () => {
-    // เหลือแค่ groq (1/1) กับ claude (60/300) — groq เป็นตัวแรกที่เจอในลำดับ
-    const { service, calls } = makeService([GROQ, CLAUDE], {
-      'groq-llama3': providerUnavailable('groq-llama3'),
-    });
+  it('fast ไม่อยู่ในรายการ (ปิดไว้) -> ใช้ตัวแรกที่มี ไม่ crash', async () => {
+    const { service, calls } = makeService([SMART]);
 
-    await expect(service.getGrowthRecommendations(1)).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    await service.getGrowthRecommendations(1);
 
-    expect(calls).toEqual(['groq-llama3']);
-  });
-
-  it('ทุกตัวใน chain ล่ม -> โยน error ของตัวสุดท้ายออกไป ไม่กลืนเงียบ', async () => {
-    const { service, calls } = makeService([GEMINI, GROQ], {
-      'gemini-2.5-flash': providerUnavailable('gemini-2.5-flash'),
-      'groq-llama3': providerUnavailable('groq-llama3'),
-    });
-
-    await expect(service.getGrowthRecommendations(1)).rejects.toMatchObject({
-      response: { model: 'groq-llama3' },
-    });
-
-    expect(calls).toEqual(['gemini-2.5-flash', 'groq-llama3']);
+    expect(calls).toEqual(['claude-smart']);
   });
 
   it('ไม่มี provider ที่ตั้งค่าไว้เลย -> บอกให้ชัด ไม่ใช่ crash แปลกๆ', async () => {
@@ -203,7 +177,7 @@ describe('AiRecommendationService — เลือกและถอยโมเ
    * ทั้งสองชั้น ไม่ใช่แค่ชั้นเดียวเหมือนจุดอื่น
    */
   it('system prompt มี guardrail ห้ามพูดเป็นคำสั่งซื้อขาย ทั้งสองชั้น', async () => {
-    const { service, manager } = makeService([GEMINI]);
+    const { service, manager } = makeService([FAST]);
 
     await service.getGrowthRecommendations(1);
 

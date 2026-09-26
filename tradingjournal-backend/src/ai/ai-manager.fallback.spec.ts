@@ -117,6 +117,18 @@ describe('classifyAiFailure', () => {
   });
 });
 
+// ค่าเริ่มต้นของ AI_PROVIDERS คือ anthropic อย่างเดียว — ชุดนี้ทดสอบ chain หลาย provider
+// (โค้ดที่ปิดไว้ยังต้องใช้ได้เมื่อเปิดกลับมา) จึงเปิดครบทุกตัวเอง ส่วนพฤติกรรม default
+// อยู่ใน ai-manager.providers.spec.ts
+const ORIGINAL_PROVIDERS = process.env.AI_PROVIDERS;
+beforeAll(() => {
+  process.env.AI_PROVIDERS = 'groq,gemini,openai,anthropic';
+});
+afterAll(() => {
+  if (ORIGINAL_PROVIDERS === undefined) delete process.env.AI_PROVIDERS;
+  else process.env.AI_PROVIDERS = ORIGINAL_PROVIDERS;
+});
+
 describe('executeSystemAiRequest — provider chain', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -150,7 +162,7 @@ describe('executeSystemAiRequest — provider chain', () => {
 
     const result = await manager.executeSystemAiRequest(systemRequest);
 
-    expect(result.model).toBe('claude-sonnet-5');
+    expect(result.model).toBe('claude-fast');
     expect(calls).toEqual(['groq', 'gemini', 'openai', 'anthropic']);
   });
 
@@ -322,7 +334,8 @@ describe('executeAiRequest — ฝั่งผู้ใช้ ต้องไม
     expect(body.availableModels).toEqual([
       'gemini-2.5-flash',
       'gpt-4o',
-      'claude-sonnet-5',
+      'claude-fast',
+      'claude-smart',
     ]);
     expect(body.message).toContain('rate limit');
     expect(body.message).toContain('gemini-2.5-flash');

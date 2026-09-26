@@ -1,6 +1,6 @@
 /**
  * Config for the shadow guardrails second pass. Read from process.env on every run (like
- * GEMINI_NEWS_ENRICHMENT_ENABLED) so a flag flip needs a restart at most, and a malformed
+ * NEWS_CLASSIFIER_ENABLED) so a flag flip needs a restart at most, and a malformed
  * value falls back to the safe default instead of throwing inside a cron.
  */
 export interface NewsGuardrailsConfig {

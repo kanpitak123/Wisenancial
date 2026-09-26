@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NewsImportance, NewsSentiment, Prisma } from '@prisma/client';
 import { AiService } from '../ai/ai.service';
 import type { NewsEnrichmentOutcome } from '../ai/ai-news.types';
-import { GeminiNewsClassifierService } from '../ai/gemini-news-classifier.service';
+import { NewsClassifierService } from '../ai/news-classifier.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsScope } from './dto/news-query.dto';
 import { NewsGateway } from './news.gateway';
@@ -15,7 +15,7 @@ export class NewsEnrichmentService {
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
     private readonly gateway: NewsGateway,
-    private readonly geminiClassifier?: GeminiNewsClassifierService,
+    private readonly newsClassifier?: NewsClassifierService,
   ) {}
 
   async enrichTraderNews(id: number, language: 'en' | 'th') {
@@ -71,11 +71,12 @@ export class NewsEnrichmentService {
   }
 
   /**
-   * Chunk A — Gemini first-pass enrichment, gated by GEMINI_NEWS_ENRICHMENT_ENABLED
-   * (default OFF, unchanged behavior). When on: try Gemini alone; on any failure
-   * (network/timeout, or GeminiClassificationValidationError for malformed/
-   * non-compliant output) fall back to the existing multi-provider chain with Gemini
-   * excluded, since it just failed. Never throws — enrichNewsArticle() already has its
+   * Chunk A — first-pass classifier (Claude FAST tier, temperature 0), gated by
+   * NEWS_CLASSIFIER_ENABLED (default OFF, unchanged behavior). When on: try the
+   * classifier alone; on any failure (provider error, or NewsClassificationValidationError
+   * for malformed/non-compliant output) run the legacy enrichment prompt through the
+   * system chain. Only providers listed in AI_PROVIDERS take part in either step.
+   * Never throws — enrichNewsArticle() already has its
    * own final static fallback, so this always resolves.
    */
   private async enrichWithFallback(
@@ -84,7 +85,7 @@ export class NewsEnrichmentService {
     content: string,
     language: 'en' | 'th',
   ): Promise<NewsEnrichmentOutcome> {
-    if (!this.isGeminiEnrichmentEnabled() || !this.geminiClassifier) {
+    if (!this.isClassifierEnabled() || !this.newsClassifier) {
       const result = await this.ai.enrichNewsArticle(
         headline,
         summary,
@@ -95,32 +96,31 @@ export class NewsEnrichmentService {
     }
 
     try {
-      const result = await this.geminiClassifier.classify({
+      const result = await this.newsClassifier.classify({
         headline,
         summary,
         content,
         language,
       });
-      this.logger.log('[news-enrichment] served by gemini');
-      return { ...result, servedBy: 'gemini' };
+      this.logger.log('[news-enrichment] served by classifier');
+      return { ...result, servedBy: 'classifier' };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `[news-enrichment] gemini classification failed (${reason}) — falling back to existing chain`,
+        `[news-enrichment] classification failed (${reason}) — falling back to the legacy enrichment prompt`,
       );
       const result = await this.ai.enrichNewsArticle(
         headline,
         summary,
         content,
         language,
-        { excludeProviders: ['gemini'] },
       );
       return { ...result, confidence: null, servedBy: 'fallback-chain' };
     }
   }
 
-  private isGeminiEnrichmentEnabled(): boolean {
-    return process.env.GEMINI_NEWS_ENRICHMENT_ENABLED === 'true';
+  private isClassifierEnabled(): boolean {
+    return process.env.NEWS_CLASSIFIER_ENABLED === 'true';
   }
 
   private buildEconomicContext(row: {
