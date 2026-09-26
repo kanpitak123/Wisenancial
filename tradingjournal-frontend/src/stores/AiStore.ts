@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { aiService, getAiErrorMessage, isAiCreditError } from 'src/services/ai.service';
 import { useAuthStore } from 'src/stores/AuthStore';
 import { useLanguageStore } from 'src/stores/LanguageStore';
+import { notifyAiError } from 'src/utils/ai-notify';
 import type {
   AiFeatureId,
   AiFeaturePricing,
@@ -175,10 +176,19 @@ export const useAiStore = defineStore('ai', {
         };
 
         this.syncCredits(result.creditsRemaining);
+
+        // an AI insight is a charge: reconcile with the server's balance right away
+        if (result.source === 'LLM') {
+          void this.reconcileCredits();
+        }
+
         return result;
       } catch (error) {
+        // Handled here, not rethrown: the button that starts an insight is fire-and-forget,
+        // so a rejection would vanish and the user would see nothing (a 400 did exactly that).
         this.handleError(error);
-        throw error;
+        notifyAiError(this.error);
+        return null;
       } finally {
         this.loadingInsight = {
           ...this.loadingInsight,
@@ -293,6 +303,17 @@ export const useAiStore = defineStore('ai', {
         throw error;
       } finally {
         this.loadingCredits = false;
+      }
+    },
+
+    /** Re-read the balance after a charge. Quiet: a failed refresh must not show an AI error. */
+    async reconcileCredits() {
+      try {
+        const response = await aiService.getCredits();
+        this.minBalance = response.minBalance;
+        this.syncCredits(response.balance);
+      } catch {
+        // the charge response already synced the balance; this is only a double check
       }
     },
 

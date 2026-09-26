@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, defineComponent, h } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import VueApexCharts from 'vue3-apexcharts';
@@ -9,7 +9,7 @@ import { useAiStore } from 'stores/AiStore';
 import { usePortfolioStore } from 'stores/PortfolioStore';
 import { useGlobalFilterStore } from 'stores/GlobalFilterStore';
 import { useInvestorPortfolioStore } from 'stores/InvestorPortfolioStore';
-import { WsAiDisclaimer, WsUpgradeNotice } from 'src/components/ui';
+import { WsUpgradeNotice } from 'src/components/ui';
 import { stocksService } from 'src/services/stocks.service';
 import AiPortfolioAdvisorCard from 'components/analytics/AiPortfolioAdvisorCard.vue';
 import AiRiskAnalysisCard from 'components/analytics/AiRiskAnalysisCard.vue';
@@ -18,95 +18,7 @@ import AverageCostCalculator from 'components/analytics/AverageCostCalculator.vu
 import PlExportCard from 'components/analytics/PlExportCard.vue';
 import DcaPredictorCard from 'components/analytics/DcaPredictorCard.vue';
 import type { PortfolioRiskHolding } from 'src/types/ai.types';
-import { aiCostSuffix } from 'src/utils/ai-cost';
-
-// ── AiInsightPanel (inline component) ────────────────────────────────────────
-const AiInsightPanel = defineComponent({
-  name: 'AiInsightPanel',
-  props: {
-    chartType: { type: String, required: true },
-    insight: { type: String, default: '' },
-    loading: { type: Boolean, default: false },
-    /** flat credits of one insight (AiStore.costOf('chart_insight')); null until loaded */
-    cost: { type: Number as () => number | null, default: null },
-    /** the AI button is disabled (e.g. not enough credits) */
-    aiDisabled: { type: Boolean, default: false },
-    lines: { type: Array as () => string[], default: () => [] },
-  },
-  emits: ['refresh', 'ai'],
-  setup(props, { emit }) {
-    return () =>
-      h(
-        'div',
-        {
-          class: 'ai-panel h-full flex column',
-          style: 'min-height: 300px',
-        },
-        [
-          // Header
-          h('div', { class: 'ai-panel-header row items-center justify-between q-mb-md' }, [
-            h('div', { class: 'row items-center q-gutter-xs' }, [
-              h('div', { class: 'ai-icon-box' }, [
-                h(
-                  'span',
-                  { class: 'material-icons', style: 'font-size:16px;color:#fff' },
-                  'auto_awesome',
-                ),
-              ]),
-              h('span', { class: 'text-subtitle2 text-weight-bolder ai-title' }, 'Auto Insights'),
-            ]),
-            h('div', { class: 'row items-center q-gutter-xs' }, [
-              // free, rule-based: the default
-              h(
-                'button',
-                {
-                  class: 'ai-refresh-btn',
-                  disabled: props.loading,
-                  onClick: () => emit('refresh'),
-                },
-                props.loading ? '...' : '↻ Refresh',
-              ),
-              // AI: charged, so it is a separate button that names its price
-              h(
-                'button',
-                {
-                  class: 'ai-refresh-btn',
-                  'data-test': 'ai-insight-run',
-                  disabled: props.loading || props.aiDisabled,
-                  onClick: () => emit('ai'),
-                },
-                `✨ AI analysis${aiCostSuffix(props.cost, false)}`,
-              ),
-            ]),
-          ]),
-          // แถบเตือนว่าไม่ใช่คำแนะนำการลงทุน — อยู่เหนือเนื้อผลวิเคราะห์เสมอ
-          // (ตัวนี้ครอบคลุมทั้ง 4 จุดที่ใช้ AiInsightPanel ในหน้านี้)
-          h(WsAiDisclaimer, { dense: true }),
-          // Content
-          props.loading
-            ? h('div', { class: 'flex flex-center column flex-grow q-py-lg' }, [
-                h('div', { class: 'ai-spinner q-mb-sm' }),
-                h('div', { class: 'text-caption ai-muted' }, 'Analyzing your data…'),
-              ])
-            : props.lines.length
-              ? h(
-                  'div',
-                  { class: 'ai-lines flex-grow' },
-                  props.lines.map((line, i) =>
-                    h('div', { key: i, class: 'ai-line' }, [
-                      h('div', { class: 'ai-line-dot' }),
-                      h('div', { class: 'ai-line-text' }, line),
-                    ]),
-                  ),
-                )
-              : h('div', { class: 'flex flex-center column flex-grow q-py-lg' }, [
-                  h('span', { class: 'material-icons ai-empty-icon' }, 'insights'),
-                  h('div', { class: 'text-caption ai-muted q-mt-sm' }, 'Click Refresh to analyze'),
-                ]),
-        ],
-      );
-  },
-});
+import { AiInsightPanel } from 'components/analytics/AiInsightPanel';
 
 const $q = useQuasar();
 const store = useAnalyticsStore();
@@ -824,6 +736,7 @@ const wrTimeOpts = computed(() => {
 // ── AI Insight helpers ────────────────────────────────────────────────────────
 const aiInsight = (key: string) => aiStore.insights[key]?.insight ?? '';
 const aiLoading = (key: string) => aiStore.loadingInsight[key] ?? false;
+const aiSource = (key: string) => aiStore.insights[key]?.source ?? '';
 const aiLines = (key: string) =>
   aiInsight(key)
     .split('\n')
@@ -1257,6 +1170,7 @@ const pnlMonthOpts = computed(() =>
               :cost="aiStore.costOf('chart_insight')"
               :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight('monthly_growth')"
+              :source="aiSource('monthly_growth')"
               :loading="aiLoading('monthly_growth')"
               :lines="aiLines('monthly_growth')"
               @refresh="refreshGrowth()"
@@ -1377,6 +1291,7 @@ const pnlMonthOpts = computed(() =>
               :cost="aiStore.costOf('chart_insight')"
               :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight(`performance_${perfTab}`)"
+              :source="aiSource(`performance_${perfTab}`)"
               :loading="aiLoading(`performance_${perfTab}`)"
               :lines="aiLines(`performance_${perfTab}`)"
               @refresh="refreshPerf()"
@@ -1490,6 +1405,7 @@ const pnlMonthOpts = computed(() =>
               :cost="aiStore.costOf('chart_insight')"
               :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight(`winrate_${winTab}`)"
+              :source="aiSource(`winrate_${winTab}`)"
               :loading="aiLoading(`winrate_${winTab}`)"
               :lines="aiLines(`winrate_${winTab}`)"
               @refresh="refreshWinRate()"
@@ -1588,6 +1504,7 @@ const pnlMonthOpts = computed(() =>
               :cost="aiStore.costOf('chart_insight')"
               :ai-disabled="!aiStore.canAffordFeature('chart_insight')"
               :insight="aiInsight(`pnl_${pnlTab}`)"
+              :source="aiSource(`pnl_${pnlTab}`)"
               :loading="aiLoading(`pnl_${pnlTab}`)"
               :lines="aiLines(`pnl_${pnlTab}`)"
               @refresh="refreshPnl()"

@@ -9,8 +9,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from 'src/stores/AuthStore';
 import { useAiStore } from './AiStore';
 
-const { getPricing, analyzeChart, reviewPortfolio, analyzeRisk } = vi.hoisted(() => ({
+const { getPricing, getCredits, notifyAiError, analyzeChart, reviewPortfolio, analyzeRisk } =
+  vi.hoisted(() => ({
   getPricing: vi.fn(),
+  getCredits: vi.fn(),
+  notifyAiError: vi.fn(),
   analyzeChart: vi.fn(),
   reviewPortfolio: vi.fn(),
   analyzeRisk: vi.fn(),
@@ -18,8 +21,10 @@ const { getPricing, analyzeChart, reviewPortfolio, analyzeRisk } = vi.hoisted(()
 
 vi.mock('src/services/ai.service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  aiService: { getPricing, analyzeChart, reviewPortfolio, analyzeRisk },
+  aiService: { getPricing, getCredits, analyzeChart, reviewPortfolio, analyzeRisk },
 }));
+
+vi.mock('src/utils/ai-notify', () => ({ notifyAiError }));
 
 const PRICING = {
   features: [
@@ -164,5 +169,84 @@ describe('chart insight: never charged without an explicit AI click', () => {
     await store.analyzeChart(base);
 
     expect(store.credits).toBe(100);
+  });
+});
+
+describe('chart insight: errors and the balance after a charge', () => {
+  const base = { key: 'k', portfolioType: 'TRADER' as const, chartType: 'x', data: {}, useAi: true };
+
+  const serverError = (message: string[] | string, status = 400) =>
+    Object.assign(new Error('Request failed'), {
+      response: { status, data: { message, error: 'Bad Request', statusCode: status } },
+    });
+
+  it('a 400 is caught (not thrown), toasts the server message, and clears the loading state', async () => {
+    const store = useAiStore();
+    analyzeChart.mockRejectedValue(serverError(['property data should not exist']));
+
+    await expect(store.analyzeChart(base)).resolves.toBeNull();
+
+    expect(notifyAiError).toHaveBeenCalledWith('property data should not exist');
+    expect(store.error).toBe('property data should not exist');
+    expect(store.loadingInsight.k).toBe(false);
+    expect(store.insights.k).toBeUndefined();
+  });
+
+  it('a 402 marks insufficient credits and still toasts the server message', async () => {
+    const store = useAiStore();
+    analyzeChart.mockRejectedValue(serverError('You need at least 5 AI tokens to run this.', 402));
+
+    await store.analyzeChart(base);
+
+    expect(store.insufficientCredits).toBe(true);
+    expect(notifyAiError).toHaveBeenCalledWith('You need at least 5 AI tokens to run this.');
+  });
+
+  it('shows the loading state while the request is in flight', async () => {
+    const store = useAiStore();
+    let release: (value: unknown) => void = () => undefined;
+    analyzeChart.mockReturnValue(new Promise((resolve) => (release = resolve)));
+
+    const pending = store.analyzeChart(base);
+    expect(store.loadingInsight.k).toBe(true);
+
+    release({ insight: 'ai', source: 'LLM', creditsRemaining: 95 });
+    await pending;
+    expect(store.loadingInsight.k).toBe(false);
+  });
+
+  it('after an AI charge the balance is re-read from the server', async () => {
+    const store = useAiStore();
+    setCredits(100);
+    analyzeChart.mockResolvedValue({ insight: 'ai', source: 'LLM', creditsRemaining: 95 });
+    getCredits.mockResolvedValue({ balance: 94, minBalance: 20 });
+
+    await store.analyzeChart(base);
+    await vi.waitFor(() => expect(store.credits).toBe(94));
+
+    expect(getCredits).toHaveBeenCalledTimes(1);
+    expect(notifyAiError).not.toHaveBeenCalled();
+  });
+
+  it('a failed balance re-read is silent (the charge response already synced it)', async () => {
+    const store = useAiStore();
+    setCredits(100);
+    analyzeChart.mockResolvedValue({ insight: 'ai', source: 'LLM', creditsRemaining: 95 });
+    getCredits.mockRejectedValue(new Error('offline'));
+
+    await store.analyzeChart(base);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(store.credits).toBe(95);
+    expect(store.error).toBeNull();
+  });
+
+  it('a free rule-based answer does not re-read the balance', async () => {
+    const store = useAiStore();
+    analyzeChart.mockResolvedValue({ insight: 'rule', source: 'RULE_BASED' });
+
+    await store.analyzeChart({ ...base, useAi: false });
+
+    expect(getCredits).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsBoolean,
+  IsDefined,
   IsIn,
   IsObject,
   IsOptional,
@@ -32,6 +33,12 @@ export class AnalyzeChartDto {
   @IsString()
   chartType!: string;
 
+  /**
+   * Required chart data, any shape. It needs a validator decorator: with whitelist +
+   * forbidNonWhitelisted (main.ts) an undecorated property is treated as "not in the DTO"
+   * and every request that carries it is rejected with 400 "property data should not exist".
+   */
+  @IsDefined()
   data!: unknown;
 
   @IsOptional()

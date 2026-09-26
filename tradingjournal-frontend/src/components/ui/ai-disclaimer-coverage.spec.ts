@@ -7,14 +7,15 @@
  */
 import { describe, expect, it } from 'vitest';
 
-const sources = import.meta.glob<string>('/src/**/*.vue', {
+// AiInsightPanel is a render-function component (.ts), not an SFC, so it is listed explicitly
+const sources = import.meta.glob<string>(['/src/**/*.vue', '/src/components/analytics/AiInsightPanel.ts'], {
   query: '?raw',
   import: 'default',
   eager: true,
 });
 
 const AI_SURFACES = [
-  '/src/pages/shared/AnalyticsPage.vue', // AI Insights (AiInsightPanel)
+  '/src/components/analytics/AiInsightPanel.ts', // AI Insights on AnalyticsPage
   '/src/components/analytics/AiPortfolioAdvisorCard.vue',
   '/src/components/analytics/AiRiskAnalysisCard.vue',
   '/src/pages/investor/MarketPulsePage.vue', // AI Picks
