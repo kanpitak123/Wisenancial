@@ -8,17 +8,24 @@ export type AiPortfolioType = 'TRADER' | 'INVESTOR';
  */
 export type AiOutputLanguage = 'th' | 'en';
 
-export type AiModelId = string;
+/** AI features that cost credits. Ids match the backend (ai-pricing.config.ts). */
+export type AiFeatureId =
+  | 'chart_insight'
+  | 'news_enrich'
+  | 'education_quiz'
+  | 'ai_picks'
+  | 'risk_analysis'
+  | 'portfolio_review';
 
-export interface AiModel {
-  id: AiModelId;
-  label: string;
-  creditsPer1kInput: number;
-  creditsPer1kOutput: number;
+/** Flat price of one feature call, from GET /ai/pricing (the backend config is the only source). */
+export interface AiFeaturePricing {
+  feature: AiFeatureId;
+  credits: number;
+  tier: 'fast' | 'smart';
 }
 
-export interface AiModelsResponse {
-  models: AiModel[];
+export interface AiPricingResponse {
+  features: AiFeaturePricing[];
   minBalance: number;
 }
 
@@ -33,7 +40,7 @@ export interface AnalyzeChartPayload {
   chartType: string;
   data: unknown;
   extraContext?: Record<string, unknown>;
-  modelId?: string;
+  /** true = free rule-based insight; otherwise the AI runs (flat credits). */
   useRuleBased?: boolean;
   outputLanguage?: AiOutputLanguage;
 }
@@ -85,7 +92,6 @@ export type PortfolioReviewResponse =
   | InvestorPortfolioReviewResponse;
 
 export interface ReviewPortfolioPayload {
-  modelId: string;
   items?: unknown[];
   analytics?: Record<string, unknown>;
   outputLanguage?: AiOutputLanguage;

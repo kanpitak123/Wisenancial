@@ -14,24 +14,30 @@
  * D/E เป็น ratio ดิบ (0.78) — backend หาร 100 จากที่ Yahoo คืนเป็นเปอร์เซ็นต์แล้ว
  * ("—" ยังขึ้นได้ถ้า Yahoo ไม่มีงบของหุ้นตัวนั้นจริง ๆ เช่น กองทุน/ETF)
  */
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
 import { WsAiDisclaimer, WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
 import type { PortfolioRiskHolding } from 'src/types/ai.types';
+import { aiCostSuffix, aiNotEnoughCreditsMessage } from 'src/utils/ai-cost';
 
 const props = defineProps<{ holdings: PortfolioRiskHolding[] }>();
 
 const languageStore = useLanguageStore();
 const aiStore = useAiStore();
 
+onMounted(() => {
+  void aiStore.fetchPricing().catch(() => undefined);
+});
+
+const cost = computed(() => aiStore.costOf('risk_analysis'));
+
 const analysis = computed(() => aiStore.riskAnalysis);
 
 const canAnalyze = computed(
   () =>
     props.holdings.length > 0 &&
-    aiStore.selectedModelId !== null &&
-    aiStore.canAfford &&
+    aiStore.canAffordFeature('risk_analysis') &&
     !aiStore.loadingRisk,
 );
 
@@ -45,14 +51,12 @@ const disabledReason = computed(() => {
       : 'No holdings yet — record a purchase before analysing risk.';
   }
 
-  if (aiStore.selectedModelId === null) {
-    return languageStore.isThai ? 'เลือกโมเดล AI ก่อน' : 'Pick an AI model first.';
-  }
-
-  if (!aiStore.canAfford) {
-    return languageStore.isThai
-      ? `เครดิต AI ไม่พอ (มี ${aiStore.credits} ต้องมีอย่างน้อย ${aiStore.minBalance}) — เติมเครดิตก่อนใช้งาน`
-      : `Not enough AI credits (${aiStore.credits} of ${aiStore.minBalance} required). Top up to continue.`;
+  if (!aiStore.canAffordFeature('risk_analysis')) {
+    return aiNotEnoughCreditsMessage(
+      aiStore.credits,
+      cost.value ?? aiStore.minBalance,
+      languageStore.isThai,
+    );
   }
 
   return '';
@@ -117,13 +121,13 @@ const run = async () => {
         :disable="!canAnalyze"
         :loading="aiStore.loadingRisk"
         :label="
-          analysis
+          (analysis
             ? languageStore.isThai
               ? 'วิเคราะห์ใหม่'
               : 'Re-analyze'
             : languageStore.isThai
               ? 'วิเคราะห์ความเสี่ยง'
-              : 'Analyze Portfolio Risk'
+              : 'Analyze Portfolio Risk') + aiCostSuffix(cost, languageStore.isThai)
         "
         @click="run"
       >

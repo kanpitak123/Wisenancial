@@ -3,7 +3,8 @@ import { aiService, getAiErrorMessage, isAiCreditError } from 'src/services/ai.s
 import { useAuthStore } from 'src/stores/AuthStore';
 import { useLanguageStore } from 'src/stores/LanguageStore';
 import type {
-  AiModel,
+  AiFeatureId,
+  AiFeaturePricing,
   AiOutputLanguage,
   AiPortfolioType,
   AnalyzeChartPayload,
@@ -21,9 +22,10 @@ import type {
 
 export const useAiStore = defineStore('ai', {
   state: () => ({
-    models: [] as AiModel[],
-    minBalance: 10,
-    selectedModelId: null as string | null,
+    /** feature -> flat price, filled from GET /ai/pricing */
+    pricing: {} as Partial<Record<AiFeatureId, AiFeaturePricing>>,
+    /** highest single-feature price; a balance at or above it can run any feature */
+    minBalance: 20,
     insights: {} as Record<string, ChartInsight>,
     portfolioReview: null as PortfolioReviewResponse | null,
     growthRecommendations: [] as StockRecommendation[],
@@ -31,7 +33,7 @@ export const useAiStore = defineStore('ai', {
     normalizedRiskHoldings: [] as PortfolioRiskHolding[],
     quiz: null as QuizResponse | null,
 
-    loadingModels: false,
+    loadingPricing: false,
     loadingInsight: {} as Record<string, boolean>,
     loadingReview: false,
     loadingRecommendations: false,
@@ -39,7 +41,7 @@ export const useAiStore = defineStore('ai', {
     loadingQuiz: false,
     loadingCredits: false,
 
-    loadedModels: false,
+    loadedPricing: false,
     insufficientCredits: false,
     error: null as string | null,
   }),
@@ -58,12 +60,18 @@ export const useAiStore = defineStore('ai', {
       return Number(user?.ai_token_balance ?? user?.ai_credits ?? 0);
     },
 
+    /** Can the user run the most expensive feature? (used by the credits badge) */
     canAfford(): boolean {
       return this.credits >= this.minBalance;
     },
 
-    selectedModel(state): AiModel | null {
-      return state.models.find((model) => model.id === state.selectedModelId) ?? null;
+    /** Flat credits of one feature, or null until GET /ai/pricing has answered. */
+    costOf: (state) => (feature: AiFeatureId): number | null =>
+      state.pricing[feature]?.credits ?? null,
+
+    /** Can the user pay for this feature? Before pricing loads, falls back to the balance floor. */
+    canAffordFeature(): (feature: AiFeatureId) => boolean {
+      return (feature) => this.credits >= (this.pricing[feature]?.credits ?? this.minBalance);
     },
 
     traderReview(): TraderReviewResult | null {
@@ -76,7 +84,7 @@ export const useAiStore = defineStore('ai', {
 
     isLoading(state): boolean {
       return (
-        state.loadingModels ||
+        state.loadingPricing ||
         state.loadingReview ||
         state.loadingRecommendations ||
         state.loadingRisk ||
@@ -101,47 +109,29 @@ export const useAiStore = defineStore('ai', {
       this.insufficientCredits = false;
     },
 
-    async fetchModels(force = false) {
-      if ((!force && this.loadedModels) || this.loadingModels) {
-        return this.models;
+    /** Loads the flat feature prices once (cached); the backend config is the only source. */
+    async fetchPricing(force = false) {
+      if ((!force && this.loadedPricing) || this.loadingPricing) {
+        return this.pricing;
       }
 
-      this.loadingModels = true;
-      this.error = null;
+      this.loadingPricing = true;
 
       try {
-        const response = await aiService.getModels();
-        this.models = response.models;
+        const response = await aiService.getPricing();
+        this.pricing = Object.fromEntries(
+          response.features.map((entry) => [entry.feature, entry]),
+        );
         this.minBalance = response.minBalance;
-
-        const selectedStillExists = this.models.some((model) => model.id === this.selectedModelId);
-
-        if (!selectedStillExists) {
-          this.selectedModelId = this.models[0]?.id ?? null;
-        }
-
-        this.loadedModels = true;
-        return this.models;
+        this.loadedPricing = true;
+        return this.pricing;
       } catch (error) {
+        // prices only decorate the buttons; a failure must not block the page
         this.handleError(error);
         throw error;
       } finally {
-        this.loadingModels = false;
+        this.loadingPricing = false;
       }
-    },
-
-    setSelectedModel(modelId: string | null) {
-      if (modelId === null) {
-        this.selectedModelId = null;
-        return;
-      }
-
-      const exists = this.models.some((model) => model.id === modelId);
-      if (!exists) {
-        throw new Error('AI model นี้ไม่พร้อมใช้งาน');
-      }
-
-      this.selectedModelId = modelId;
     },
 
     async analyzeChart(payload: {
@@ -174,9 +164,6 @@ export const useAiStore = defineStore('ai', {
           ...(payload.portfolioId !== undefined ? { portfolioId: payload.portfolioId } : {}),
           ...(payload.extraContext !== undefined ? { extraContext: payload.extraContext } : {}),
           ...(payload.useRuleBased !== undefined ? { useRuleBased: payload.useRuleBased } : {}),
-          ...(!payload.useRuleBased && this.selectedModelId
-            ? { modelId: this.selectedModelId }
-            : {}),
         };
 
         const result = await aiService.analyzeChart(request);
@@ -204,14 +191,12 @@ export const useAiStore = defineStore('ai', {
       items?: unknown[],
       analytics?: Record<string, unknown>,
     ) {
-      const modelId = this.requireSelectedModel();
       this.loadingReview = true;
       this.error = null;
       this.insufficientCredits = false;
 
       try {
         const payload: ReviewPortfolioPayload = {
-          modelId,
           outputLanguage: this.outputLanguage(),
           ...(items !== undefined ? { items } : {}),
           ...(analytics !== undefined ? { analytics } : {}),
@@ -248,7 +233,6 @@ export const useAiStore = defineStore('ai', {
     },
 
     async analyzeRisk(holdings: PortfolioRiskHolding[]) {
-      const modelId = this.requireSelectedModel();
       this.loadingRisk = true;
       this.error = null;
       this.insufficientCredits = false;
@@ -256,7 +240,6 @@ export const useAiStore = defineStore('ai', {
       try {
         const result = await aiService.analyzeRisk({
           holdings,
-          modelId,
           outputLanguage: this.outputLanguage(),
         });
         this.riskAnalysis = result.data;
@@ -310,14 +293,6 @@ export const useAiStore = defineStore('ai', {
       } finally {
         this.loadingCredits = false;
       }
-    },
-
-    requireSelectedModel(): string {
-      if (!this.selectedModelId) {
-        throw new Error('ยังไม่ได้เลือก AI model');
-      }
-
-      return this.selectedModelId;
     },
 
     syncCredits(balance?: number) {

@@ -7,16 +7,15 @@ export function useAi() {
   const store = useAiStore();
 
   const {
-    models,
+    pricing,
     minBalance,
-    selectedModelId,
     insights,
     portfolioReview,
     growthRecommendations,
     riskAnalysis,
     normalizedRiskHoldings,
     quiz,
-    loadingModels,
+    loadingPricing,
     loadingInsight,
     loadingReview,
     loadingRecommendations,
@@ -29,23 +28,21 @@ export function useAi() {
 
   const credits = computed(() => store.credits);
   const canAfford = computed(() => store.canAfford);
-  const selectedModel = computed(() => store.selectedModel);
   const traderReview = computed(() => store.traderReview);
   const investorReview = computed(() => store.investorReview);
   const isLoading = computed(() => store.isLoading);
 
   return {
     store,
-    models,
+    pricing,
     minBalance,
-    selectedModelId,
     insights,
     portfolioReview,
     growthRecommendations,
     riskAnalysis,
     normalizedRiskHoldings,
     quiz,
-    loadingModels,
+    loadingPricing,
     loadingInsight,
     loadingReview,
     loadingRecommendations,
@@ -57,14 +54,11 @@ export function useAi() {
 
     credits,
     canAfford,
-    selectedModel,
     traderReview,
     investorReview,
     isLoading,
 
-    fetchModels: (force?: boolean) => store.fetchModels(force),
-
-    setSelectedModel: (modelId: string | null) => store.setSelectedModel(modelId),
+    fetchPricing: (force?: boolean) => store.fetchPricing(force),
 
     analyzeChart: (payload: Parameters<typeof store.analyzeChart>[0]) =>
       store.analyzeChart(payload),

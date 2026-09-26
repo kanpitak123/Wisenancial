@@ -26,6 +26,8 @@ const AiInsightPanel = defineComponent({
     chartType: { type: String, required: true },
     insight: { type: String, default: '' },
     loading: { type: Boolean, default: false },
+    /** flat credits of one insight (AiStore.costOf('chart_insight')); null until loaded */
+    cost: { type: Number as () => number | null, default: null },
     lines: { type: Array as () => string[], default: () => [] },
   },
   emits: ['refresh'],
@@ -57,7 +59,9 @@ const AiInsightPanel = defineComponent({
                 disabled: props.loading,
                 onClick: () => emit('refresh'),
               },
-              props.loading ? '...' : '↻ Refresh',
+              props.loading
+                ? '...'
+                : `↻ Refresh${props.cost === null ? '' : ` · ${props.cost}`}`,
             ),
           ]),
           // แถบเตือนว่าไม่ใช่คำแนะนำการลงทุน — อยู่เหนือเนื้อผลวิเคราะห์เสมอ
@@ -351,6 +355,9 @@ const loadAllData = async () => {
 // daily-pnl/performance/overview ยิงซ้ำ 3-6 ครั้งต่อการเปิดหน้าเดียว) -> ถ้าต้อง
 // loadPortfolios() ก็ปล่อยให้ watcher ด้านล่างเป็นคนสั่งโหลดแทน ไม่ยิงซ้ำเอง
 onMounted(async () => {
+  // ราคา AI ต่อฟีเจอร์ — ใช้แสดงบนปุ่ม Refresh (ดึงครั้งเดียว มี cache ใน AiStore)
+  void aiStore.fetchPricing().catch(() => undefined);
+
   if (portStore.portfolios.length === 0) {
     await safeLoad(() => portStore.loadPortfolios(), 'โหลดพอร์ตโฟลิโอไม่สำเร็จ');
   } else if (portStore.activePortfolio) {
@@ -1230,6 +1237,7 @@ const pnlMonthOpts = computed(() =>
           <div class="col-12 col-md-4">
             <AiInsightPanel
               chart-type="monthly_growth"
+              :cost="aiStore.costOf('chart_insight')"
               :insight="aiInsight('monthly_growth')"
               :loading="aiLoading('monthly_growth')"
               :lines="aiLines('monthly_growth')"
@@ -1347,6 +1355,7 @@ const pnlMonthOpts = computed(() =>
           <div class="col-12 col-md-4">
             <AiInsightPanel
               :chart-type="`performance_${perfTab}`"
+              :cost="aiStore.costOf('chart_insight')"
               :insight="aiInsight(`performance_${perfTab}`)"
               :loading="aiLoading(`performance_${perfTab}`)"
               :lines="aiLines(`performance_${perfTab}`)"
@@ -1457,6 +1466,7 @@ const pnlMonthOpts = computed(() =>
           <div class="col-12 col-md-4">
             <AiInsightPanel
               :chart-type="`winrate_${winTab}`"
+              :cost="aiStore.costOf('chart_insight')"
               :insight="aiInsight(`winrate_${winTab}`)"
               :loading="aiLoading(`winrate_${winTab}`)"
               :lines="aiLines(`winrate_${winTab}`)"
@@ -1552,6 +1562,7 @@ const pnlMonthOpts = computed(() =>
           <div class="col-12 col-md-4">
             <AiInsightPanel
               :chart-type="`pnl_${pnlTab}`"
+              :cost="aiStore.costOf('chart_insight')"
               :insight="aiInsight(`pnl_${pnlTab}`)"
               :loading="aiLoading(`pnl_${pnlTab}`)"
               :lines="aiLines(`pnl_${pnlTab}`)"

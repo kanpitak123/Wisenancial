@@ -19,6 +19,7 @@ import { useRouter } from 'vue-router';
 import { useSafeLoad } from 'src/composables/useSafeLoad';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
+import { aiCostSuffix, aiNotEnoughCreditsMessage } from 'src/utils/ai-cost';
 import { WsAiDisclaimer, WsAiLoader, WsBadge, WsCard, WsUpgradeNotice } from 'src/components/ui';
 import { heatmapService } from 'src/services/heatmap.service';
 import { sentimentService } from 'src/services/sentiment.service';
@@ -44,7 +45,7 @@ const requiresUpgrade = ref(false);
 
 // โหลดรายชื่อโมเดล + ยอดเครดิตไว้ก่อน ทั้งคู่ไม่คิดเครดิต
 onMounted(() => {
-  void aiStore.fetchModels().catch(() => undefined);
+  void aiStore.fetchPricing().catch(() => undefined);
   void load();
 });
 
@@ -224,16 +225,22 @@ const picksAsOfLabel = computed(() => {
     : `Growth and margin figures come from financials through the quarter ending ${formatted}${mixed ? ' or later' : ''} — not live data.`;
 });
 
-const canGenerate = computed(() => aiStore.canAfford && !aiStore.loadingRecommendations);
+const picksCost = computed(() => aiStore.costOf('ai_picks'));
+
+const canGenerate = computed(
+  () => aiStore.canAffordFeature('ai_picks') && !aiStore.loadingRecommendations,
+);
 
 /** ทำไมปุ่มถึงกดไม่ได้ — ปุ่ม disable เฉยๆ โดยไม่บอกอะไรคือสิ่งที่ผู้ใช้เดาไม่ถูก */
 const disabledReason = computed(() => {
   if (aiStore.loadingRecommendations) return '';
 
-  if (!aiStore.canAfford) {
-    return languageStore.isThai
-      ? `เครดิต AI ไม่พอ (มี ${aiStore.credits} ต้องมีอย่างน้อย ${aiStore.minBalance}) — เติมเครดิตก่อนใช้งาน`
-      : `Not enough AI credits (${aiStore.credits} of ${aiStore.minBalance} required). Top up to continue.`;
+  if (!aiStore.canAffordFeature('ai_picks')) {
+    return aiNotEnoughCreditsMessage(
+      aiStore.credits,
+      picksCost.value ?? aiStore.minBalance,
+      languageStore.isThai,
+    );
   }
 
   return '';
@@ -494,13 +501,13 @@ const REASON_META = [
               :disable="!canGenerate"
               :loading="aiStore.loadingRecommendations"
               :label="
-                recommendations.length
+                (recommendations.length
                   ? languageStore.isThai
                     ? 'สแกนใหม่'
                     : 'Rescan'
                   : languageStore.isThai
                     ? 'ให้ AI สแกนหุ้น'
-                    : 'Scan with AI'
+                    : 'Scan with AI') + aiCostSuffix(picksCost, languageStore.isThai)
               "
               @click="generate"
             />

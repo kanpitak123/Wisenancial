@@ -725,14 +725,17 @@ export const contentRoutes = defineMockRoutes([
   // ---------- AI ----------
   {
     method: 'GET',
-    path: '/ai/models',
+    path: '/ai/pricing',
     handler: () => ({
-      models: [
-        { id: 'gpt-4o-mini', name: 'GPT-4o mini', provider: 'openai', costPerCall: 1 },
-        { id: 'claude-haiku', name: 'Claude Haiku', provider: 'anthropic', costPerCall: 1 },
-        { id: 'gemini-flash', name: 'Gemini Flash', provider: 'google', costPerCall: 1 },
+      features: [
+        { feature: 'chart_insight', credits: 5, tier: 'fast' },
+        { feature: 'news_enrich', credits: 5, tier: 'fast' },
+        { feature: 'education_quiz', credits: 5, tier: 'fast' },
+        { feature: 'ai_picks', credits: 10, tier: 'fast' },
+        { feature: 'risk_analysis', credits: 20, tier: 'smart' },
+        { feature: 'portfolio_review', credits: 20, tier: 'smart' },
       ],
-      defaultModelId: 'gpt-4o-mini',
+      minBalance: 20,
     }),
   },
   {

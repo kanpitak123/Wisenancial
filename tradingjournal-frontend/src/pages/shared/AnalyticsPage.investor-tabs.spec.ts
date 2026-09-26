@@ -281,7 +281,7 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
       creditsRemaining: 9,
     });
 
-    // ปุ่มวิเคราะห์ถูก disable ถ้าเครดิตไม่พอหรือยังไม่ได้เลือกโมเดล
+    // ปุ่มวิเคราะห์ถูก disable ถ้าเครดิตไม่พอ (ราคา flat ต่อฟีเจอร์)
     useAuthStore().user = {
       id: 1,
       username: 'qa',
@@ -292,10 +292,7 @@ describe('AnalyticsPage — แท็บของโหมด Stock', () => {
     await openTab(wrapper, 'ai');
 
     const aiStore = useAiStore();
-    aiStore.models = [
-      { id: 'groq-llama3', label: 'Groq', creditsPer1kInput: 1, creditsPer1kOutput: 1 },
-    ];
-    aiStore.selectedModelId = 'groq-llama3';
+    aiStore.pricing = { risk_analysis: { feature: 'risk_analysis', credits: 20, tier: 'smart' } };
     await nextTick();
 
     await wrapper.find('[data-test="ai-risk-run"]').trigger('click');

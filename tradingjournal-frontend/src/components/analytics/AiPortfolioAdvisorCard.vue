@@ -14,6 +14,7 @@ import { computed, onMounted } from 'vue';
 import { useLanguageStore } from 'stores/LanguageStore';
 import { useAiStore } from 'stores/AiStore';
 import { WsAiDisclaimer, WsAiLoader, WsBadge, WsCard } from 'src/components/ui';
+import { aiCostSuffix, aiNotEnoughCreditsMessage } from 'src/utils/ai-cost';
 
 const props = defineProps<{ portfolioId: number | null; hasHoldings: boolean }>();
 
@@ -21,26 +22,18 @@ const languageStore = useLanguageStore();
 const aiStore = useAiStore();
 
 onMounted(() => {
-  void aiStore.fetchModels().catch(() => undefined);
+  void aiStore.fetchPricing().catch(() => undefined);
 });
+
+const cost = computed(() => aiStore.costOf('portfolio_review'));
 
 const review = computed(() => aiStore.investorReview);
-
-const modelOptions = computed(() =>
-  aiStore.models.map((model) => ({ label: model.label, value: model.id })),
-);
-
-const selectedModel = computed({
-  get: () => aiStore.selectedModelId,
-  set: (value: string | null) => aiStore.setSelectedModel(value),
-});
 
 const canGenerate = computed(
   () =>
     props.portfolioId !== null &&
     props.hasHoldings &&
-    aiStore.selectedModelId !== null &&
-    aiStore.canAfford &&
+    aiStore.canAffordFeature('portfolio_review') &&
     !aiStore.loadingReview,
 );
 
@@ -48,7 +41,7 @@ const canGenerate = computed(
  * ทำไมปุ่มถึงกดไม่ได้ — ต้องบอกให้รู้
  *
  * ของเดิมปุ่มถูก disable เฉย ๆ โดยไม่มีอะไรอธิบาย เคสที่เจอบ่อยที่สุดคือเครดิต AI = 0
- * (ผู้ใช้ใหม่ทุกคนเริ่มที่ 0 แต่ minBalance = 10) ส่วน aiStore.insufficientCredits
+ * (ผู้ใช้ใหม่ทุกคนเริ่มที่ 0 แต่ต้องมีอย่างน้อยเท่าราคาของฟีเจอร์) ส่วน aiStore.insufficientCredits
  * จะถูกตั้งก็ต่อเมื่อ "ยิงแล้วโดนปฏิเสธ" เท่านั้น จึงไม่เคยขึ้นก่อนกดเลย
  */
 const disabledReason = computed(() => {
@@ -66,14 +59,12 @@ const disabledReason = computed(() => {
       : 'No holdings yet — record a purchase before running the analysis.';
   }
 
-  if (aiStore.selectedModelId === null) {
-    return languageStore.isThai ? 'เลือกโมเดล AI ก่อน' : 'Pick an AI model first.';
-  }
-
-  if (!aiStore.canAfford) {
-    return languageStore.isThai
-      ? `เครดิต AI ไม่พอ (มี ${aiStore.credits} ต้องมีอย่างน้อย ${aiStore.minBalance}) — เติมเครดิตก่อนใช้งาน`
-      : `Not enough AI credits (${aiStore.credits} of ${aiStore.minBalance} required). Top up to continue.`;
+  if (!aiStore.canAffordFeature('portfolio_review')) {
+    return aiNotEnoughCreditsMessage(
+      aiStore.credits,
+      cost.value ?? aiStore.minBalance,
+      languageStore.isThai,
+    );
   }
 
   return '';
@@ -127,20 +118,6 @@ const generate = async () => {
       <WsAiDisclaimer dense />
 
       <div class="advisor-controls">
-        <q-select
-          v-model="selectedModel"
-          :options="modelOptions"
-          option-value="value"
-          option-label="label"
-          emit-value
-          map-options
-          dense
-          outlined
-          :dark="$q.dark.isActive"
-          :loading="aiStore.loadingModels"
-          class="advisor-model"
-          :label="languageStore.isThai ? 'โมเดล AI' : 'AI model'"
-        />
         <q-btn
           unelevated
           no-caps
@@ -151,13 +128,13 @@ const generate = async () => {
           :disable="!canGenerate"
           :loading="aiStore.loadingReview"
           :label="
-            review
+            (review
               ? languageStore.isThai
                 ? 'วิเคราะห์ใหม่'
                 : 'Regenerate'
               : languageStore.isThai
                 ? 'สร้างรายงาน AI'
-                : 'Generate AI Analysis'
+                : 'Generate AI Analysis') + aiCostSuffix(cost, languageStore.isThai)
           "
           @click="generate"
         >
@@ -360,11 +337,6 @@ const generate = async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-}
-
-.advisor-model {
-  min-width: 220px;
-  flex: 1 1 220px;
 }
 
 .advisor-generate {

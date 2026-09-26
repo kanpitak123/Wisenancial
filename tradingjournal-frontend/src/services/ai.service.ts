@@ -3,8 +3,8 @@ import { api } from 'boot/axios';
 import type {
   AiActionResponse,
   AiCreditsResponse,
-  AiModelsResponse,
   AiOutputLanguage,
+  AiPricingResponse,
   AnalyzeChartPayload,
   ApiErrorResponse,
   ChartInsight,
@@ -34,8 +34,9 @@ export function isAiCreditError(error: unknown): boolean {
 }
 
 export const aiService = {
-  async getModels(): Promise<AiModelsResponse> {
-    const { data } = await api.get<AiModelsResponse>('/ai/models');
+  /** Flat credit price of every AI feature — what the buttons display. */
+  async getPricing(): Promise<AiPricingResponse> {
+    const { data } = await api.get<AiPricingResponse>('/ai/pricing');
     return data;
   },
 
@@ -73,7 +74,6 @@ export const aiService = {
 
   async analyzeRisk(payload: {
     holdings: PortfolioRiskHolding[];
-    modelId: string;
     outputLanguage?: AiOutputLanguage;
   }): Promise<RiskAnalysisResponse> {
     const { data } = await api.post<RiskAnalysisResponse>('/ai/portfolio/risk-analysis', payload);

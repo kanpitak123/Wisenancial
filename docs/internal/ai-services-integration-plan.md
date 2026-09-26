@@ -267,3 +267,23 @@ Investigation of the qa@ Stock review ("MSFT return 932%", "total profit 2,874.7
 - **The two "profits" are different metrics, both correct.** `total_pnl 2,874.76 = realized_pnl −1,280 + unrealized_pnl 4,154.76 + dividends 0` (equal to `investment_gain` here). The raw payload put them side by side with no definitions, and sent holdings twice plus 11 raw activity rows.
 - **Fix.** The review now sends `metrics` (unit in every key: `_USD`, `_percent`, `_count`, `_shares`; rounded once to 2 decimals; per-holding weight precomputed) plus a `glossary`, and the system prompt says to quote only those numbers and never calculate, convert or re-round. Unrealized / realized / total are defined and named apart. Trader review gets the same treatment.
 - **Post-check.** `ai-grounding.ts`: every percent, money or separated/decimal figure in the answer's prose must equal a number that was in the payload, within the precision it was written with (loss quoted without its sign is fine; years and small counts are ignored). A miss is retried once with the offending figures named; a second miss returns `AI_UNGROUNDED_NUMBERS` (502), not charged, discarded answers logged `FAILED` / 0 credits / `UNGROUNDED_NUMBERS`. It catches invented, summed and converted figures; it cannot catch a real number attached to the wrong label, which is what the glossary is for. Scope this round: Portfolio Review only (Risk Analysis and chart insight use ratios like `weight 0.6` that the prose renders as percent, so they need their own handling).
+
+## 11. Flat per-feature pricing (branch `feat/flat-pricing`, local, migration NOT applied)
+
+Replaces the token-metered pricing of §8 for user-paid calls. One config, `tradingjournal-backend/src/ai/ai-pricing.config.ts`:
+
+| Feature | Tier | Credits |
+|---|---|---|
+| Chart insight | fast | 5 |
+| User news enrich | fast | 5 |
+| Education quiz | fast | 5 |
+| AI Picks | fast | 10 |
+| Risk Analysis | smart | 20 |
+| Portfolio Review | smart | 20 |
+
+- The price is charged per successful call whatever the tokens or retries (a rejected/retried answer costs us, not the user). A call needs a balance of at least its own price; `MIN_CREDIT_BALANCE` is 20 (the highest price) and only drives the UI floor.
+- The model is fixed per feature (fast → `AI_MODEL_FAST`, smart → `AI_MODEL_SMART`). The model picker, `GET /ai/models` and the per-model credit rates are gone; `GET /ai/pricing` returns the table above and the frontend shows it on every AI button (`· 20 credits`). `modelId` is still accepted in request bodies and ignored, only so a stale cached client is not rejected; remove it after the rollout.
+- Chart insight is now AI by default (was rule-based unless a model was selected); only `useRuleBased: true` is free. `POST /ai/news/enrich` is always billed: its old no-model branch ran the system-paid enrichment for any logged-in user.
+- AI Picks lost its model chain (a single fixed model).
+- **Per-feature token logging:** `ai_usage_logs.feature` (nullable `VARCHAR(40)`) plus an index on `(feature, created_at)`; tokens, credits, model, status and error code were already columns. Discarded/retried answers are logged as `FAILED` rows with the feature. Migration `20260930000000_add_feature_to_ai_usage_logs` is written but not applied; the branch must not run against the database before it is.
+- Sizing basis: assumed list prices (fast $1/$5, smart $3/$15 per 1M tokens), estimated token sizes, 35 THB/USD; Claude cost ≈ 20–30% of revenue at the Max pack rate. Replace with real `ai_usage_logs` averages by feature once the column is filled.

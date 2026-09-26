@@ -22,7 +22,7 @@ import type * as AiServiceModule from 'src/services/ai.service';
 const getHeatmap = vi.fn();
 const getSentiment = vi.fn();
 const getGrowthRecommendations = vi.fn();
-const getModels = vi.fn();
+const getPricing = vi.fn();
 
 vi.mock('src/services/heatmap.service', () => ({
   heatmapService: {
@@ -43,7 +43,7 @@ vi.mock('src/services/ai.service', async (importOriginal) => ({
   ...(await importOriginal<typeof AiServiceModule>()),
   aiService: {
     getGrowthRecommendations: (...args: unknown[]) => getGrowthRecommendations(...args),
-    getModels: (...args: unknown[]) => getModels(...args),
+    getPricing: (...args: unknown[]) => getPricing(...args),
   },
 }));
 
@@ -147,7 +147,10 @@ describe('MarketPulsePage', () => {
     localStorage.clear();
     document.body.innerHTML = '';
     vi.clearAllMocks();
-    getModels.mockResolvedValue({ models: [{ id: 'groq', label: 'Groq' }], minBalance: 10 });
+    getPricing.mockResolvedValue({
+      features: [{ feature: 'ai_picks', credits: 10, tier: 'fast' }],
+      minBalance: 20,
+    });
     getHeatmap.mockResolvedValue(response([]));
     getSentiment.mockResolvedValue(sentimentResponse());
   });
@@ -408,6 +411,28 @@ describe('MarketPulsePage', () => {
       await openPicksTab(wrapper);
 
       expect(getGrowthRecommendations).not.toHaveBeenCalled();
+    });
+
+    it('ปุ่มสแกนแสดงราคา flat ของฟีเจอร์ (จาก /ai/pricing)', async () => {
+      setCredits(100);
+
+      const wrapper = await mountPage();
+      await openPicksTab(wrapper);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+
+      expect(wrapper.find('[data-test="discover-generate"]').text()).toMatch(/10/);
+    });
+
+    it('เครดิตน้อยกว่าราคาฟีเจอร์ -> ปุ่มกดไม่ได้และบอกราคา', async () => {
+      setCredits(9);
+
+      const wrapper = await mountPage();
+      await openPicksTab(wrapper);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+
+      expect(wrapper.find('[data-test="discover-hint"]').text()).toMatch(/9.*10|9 of 10/);
     });
 
     it('กดปุ่มแล้วจึงยิง และวาดการ์ดครบทุกตัว', async () => {
