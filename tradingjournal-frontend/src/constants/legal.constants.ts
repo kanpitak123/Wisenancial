@@ -15,7 +15,7 @@ export const AI_DISCLAIMER_ANCHOR = 'ai-disclaimer';
 export const AI_DISCLAIMER_ROUTE = { path: TERMS_ROUTE, hash: `#${AI_DISCLAIMER_ANCHOR}` };
 
 /**
- * เวอร์ชันของ Terms + Privacy ที่ผู้ใช้เห็นตอนกดยอมรับ
- * ต้องเปลี่ยนทุกครั้งที่เนื้อหาเปลี่ยนจริง (และตรงกับ CURRENT_TERMS_VERSION ฝั่งหลังบ้าน)
+ * เวอร์ชันของ Terms + Privacy ที่ต้องยอมรับตอนสมัคร "ไม่ได้เก็บไว้ในหน้าบ้าน" — มีแหล่งเดียวคือหลังบ้าน
+ * (CURRENT_TERMS_VERSION) หน้าบ้านอ่านจาก endpoint นี้ (ดู LegalStore) มีเทสกันไม่ให้เลขเวอร์ชันกลับมาฝังในโค้ด
  */
-export const TERMS_VERSION = 'draft-0.1';
+export const LEGAL_TERMS_VERSION_PATH = '/legal/terms-version';

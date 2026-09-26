@@ -4,10 +4,8 @@ import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
-import {
-  AUTH_ERROR_MESSAGES,
-  CURRENT_TERMS_VERSION,
-} from './constants/auth.constants';
+import { CURRENT_TERMS_VERSION } from '../legal/legal.constants';
+import { AUTH_ERROR_MESSAGES } from './constants/auth.constants';
 import { EmailFlowsService } from './email-flows.service';
 import { RefreshTokenService } from './refresh-token.service';
 

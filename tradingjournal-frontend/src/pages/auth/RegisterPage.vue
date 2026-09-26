@@ -134,6 +134,22 @@
             </span>
           </div>
 
+          <div v-if="versionLoadFailed" class="consent-error" data-test="register-terms-error">
+            {{
+              languageStore.isThai
+                ? 'โหลดข้อมูลเวอร์ชันข้อกำหนดไม่สำเร็จ จึงยังสมัครไม่ได้'
+                : 'Could not load the terms version, so sign-up is unavailable right now.'
+            }}
+            <q-btn
+              flat
+              dense
+              no-caps
+              :label="languageStore.isThai ? 'ลองใหม่' : 'Retry'"
+              data-test="register-terms-retry"
+              @click="legalStore.loadTermsVersion()"
+            />
+          </div>
+
           <q-btn
             type="submit"
             unelevated
@@ -141,7 +157,7 @@
             label="Sign Up"
             class="full-width custom-theme-btn text-white text-weight-bold q-py-sm shadow-3 q-mt-md"
             :loading="auth.loading"
-            :disable="!acceptedTerms"
+            :disable="!canSubmit"
             data-test="register-submit"
           >
             <template v-slot:loading>
@@ -161,10 +177,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useAuthStore } from 'stores/AuthStore';
 import { useLanguageStore } from 'stores/LanguageStore';
-import { PRIVACY_ROUTE, TERMS_ROUTE, TERMS_VERSION } from 'src/constants/legal.constants';
+import { useLegalStore } from 'stores/LegalStore';
+import { PRIVACY_ROUTE, TERMS_ROUTE } from 'src/constants/legal.constants';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import wisenancialLogo from 'assets/wisenancial-logo-transparent.png';
@@ -173,6 +190,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const $q = useQuasar();
 const languageStore = useLanguageStore();
+const legalStore = useLegalStore();
 
 const form = reactive({
   username: '',
@@ -183,6 +201,15 @@ const form = reactive({
 
 /** ยังไม่ติ๊ก = สมัครไม่ได้ — ตั้งเป็น false เสมอ ห้ามจำค่าจากรอบก่อน */
 const acceptedTerms = ref(false);
+
+/**
+ * เลขเวอร์ชันข้อกำหนดมาจากหลังบ้านเท่านั้น (ไม่มีค่าฝังในหน้าบ้าน) — โหลดไม่ได้ = ยังสมัครไม่ได้
+ * เพราะไม่มีเวอร์ชันให้บันทึกว่าผู้ใช้ยอมรับฉบับไหน
+ */
+const canSubmit = computed(() => acceptedTerms.value && legalStore.termsVersion !== null);
+const versionLoadFailed = computed(() => legalStore.termsVersion === null && legalStore.error !== null);
+
+onMounted(() => void legalStore.loadTermsVersion());
 
 const consentAriaLabel = computed(() =>
   languageStore.isThai
@@ -213,8 +240,22 @@ const handleRegister = async () => {
     return;
   }
 
+  const termsVersion = legalStore.termsVersion;
+
+  if (termsVersion === null) {
+    void legalStore.loadTermsVersion();
+    $q.notify({
+      type: 'negative',
+      message: languageStore.isThai
+        ? 'โหลดข้อมูลเวอร์ชันข้อกำหนดไม่สำเร็จ กรุณาลองใหม่'
+        : 'Could not load the terms version. Please try again.',
+      position: 'top',
+    });
+    return;
+  }
+
   try {
-    await auth.register({ ...form, accepted_terms_version: TERMS_VERSION });
+    await auth.register({ ...form, accepted_terms_version: termsVersion });
     $q.notify({
       type: 'positive',
       message: 'Account created successfully!',
@@ -347,6 +388,11 @@ body.body--dark .dash-text-muted {
   gap: 10px;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.consent-error {
+  font-size: 12.5px;
+  color: var(--q-negative, #c10015);
 }
 
 .consent-label {

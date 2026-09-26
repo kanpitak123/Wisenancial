@@ -109,7 +109,7 @@ const tooltipText = computed(() =>
 const noteText = computed(() => {
   if (aiStore.canAfford) {
     return languageStore.isThai
-      ? 'ใช้กับการวิเคราะห์กราฟ รีวิวพอร์ต และคำแนะนำหุ้น'
+      ? 'ใช้กับการวิเคราะห์กราฟ รีวิวพอร์ต และการคัดหุ้นด้วย AI'
       : 'Spent on chart analysis, portfolio reviews and stock picks.';
   }
   return languageStore.isThai

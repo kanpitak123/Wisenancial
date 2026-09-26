@@ -186,6 +186,9 @@ const LEADERBOARD_NAMES = [
 ];
 
 export const coreRoutes = defineMockRoutes([
+  // ---------- Legal ----------
+  { method: 'GET', path: '/legal/terms-version', handler: () => ({ terms_version: 'mock' }) },
+
   // ---------- Auth ----------
   {
     method: 'GET',

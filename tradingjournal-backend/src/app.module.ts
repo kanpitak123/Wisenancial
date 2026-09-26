@@ -26,6 +26,7 @@ import { CoachModule } from './coach/coach.module';
 import { StocksModule } from './stocks/stocks.module';
 import { MarketInsightsModule } from './market-insights/market-insights.module';
 import { HealthModule } from './health/health.module';
+import { LegalModule } from './legal/legal.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { BrokersModule } from './brokers/brokers.module';
 
@@ -52,6 +53,7 @@ import { BrokersModule } from './brokers/brokers.module';
 
     MonitoringModule,
     HealthModule,
+    LegalModule,
     PrismaModule,
     AuthModule,
     TradesModule,

@@ -76,7 +76,7 @@
             ><span class="landing-hero__accent">ที่เดียว</span>
           </h1>
           <p class="landing-hero__sub">
-            บันทึกเทรด วิเคราะห์พอร์ต และรับคำแนะนำจาก AI ทั้ง Forex และหุ้น
+            บันทึกเทรด วิเคราะห์พอร์ต และดูบทวิเคราะห์จาก AI ทั้ง Forex และหุ้น
             ในแอปเดียวที่ออกแบบมาให้ใช้งานง่ายที่สุด
           </p>
 
@@ -143,7 +143,7 @@
 
           <div class="landing-float landing-float--ai">
             <q-icon name="auto_awesome" size="14px" />
-            AI แนะนำ 3 หุ้นใหม่
+            AI คัด 3 หุ้นใหม่
           </div>
         </div>
       </section>
@@ -151,7 +151,7 @@
       <section class="landing-section">
         <div class="landing-section__head">
           <h2>ทุกเครื่องมือที่นักลงทุนต้องการ</h2>
-          <p>จากบันทึกเทรดไปจนถึงคำแนะนำจาก AI ครบในที่เดียว ไม่ต้องสลับแอปไปมา</p>
+          <p>จากบันทึกเทรดไปจนถึงบทวิเคราะห์จาก AI ครบในที่เดียว ไม่ต้องสลับแอปไปมา</p>
         </div>
 
         <div class="landing-feats">
@@ -291,7 +291,7 @@ const FEATURES = [
   {
     icon: 'auto_awesome',
     title: 'AI Insights',
-    body: 'รับคำแนะนำการลงทุนและวิเคราะห์ความเสี่ยงจาก AI แบบเรียลไทม์',
+    body: 'บทวิเคราะห์พอร์ตและความเสี่ยงจาก AI ไว้ประกอบการตัดสินใจของคุณเอง',
     tint: 'rgba(23, 130, 48, 0.12)',
     color: '#178230',
   },

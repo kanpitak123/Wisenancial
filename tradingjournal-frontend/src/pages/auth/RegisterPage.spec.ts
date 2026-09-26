@@ -12,12 +12,16 @@ import { QLayout, QPageContainer } from 'quasar';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RegisterPage from './RegisterPage.vue';
 import type * as QuasarModule from 'quasar';
-import { TERMS_VERSION } from 'src/constants/legal.constants';
+import { legalService } from 'src/services/legal.service';
 import { useAuthStore } from 'stores/AuthStore';
 import { useLanguageStore } from 'stores/LanguageStore';
 
 const push = vi.fn();
 const notifyMock = vi.fn();
+
+/** เวอร์ชันที่หลังบ้านตอบมา — หน้าบ้านต้องส่งค่านี้กลับไปตรง ๆ ไม่มีค่าฝังเอง */
+const SERVER_VERSION = 'v-from-server';
+const getTermsVersion = vi.spyOn(legalService, 'getTermsVersion');
 
 vi.mock('quasar', async (importOriginal) => {
   const actual = await importOriginal<typeof QuasarModule>();
@@ -64,6 +68,7 @@ beforeEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
   vi.clearAllMocks();
+  getTermsVersion.mockResolvedValue(SERVER_VERSION);
   useLanguageStore().setLanguage('en');
 });
 
@@ -116,9 +121,46 @@ describe('RegisterPage — terms consent', () => {
       full_name: 'New User',
       email: 'new@example.com',
       password: 'Password123',
-      accepted_terms_version: TERMS_VERSION,
+      accepted_terms_version: SERVER_VERSION,
     });
     expect(push).toHaveBeenCalledWith('/login');
+  });
+
+  it('โหลดเวอร์ชันข้อกำหนดจากหลังบ้านตอนเปิดหน้า', async () => {
+    await mountPage();
+
+    expect(getTermsVersion).toHaveBeenCalledTimes(1);
+  });
+
+  it('โหลดเวอร์ชันไม่ได้ -> ปุ่มกดไม่ได้แม้ติ๊กแล้ว มีข้อความและปุ่มลองใหม่ ไม่ยิงสมัคร', async () => {
+    getTermsVersion.mockRejectedValue(new Error('network down'));
+    const register = vi.spyOn(useAuthStore(), 'register').mockResolvedValue({} as never);
+    const wrapper = await mountPage();
+
+    await wrapper.get('[data-test="register-terms"]').trigger('click');
+
+    expect(wrapper.find('[data-test="register-terms-error"]').exists()).toBe(true);
+    expect(submitDisabled(wrapper)).toBe(true);
+
+    await fillForm(wrapper);
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('กดลองใหม่แล้วโหลดสำเร็จ -> ข้อความหาย และสมัครได้', async () => {
+    getTermsVersion.mockRejectedValueOnce(new Error('network down'));
+    const wrapper = await mountPage();
+
+    await wrapper.get('[data-test="register-terms"]').trigger('click');
+    expect(submitDisabled(wrapper)).toBe(true);
+
+    await wrapper.get('[data-test="register-terms-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="register-terms-error"]').exists()).toBe(false);
+    expect(submitDisabled(wrapper)).toBe(false);
   });
 
   it('ลิงก์ Terms / Privacy ชี้ถูกหน้าและเปิดแท็บใหม่ (ข้อมูลในฟอร์มไม่หาย)', async () => {

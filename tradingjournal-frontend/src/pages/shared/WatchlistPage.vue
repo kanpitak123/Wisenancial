@@ -112,15 +112,15 @@ const SECTION_META: Record<RadarCategory, SectionMeta> = {
     category: 'Near-recommended',
     icon: 'star',
     iconClass: 'is-near-recommended',
-    titleEn: 'Near Recommended',
-    titleTh: 'ใกล้เกณฑ์แนะนำ',
+    titleEn: 'Near Threshold',
+    titleTh: 'ใกล้เกณฑ์',
   },
   'Not-recommended': {
     category: 'Not-recommended',
     icon: 'highlight_off',
     iconClass: 'is-not-recommended',
-    titleEn: 'Not Recommended',
-    titleTh: 'ไม่แนะนำ',
+    titleEn: 'Below Threshold',
+    titleTh: 'ต่ำกว่าเกณฑ์',
   },
 };
 
@@ -340,7 +340,7 @@ const handleRemove = async (item: WatchlistItem) => {
       <section v-else-if="recStore.error" class="state-card" data-test="radar-error">
         <q-icon name="cloud_off" size="48px" class="state-icon" />
         <h3 class="state-title">
-          {{ languageStore.isThai ? 'โหลดคำแนะนำไม่สำเร็จ' : 'Could not load recommendations' }}
+          {{ languageStore.isThai ? 'โหลด Momentum Radar ไม่สำเร็จ' : 'Could not load Momentum Radar' }}
         </h3>
         <p class="state-text">{{ recStore.error }}</p>
         <q-btn
@@ -356,7 +356,7 @@ const handleRemove = async (item: WatchlistItem) => {
       <section v-else-if="radarIsEmpty" class="state-card" data-test="radar-empty">
         <q-icon name="radar" size="48px" class="state-icon" />
         <h3 class="state-title">
-          {{ languageStore.isThai ? 'ยังไม่มีคำแนะนำในตอนนี้' : 'No recommendations yet' }}
+          {{ languageStore.isThai ? 'ยังไม่มีรายการในตอนนี้' : 'Nothing to show yet' }}
         </h3>
         <p class="state-text">
           {{
@@ -442,8 +442,8 @@ const handleRemove = async (item: WatchlistItem) => {
             <p class="state-text">
               {{
                 languageStore.isThai
-                  ? 'ลองปรับตัวกรองด้านบนเพื่อดูคำแนะนำเพิ่มเติม'
-                  : 'Try loosening the filters above to see more recommendations.'
+                  ? 'ลองปรับตัวกรองด้านบนเพื่อดูรายการเพิ่มเติม'
+                  : 'Try loosening the filters above to see more stocks.'
               }}
             </p>
           </section>

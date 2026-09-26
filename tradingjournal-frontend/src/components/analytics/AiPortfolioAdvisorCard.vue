@@ -108,13 +108,13 @@ const generate = async () => {
           <q-icon name="psychology" size="22px" class="advisor-header__icon" />
           <div>
             <h3 class="advisor-title">
-              {{ languageStore.isThai ? 'ที่ปรึกษาพอร์ต AI' : 'AI Portfolio Advisor' }}
+              {{ languageStore.isThai ? 'รีวิวพอร์ตด้วย AI' : 'AI Portfolio Review' }}
             </h3>
             <p class="advisor-subtitle">
               {{
                 languageStore.isThai
-                  ? 'วิเคราะห์การกระจายความเสี่ยงและให้คำแนะนำจากพอร์ตจริงของคุณ'
-                  : 'Diversification analysis and recommendations from your live portfolio'
+                  ? 'วิเคราะห์การกระจายความเสี่ยงและจุดที่ควรพิจารณาจากพอร์ตจริงของคุณ'
+                  : 'Diversification analysis and points to consider from your live portfolio'
               }}
             </p>
           </div>
@@ -229,7 +229,7 @@ const generate = async () => {
             <div class="advisor-panel__head">
               <q-icon name="bolt" color="orange" size="20px" />
               <h4 class="advisor-panel__title">
-                {{ languageStore.isThai ? 'สิ่งที่ควรทำต่อ' : 'Actionable Recommendations' }}
+                {{ languageStore.isThai ? 'ประเด็นที่ควรพิจารณา' : 'Points to Consider' }}
               </h4>
             </div>
             <ul v-if="review.actionableRecommendations.length" class="advisor-list">
@@ -238,7 +238,7 @@ const generate = async () => {
               </li>
             </ul>
             <p v-else class="advisor-empty">
-              {{ languageStore.isThai ? 'AI ไม่ได้ให้คำแนะนำเพิ่ม' : 'No recommendations given' }}
+              {{ languageStore.isThai ? 'AI ไม่มีข้อสังเกตเพิ่มเติม' : 'No further observations' }}
             </p>
           </div>
         </section>

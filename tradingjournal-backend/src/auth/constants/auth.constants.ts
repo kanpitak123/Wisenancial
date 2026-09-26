@@ -1,10 +1,3 @@
-/**
- * เวอร์ชันของ Terms + Privacy ที่ต้องยอมรับตอนสมัคร — ต้องตรงกับ TERMS_VERSION ฝั่งหน้าบ้าน
- * (tradingjournal-frontend/src/constants/legal.constants.ts) และเปลี่ยนทุกครั้งที่เนื้อหาเปลี่ยนจริง
- * ตอนนี้ยังเป็นฉบับร่างที่ยังไม่ผ่านทนายความ จึงเป็น draft-0.1
- */
-export const CURRENT_TERMS_VERSION = 'draft-0.1';
-
 export const AUTH_CONSTANTS = {
   bcryptSaltRounds: 12,
   defaultAccessTokenExpiresIn: '15m',

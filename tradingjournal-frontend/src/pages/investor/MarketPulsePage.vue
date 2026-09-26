@@ -552,7 +552,7 @@ const REASON_META = [
         <div v-else-if="aiStore.error" class="pulse-state" data-test="discover-error">
           <q-icon name="error_outline" size="40px" class="q-mb-sm text-negative" />
           <div class="text-subtitle1 text-weight-bolder">
-            {{ languageStore.isThai ? 'โหลดคำแนะนำไม่สำเร็จ' : 'Unable to load recommendations' }}
+            {{ languageStore.isThai ? 'โหลดรายชื่อหุ้นที่ AI คัดไม่สำเร็จ' : 'Unable to load AI picks' }}
           </div>
           <div class="text-body2 text-muted q-mt-xs">{{ aiStore.error }}</div>
           <q-btn

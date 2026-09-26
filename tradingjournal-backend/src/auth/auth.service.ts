@@ -9,10 +9,10 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailFlowsService } from './email-flows.service';
+import { CURRENT_TERMS_VERSION } from '../legal/legal.constants';
 import {
   AUTH_CONSTANTS,
   AUTH_ERROR_MESSAGES,
-  CURRENT_TERMS_VERSION,
 } from './constants/auth.constants';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';

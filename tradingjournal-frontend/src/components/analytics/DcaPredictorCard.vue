@@ -479,7 +479,7 @@ const simulate = async () => {
 
         <div v-if="result.analysis.recommendations.length" class="dca-analysis">
           <div class="dca-label q-mb-xs">
-            {{ languageStore.isThai ? 'คำแนะนำ' : 'Recommendations' }}
+            {{ languageStore.isThai ? 'ข้อสังเกต' : 'Observations' }}
           </div>
           <ul class="dca-analysis__list">
             <li v-for="(item, index) in result.analysis.recommendations" :key="index">
