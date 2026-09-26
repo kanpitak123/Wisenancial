@@ -6,6 +6,7 @@ import { ValidationPipe } from '@nestjs/common'; // 👈 เพิ่ม Import 
 import { NestExpressApplication } from '@nestjs/platform-express'; // 👈 1. Import ตัวนี้
 import { join } from 'path';
 import { assertCorsOriginsValid } from './config/cors-origins.util';
+import { assertProductionEnv } from './config/env.validation';
 import { resolveTrustProxy } from './config/trust-proxy.util';
 import {
   MT5_INGEST_ROUTE_PATH,
@@ -13,6 +14,10 @@ import {
 } from './brokers/ingestion/mt5-ingest-body-limit';
 
 async function bootstrap() {
+  // production: ตรวจ env ที่จำเป็นทั้งหมดก่อนทำอย่างอื่น แล้วรายงานปัญหาทุกข้อในครั้งเดียว
+  // (ก่อนหน้านี้ JWT_REFRESH_SECRET / Stripe / Anthropic ไปพังตอนมีผู้ใช้เรียกใช้จริง)
+  assertProductionEnv();
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
