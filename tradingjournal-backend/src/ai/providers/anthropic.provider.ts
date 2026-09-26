@@ -19,6 +19,11 @@ export class AnthropicProvider implements IAiProvider {
 
   private readonly logger = new Logger(AnthropicProvider.name);
   private readonly client: Anthropic | null;
+  /**
+   * Models that answered 400 "`temperature` is deprecated for this model" (claude-sonnet-5
+   * does). Remembered so only the first call per model pays the extra round trip.
+   */
+  private readonly rejectsTemperature = new Set<string>();
 
   constructor() {
     // ตรวจรูปแบบด้วย ไม่ใช่แค่ "มีค่า" — ช่องนี้เคยถูกใส่คีย์ของ Groq ไว้จริง
@@ -55,11 +60,14 @@ export class AnthropicProvider implements IAiProvider {
       throw new Error('ANTHROPIC_API_KEY is not configured');
     }
 
-    try {
-      const response = await this.client.messages.create({
+    const client = this.client;
+    const send = (withTemperature: boolean) =>
+      client.messages.create({
         model: options.upstreamModel,
         max_tokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-        temperature: options.temperature ?? DEFAULT_TEMPERATURE,
+        ...(withTemperature
+          ? { temperature: options.temperature ?? DEFAULT_TEMPERATURE }
+          : {}),
         system: options.systemPrompt ?? 'Return valid JSON only.',
         messages: [
           {
@@ -68,6 +76,25 @@ export class AnthropicProvider implements IAiProvider {
           },
         ],
       });
+
+    try {
+      let response: Anthropic.Message;
+
+      if (this.rejectsTemperature.has(options.upstreamModel)) {
+        response = await send(false);
+      } else {
+        try {
+          response = await send(true);
+        } catch (error: unknown) {
+          if (!this.isTemperatureRejection(error)) throw error;
+
+          this.rejectsTemperature.add(options.upstreamModel);
+          this.logger.warn(
+            `${options.upstreamModel} does not accept "temperature"; sending requests to it without one`,
+          );
+          response = await send(false);
+        }
+      }
 
       const text = response.content
         .filter((block): block is Anthropic.TextBlock => block.type === 'text')
@@ -86,6 +113,16 @@ export class AnthropicProvider implements IAiProvider {
       this.logger.error(reason);
       throw new Error(reason, { cause: error });
     }
+  }
+
+  private isTemperatureRejection(error: unknown): boolean {
+    const value = error as { status?: number; message?: string } | null;
+
+    return (
+      value?.status === 400 &&
+      /temperature/i.test(value.message ?? '') &&
+      /deprecated|not supported|unsupported/i.test(value.message ?? '')
+    );
   }
 
   private describeError(error: unknown): string {

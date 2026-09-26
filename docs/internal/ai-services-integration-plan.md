@@ -245,5 +245,7 @@ Findings:
 3. **Cost that has no revenue behind it:** (a) system-paid jobs — classifier + enrichment ≈ $3–5 per 1,000 items, guardrails ≈ $0.09/item, capped at 20/day ≈ $55/month; (b) credits obtained free via gamification (10 points → 1 credit) are a subsidy at the same rate.
 4. Every number above is an estimate from assumed list prices; replace with real `ai_usage_logs` averages (tokens_input / tokens_output by model) before acting on any of it.
 
-### Key status (2026-09-26)
-`ANTHROPIC_API_KEY` has the `sk-ant-` format, but both `GET /v1/models` and a minimal `POST /v1/messages` return **400 invalid_request_error: "This API key is not scoped to a workspace … must include the anthropic-workspace-id header"**. So the key is not yet verified and the real model list is unknown. Fix: set `ANTHROPIC_WORKSPACE_ID` (the backend now sends it), or create a workspace-scoped key. Then set `AI_MODEL_FAST` / `AI_MODEL_SMART` from the listing.
+### Key status (2026-09-27) — verified
+The key needed `ANTHROPIC_WORKSPACE_ID` (sent as `anthropic-workspace-id`). With it, `GET /v1/models` returns 200 with 12 models (Opus 5.5 / 5 / 4.x, Fable 5.1 / 5, Sonnet 5 / 4.6 / 4.5, Haiku 4.5). Chosen: `AI_MODEL_FAST=claude-haiku-4-5-20251001` (the only Haiku, cheapest), `AI_MODEL_SMART=claude-sonnet-5`. A minimal call through `AiManagerService` succeeded on both tiers.
+
+Finding: `claude-sonnet-5` answers 400 "`temperature` is deprecated for this model". `AnthropicProvider` now retries once without `temperature` and remembers the model, so SMART calls (guardrails) run without a temperature setting; FAST (Haiku 4.5, the classifier) still gets temperature 0.
