@@ -6,6 +6,7 @@ import { ValidationPipe } from '@nestjs/common'; // 👈 เพิ่ม Import 
 import { NestExpressApplication } from '@nestjs/platform-express'; // 👈 1. Import ตัวนี้
 import { join } from 'path';
 import { assertCorsOriginsValid } from './config/cors-origins.util';
+import { resolveTrustProxy } from './config/trust-proxy.util';
 import {
   MT5_INGEST_ROUTE_PATH,
   createMt5IngestBodyParser,
@@ -15,6 +16,11 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+
+  // อยู่หลัง load balancer ต้องบอก Express ว่าเชื่อ X-Forwarded-For กี่ชั้น ไม่งั้น req.ip เป็น IP ของ
+  // proxy ตัวเดียวสำหรับทุกคน แล้ว rate limit (แบบ IP) จะนับรวมผู้ใช้ทั้งระบบเป็นคนเดียว
+  // ดู trust-proxy.util.ts (TRUST_PROXY: ไม่ตั้ง = 1 บน production, ปิดตอน dev)
+  app.set('trust proxy', resolveTrustProxy());
 
   // ต้องแขวนก่อน Nest's own global body-parser (ซึ่งถูก register ตอน app.listen()/init()
   // ทีหลังเสมอ) — express middleware ทำงานตามลำดับที่ .use() ถูกเรียก ตัวนี้ยิงก่อนจึง
