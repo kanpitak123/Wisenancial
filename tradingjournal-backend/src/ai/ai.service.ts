@@ -100,6 +100,17 @@ export class AiService {
 
     const outputLanguage = resolveOutputLanguage(dto.outputLanguage);
 
+    // ตัวเลขที่ insight อ้างได้มีเฉพาะที่อยู่ใน payload นี้ (groundedIn) — ห้ามคำนวณค่าเฉลี่ย/ผลรวมใหม่
+    const payload = withLanguage(
+      {
+        portfolioType: dto.portfolioType,
+        chartType: dto.chartType,
+        data: dto.data,
+        extraContext: dto.extraContext ?? {},
+      },
+      outputLanguage,
+    );
+
     const result = await this.manager.executeAiRequest<{ insight: string }>({
       userId,
       modelId: dto.modelId,
@@ -107,23 +118,16 @@ export class AiService {
         'You are a professional financial analytics coach.',
         outputLanguageRule(outputLanguage),
         investmentGuardrail(),
+        numberQuotingRule(['data', 'extraContext'], false),
         concisenessRule(),
         'Return valid JSON only: {"insight":"concise actionable analysis grounded only in supplied data"}.',
       ].join('\n'),
-      prompt: JSON.stringify(
-        withLanguage(
-          {
-            portfolioType: dto.portfolioType,
-            chartType: dto.chartType,
-            data: dto.data,
-            extraContext: dto.extraContext ?? {},
-          },
-          outputLanguage,
-        ),
-      ),
+      prompt: JSON.stringify(payload),
       maxOutputTokens: 1200,
       expectedLanguage: outputLanguage,
       languageProbe: (data) => data?.insight,
+      groundedIn: payload,
+      rejectKeyNames: true,
     });
 
     return {

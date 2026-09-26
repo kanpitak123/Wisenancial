@@ -3,10 +3,12 @@ import { AiManagerService } from './ai-manager.service';
 import {
   concisenessRule,
   investmentGuardrail,
+  numberQuotingRule,
   outputLanguageRule,
   resolveOutputLanguage,
   withLanguage,
 } from './ai-prompt.shared';
+import { labelsFor } from './review-labels';
 import type {
   PortfolioRiskAnalysis,
   PortfolioRiskHolding,
@@ -25,6 +27,54 @@ export class AiRiskService {
     const normalized = this.normalizeWeights(holdings);
     const outputLanguage = resolveOutputLanguage(requestedLanguage);
 
+    // weight ในหน้าบ้านเป็นเศษส่วน (0.6) แต่ข้อความต้องพูดเป็นเปอร์เซ็นต์ — คำนวณให้ตรงนี้
+    // เพื่อให้ตัวเลขที่โมเดลอ้างมีอยู่ใน payload จริง (ตัวตรวจ groundedIn เทียบกับก้อนนี้)
+    const promptHoldings = normalized.map((holding) => ({
+      ...holding,
+      weightPercent: Math.round(holding.weight * 10000) / 100,
+    }));
+
+    const payload = withLanguage(
+      {
+        task: 'Assess portfolio risk',
+        requiredShape: {
+          riskLevel: 'Low|Moderate|Aggressive',
+          riskScore: 'number 0-100',
+          analysisSummary: 'string',
+          keyRiskFactors: ['string'],
+        },
+        rules: {
+          highBeta: '>1.2',
+          highDebtToEquity: '>1.0',
+          highPe: '>30',
+          // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
+          concentration: 'single holding weight >25%',
+        },
+        holdings: promptHoldings,
+        fieldGuide: {
+          weightPercent: "holding's share of the portfolio, in percent",
+          weight: 'the same share as a fraction of 1',
+          peRatio: 'price/earnings ratio, in times',
+          beta: 'sensitivity to the market, a plain ratio',
+          debtToEquity:
+            'total debt divided by equity, a plain ratio (not a percent)',
+        },
+        labels: labelsFor(
+          [
+            'weightPercent',
+            'weight',
+            'quantity',
+            'currentPrice',
+            'peRatio',
+            'beta',
+            'debtToEquity',
+          ],
+          outputLanguage,
+        ),
+      },
+      outputLanguage,
+    );
+
     const result = await this.manager.executeAiRequest<PortfolioRiskAnalysis>({
       userId,
       modelId,
@@ -32,6 +82,7 @@ export class AiRiskService {
         'You are a portfolio risk analyst. Rely only on supplied data.',
         outputLanguageRule(outputLanguage),
         investmentGuardrail(),
+        numberQuotingRule(['holdings', 'rules']),
         concisenessRule(),
         // กันหลอน: ก่อนหน้านี้ทุกฟิลด์ปัจจัยพื้นฐานเป็น null เสมอ (หน้าบ้านไม่เคยส่งมา)
         // โมเดลจึงเดาค่าจากชื่อหุ้นในความจำเก่าแล้วอ้างว่าประเมินตามกติกาที่ให้ไป
@@ -39,30 +90,11 @@ export class AiRiskService {
         'When a field is null, exclude that holding from that rule and state the gap in analysisSummary instead of guessing.',
         'Return valid JSON only.',
       ].join('\n'),
-      prompt: JSON.stringify(
-        withLanguage(
-          {
-            task: 'Assess portfolio risk',
-            requiredShape: {
-              riskLevel: 'Low|Moderate|Aggressive',
-              riskScore: 'number 0-100',
-              analysisSummary: 'string',
-              keyRiskFactors: ['string'],
-            },
-            rules: {
-              highBeta: '>1.2',
-              highDebtToEquity: '>1.0',
-              highPe: '>30',
-              // เดิมเขียนว่า "large portfolio weights" ปล่อยให้โมเดลตีความเองว่าเท่าไหร่ถึงเรียกว่าใหญ่
-              concentration: 'single holding weight >25%',
-            },
-            holdings: normalized,
-          },
-          outputLanguage,
-        ),
-      ),
+      prompt: JSON.stringify(payload),
       maxOutputTokens: 1600,
       expectedLanguage: outputLanguage,
+      groundedIn: payload,
+      rejectKeyNames: true,
     });
 
     const data = result.data;

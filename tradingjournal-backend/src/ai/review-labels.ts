@@ -61,6 +61,14 @@ const LABELS: Record<string, Record<AiOutputLanguage, string>> = {
     en: 'weight in holdings',
   },
 
+  // risk analysis (per holding)
+  weightPercent: { th: 'สัดส่วนในพอร์ต', en: 'portfolio weight' },
+  weight: { th: 'สัดส่วนในพอร์ต (เศษส่วน)', en: 'portfolio weight (fraction)' },
+  quantity: { th: 'จำนวนหุ้น', en: 'quantity' },
+  peRatio: { th: 'P/E', en: 'P/E' },
+  beta: { th: 'เบต้า', en: 'beta' },
+  debtToEquity: { th: 'หนี้สินต่อส่วนทุน (D/E)', en: 'debt-to-equity' },
+
   // trader
   currentBalance: { th: 'ยอดเงินในบัญชี', en: 'current balance' },
   initialBalance: { th: 'ยอดเงินเริ่มต้น', en: 'initial balance' },

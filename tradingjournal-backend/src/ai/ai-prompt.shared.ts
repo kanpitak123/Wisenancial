@@ -126,13 +126,16 @@ export function newsLanguageRule(language: AiOutputLanguage): string {
  */
 export function numberQuotingRule(
   sources: readonly string[] = ['metrics', 'holdings'],
+  withLabels = true,
 ): string {
   const named = sources.map((name) => `"${name}"`).join(' and ');
 
   return [
     `NUMBERS: quote figures only from ${named}, exactly as given and with their unit (the unit is the last part of each key).`,
     'Never calculate, estimate, convert, sum, compare into a new figure, or re-round any number.',
-    'LABELS: refer to every figure by its entry in "labels" / "holdingLabels" (use that wording exactly, it is already in the answer language) or by ordinary words. Never write a key name, an identifier with an underscore or camelCase, or an ALL-CAPS word for emphasis.',
+    withLabels
+      ? 'LABELS: refer to every figure by its entry in "labels" / "holdingLabels" (use that wording exactly, it is already in the answer language) or by ordinary words. Never write a key name, an identifier with an underscore or camelCase, or an ALL-CAPS word for emphasis.'
+      : 'LABELS: refer to every figure by ordinary words. Never write a key name, an identifier with an underscore or camelCase, or an ALL-CAPS word for emphasis.',
     "Keep unrealized profit/loss (paper gain on shares still held), realized profit/loss (completed sales) and total profit/loss (realized + unrealized + dividends) clearly apart by using their three labels, and never call one by another's name.",
     'If a figure you would need is not provided, describe the point in words instead of producing a number.',
   ].join(' ');
